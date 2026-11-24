@@ -1,6 +1,7 @@
 import type { TelegramAiPostingRunProgress, TelegramAiPostingRunProgressRead } from '@telegram-system/shared';
 
 export const AI_POSTING_STALE_RUN_MS = 30 * 60_000;
+export const AI_POSTING_BACKGROUND_STALE_RUN_MS = 4 * 60_000;
 export const AI_POSTING_BACKGROUND_RUN_FILTER = {
   publications: { path: ['background'], equals: true },
 };
@@ -24,20 +25,31 @@ export function createTelegramAiPostingProgress(
     count, current: 0, total: 1 + count * 8, complete: 0, failed: false,
     publicationIndex: 0, processed: 0, stages: {},
   };
+  const settledPublications = new Set<number>();
+  const activeStages = new Map<number, { stage: string; attempt?: number }>();
   function emit(event: Omit<TelegramAiPostingProgress, 'runId'>) {
     const { stage, status, publicationIndex, attempt } = event;
-    if (stage === 'publication') {
-      snapshot.processed = Math.max(snapshot.processed ?? 0, (publicationIndex ?? 0) + 1);
+    if (publicationIndex !== undefined) {
+      if (stage === 'publication') settledPublications.add(publicationIndex);
+      activeStages.delete(publicationIndex);
+      if (status === 'RUNNING' && stage !== 'publication')
+        activeStages.set(publicationIndex, { stage, attempt });
     }
-    snapshot.stage = stage === 'publication' && status === 'FAILED' ? 'slot-failed' : stage;
-    if (attempt === undefined) delete snapshot.attempt;
-    else snapshot.attempt = attempt;
-    snapshot.publicationIndex = publicationIndex ?? snapshot.publicationIndex;
+    snapshot.processed = settledPublications.size;
+    const active = [...activeStages.entries()].at(-1);
+    const display = active?.[1] ?? {
+      stage: stage === 'publication' && status === 'FAILED' ? 'slot-failed' : stage,
+      attempt,
+    };
+    snapshot.stage = display.stage;
+    if (display.attempt === undefined) delete snapshot.attempt;
+    else snapshot.attempt = display.attempt;
+    snapshot.publicationIndex = active?.[0] ?? publicationIndex ?? snapshot.publicationIndex;
     if (stage === 'planning') {
       for (let index = 0; index < count; index++)
         snapshot.stages[`${index}:planning`] = status;
     } else if (stage !== 'publication') {
-      snapshot.stages[`${snapshot.publicationIndex}:${stage}`] = status;
+      snapshot.stages[`${publicationIndex ?? 0}:${stage}`] = status;
     }
     if (status === 'COMPLETED' && stage === 'image') snapshot.complete++;
     if (status !== 'RUNNING' && stage !== 'publication') snapshot.current++;
@@ -54,9 +66,10 @@ export function serializeTelegramAiPostingRunProgress(run: {
   publications: unknown;
 }): TelegramAiPostingRunProgressRead {
   if (run.status !== 'RUNNING') return { status: run.status };
-  if (run.updatedAt && Date.now() - run.updatedAt.getTime() >= AI_POSTING_STALE_RUN_MS)
-    return { status: 'INTERRUPTED' };
   const stored = run.publications as { progress?: TelegramAiPostingRunProgress; background?: boolean; items?: unknown[] } | null;
+  const staleAfter = stored?.background ? AI_POSTING_BACKGROUND_STALE_RUN_MS : AI_POSTING_STALE_RUN_MS;
+  if (run.updatedAt && Date.now() - run.updatedAt.getTime() >= staleAfter)
+    return { status: 'INTERRUPTED' };
   return {
     status: run.status,
     ...(run.updatedAt ? { updatedAt: run.updatedAt.toISOString() } : {}),

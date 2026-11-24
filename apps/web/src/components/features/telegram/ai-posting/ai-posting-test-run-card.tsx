@@ -35,6 +35,7 @@ type ActionInput = {
 
 export function AiPostingTestRunCard({
   run,
+  historyNavigation,
   onStop,
   stopPending,
   channelId,
@@ -66,6 +67,7 @@ export function AiPostingTestRunCard({
   onConfirmSuggestion,
 }: {
   run: TestRun;
+  historyNavigation?: Parameters<typeof AiPostingPublicationCarousel>[0]["historyNavigation"];
   onStop?: () => void;
   stopPending?: boolean;
   channelId?: string;
@@ -128,7 +130,7 @@ export function AiPostingTestRunCard({
         ) : searchIncomplete ? (
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-amber-800 bg-amber-950 px-2.5 py-0.5 text-xs font-medium text-amber-300">
             <ImageOff size={14} aria-hidden="true" />
-            Не все изображения найдены
+            Медиа требует повторной подготовки
           </span>
         ) : (
           ["FAILED", "PARTIAL"].includes(run.status.toUpperCase()) ? (
@@ -151,9 +153,10 @@ export function AiPostingTestRunCard({
           {stopPending ? "Останавливаю…" : "Остановить"}
         </Button>
       )}
-      {((!running && run.status !== "CANCELED") || run.publications.length > 0) && <AiPostingPublicationCarousel
+      {(historyNavigation || (!running && run.status !== "CANCELED") || run.publications.length > 0) && <AiPostingPublicationCarousel
         key={run.id}
         run={run}
+        historyNavigation={historyNavigation}
         channelTitle={channelTitle}
         channelId={channelId}
         channelPhotoUrl={channelPhotoUrl}

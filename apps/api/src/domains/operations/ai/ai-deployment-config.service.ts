@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-/** Internal AI configuration only; consumer Finance credentials/flags are separate. */
+/** Internal AI execution settings. Finance reads the same server key and applies its own subscription policy. */
 @Injectable()
 export class AiDeploymentConfig {
   readonly enabled: boolean;

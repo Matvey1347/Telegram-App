@@ -113,6 +113,13 @@ const FINANCE_API_RUNTIME_KEYS = new Set([
   "FINANCE_BOT_LOCAL_USERNAME",
 ]);
 
+const FINANCE_SUPPORT_KEYS = new Set([
+  "FINANCE_BOT_SUPPORT_USERNAME",
+  "FINANCE_BOT_SUPPORT_TOKEN",
+  "FINANCE_BOT_SUPPORT_WEBHOOK_SECRET",
+  "FINANCE_BOT_DASHBOARD_WORKSPACE_ID",
+]);
+
 const FINANCE_LOCAL_BOT_RUNTIME_KEYS = new Set([
   "FINANCE_BOT_LOCAL_USERNAME",
   "FINANCE_BOT_LOCAL_TOKEN",
@@ -149,7 +156,7 @@ export function financeApiEnvironment(
   return {
     TELEGRAM_BOT_RUNTIME_ENVIRONMENT: "LOCAL",
     // Match the selected LOCAL profile to the existing database runtime.
-    // Only the explicit tunnel receives a token for synchronization.
+    // Tokens are passed only to the local API.
     FINANCE_BROWSER_LOGIN_BOT_USERNAME: runtime === "LOCAL" ? username || "" : "",
   };
 }
@@ -266,7 +273,7 @@ function start(product, definition) {
   const financeApiEnvironmentVariables =
     name === "Finance API" ? financeApiEnvironment() : {};
   const localFinanceBotEnvironment =
-    name === "Finance API" && withCloudflare
+    name === "Finance API" && financeApiEnvironmentVariables.FINANCE_BROWSER_LOGIN_BOT_USERNAME
       ? financeLocalBotRuntimeEnvironment()
       : {};
   const financeTunnelEnvironment =
@@ -297,6 +304,12 @@ function start(product, definition) {
       ...financeTunnelEnvironment,
       ...tunnelProcessEnvironment(product, name, tunnelOrigins.get(product)),
       ...systemBotTunnelEnvironment,
+      ...(name === "Nexeloq API" ? {
+        ...financeProfileEnvironment("products/finance/.env.local", FINANCE_SUPPORT_KEYS),
+        ...(withCloudflare && tunnelOrigins.get("nexeloq")
+          ? { API_PUBLIC_URL: tunnelOrigins.get("nexeloq"), TELEGRAM_SUPPORT_WEBHOOK_OWNER: "local" }
+          : { TELEGRAM_SUPPORT_WEBHOOK_OWNER: "off" }),
+      } : name === "Finance API" ? { TELEGRAM_SUPPORT_WEBHOOK_OWNER: "off" } : {}),
       ...systemBotEnvironment,
       ...(name === "Finance Web" || name === "Nexeloq Web"
         ? { NEXT_PUBLIC_DATABASE_ENV: localDatabaseEnvironment() }
@@ -331,7 +344,7 @@ function start(product, definition) {
   return { id, definition };
 }
 
-async function activateFinanceLocalBot() {
+async function synchronizeFinanceLocalBot(activateWebhook) {
   const headers = { "x-local-dev-control-secret": localDevControlSecret };
   const synchronize = await fetch(
     "http://127.0.0.1:4001/api/finance/local-development/synchronize-bot",
@@ -350,6 +363,7 @@ async function activateFinanceLocalBot() {
     throw new Error("Finance LOCAL bot synchronization was not confirmed");
   }
   financeLocalBotId = synchronized.botIntegrationId;
+  if (!activateWebhook) return;
   const activate = await fetch(
     `http://127.0.0.1:4001/api/telegram/bots/runtime/local-development/start?botIntegrationId=${encodeURIComponent(financeLocalBotId)}`,
     { method: "POST", headers, signal: AbortSignal.timeout(5 * 60_000) },
@@ -383,11 +397,10 @@ async function assertCloudflaredAvailable() {
   });
 }
 
-async function prepareDatabase() {
-  const id = "database";
-  dashboard?.update(id, "starting", "Applying migrations");
+async function prepareStartupStep({ id, args, starting, ready, failure }) {
+  dashboard?.update(id, "starting", starting);
   const capture = createOutputCapture();
-  const child = spawnPnpm(["--filter", "api", "run", "db:deploy:safe"], {
+  const child = spawnPnpm(args, {
     cwd: process.cwd(),
     env: process.env,
     detached: process.platform !== "win32",
@@ -403,11 +416,11 @@ async function prepareDatabase() {
         if (code === 0) resolve();
         else {
           const recent = capture.recentLines().slice(-8).join("\n");
-          reject(new Error(`Database preparation failed (code ${code ?? "unknown"})${recent ? `\n${recent}` : ""}`));
+          reject(new Error(`${failure} (code ${code ?? "unknown"})${recent ? `\n${recent}` : ""}`));
         }
       });
     });
-    dashboard?.update(id, "ready", "Schema ready");
+    dashboard?.update(id, "ready", ready);
   } finally {
     children.delete(child);
   }
@@ -503,8 +516,14 @@ async function startProduct(product) {
       waitForHttpReady(`${publicUrl}/api/health`),
       waitForHttpReady(`${publicUrl}/health`),
     ]);
-    await activateFinanceLocalBot();
+    await synchronizeFinanceLocalBot(true);
     dashboard?.notice("✓ Finance bot: LOCAL webhook and Mini App links reconciled");
+  } else if (product === "finance") {
+    const configured = financeLocalBotRuntimeEnvironment();
+    if (configured.FINANCE_BOT_LOCAL_TOKEN && financeApiEnvironment().FINANCE_BROWSER_LOGIN_BOT_USERNAME)
+      await synchronizeFinanceLocalBot(false).catch(() =>
+        dashboard?.notice("Finance LOCAL bot could not be synchronized from ENV"),
+      );
   }
 }
 
@@ -560,9 +579,26 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     column: products[0],
     label: "Database",
   });
+  dashboard.register("shared", {
+    column: products[0],
+    label: "Shared package",
+  });
   dashboard.render();
   try {
-    await prepareDatabase();
+    await prepareStartupStep({
+      id: "database",
+      args: ["--filter", "api", "run", "db:deploy:safe"],
+      starting: "Applying migrations",
+      ready: "Schema ready",
+      failure: "Database preparation failed",
+    });
+    await prepareStartupStep({
+      id: "shared",
+      args: ["--filter", "@telegram-system/shared", "build"],
+      starting: "Building",
+      ready: "Build ready",
+      failure: "Shared package build failed",
+    });
     if (withCloudflare) {
       await assertCloudflaredAvailable();
       const publicUrls = await Promise.all(

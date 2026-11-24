@@ -2,13 +2,14 @@
 
 import {
   TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH,
+  TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES,
   TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES,
   TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES,
   type TelegramAiPostingMediaGuidance,
   type TelegramAiPostingReferenceAnalysisInput,
 } from "@telegram-system/shared";
 import { useRef, useState } from "react";
-import { Pencil, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { IconPicker } from "@/components/icons/icon-picker";
 import {
@@ -21,6 +22,13 @@ import {
 import { TelegramPostMediaUpload } from "../telegram/telegram-post-media-upload";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { api } from "@/lib/api";
+import {
+  AiPostingSettingsCardActions,
+  settingsCardContent,
+  settingsCardGrid,
+  settingsCardRow,
+  settingsCardTitle,
+} from "./ai-posting-settings-card-layout";
 import type { AiPostingMediaPreference } from "./ai-posting-media-preferences";
 
 function newId() {
@@ -50,8 +58,12 @@ export function AiPostingMediaPreferenceEditor({
   onChange: (value: AiPostingMediaPreference[]) => void;
 }) {
   const [draft, setDraft] = useState<AiPostingMediaPreference | null>(null);
-  const [guidanceTab, setGuidanceTab] = useState<keyof TelegramAiPostingMediaGuidance>("generationDescription");
-  const [analysisStatus, setAnalysisStatus] = useState<"idle" | "pending" | "complete" | "failed">("idle");
+  const [guidanceTab, setGuidanceTab] = useState<
+    keyof TelegramAiPostingMediaGuidance
+  >("generationDescription");
+  const [analysisStatus, setAnalysisStatus] = useState<
+    "idle" | "pending" | "complete" | "failed"
+  >("idle");
   const [uploading, setUploading] = useState(false);
   const request = useRef(0);
   const analyzing = analysisStatus === "pending";
@@ -110,16 +122,19 @@ export function AiPostingMediaPreferenceEditor({
         </div>
         <Button
           type="button"
-          disabled={preferences.length >= 10}
+          disabled={
+            preferences.length >= TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES
+          }
           onClick={() => open(blankPreference())}
         >
           <Plus size={15} /> Добавить предпочтение
         </Button>
       </div>
 
-      {preferences.length >= 10 ? (
+      {preferences.length >= TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES ? (
         <p className="text-xs text-neutral-400">
-          Достигнут лимит в 10 предпочтений.
+          Достигнут лимит в {TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES}{" "}
+          предпочтений.
         </p>
       ) : null}
       {!preferences.length ? (
@@ -127,86 +142,74 @@ export function AiPostingMediaPreferenceEditor({
           Предпочтения ещё не добавлены.
         </p>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className={settingsCardGrid}>
           {preferences.map((preference, index) => (
             <div
               key={preference.id}
-              className="flex min-h-[68px] min-w-0 items-center gap-2 rounded-lg border border-neutral-800 bg-neutral-950/60 px-2 py-1.5"
+              className={`${settingsCardRow} rounded-xl border border-neutral-700 bg-neutral-950/70`}
             >
-              {preference.emojiIconId ? (
-                <IconPicker
-                  iconId={preference.emojiIconId}
-                  onChange={(emojiIconId, icon) =>
-                    onChange(
-                      preferences.map((item) =>
-                        item.id === preference.id
-                          ? {
-                              ...item,
-                              emojiIconId: emojiIconId ?? undefined,
-                              emoji:
-                                icon?.type === "unicode"
-                                  ? icon.value
-                                  : item.emoji,
-                            }
-                          : item,
-                      ),
-                    )
-                  }
-                  buttonLabel="Эмодзи предпочтения"
-                  ariaLabel={`Эмодзи предпочтения ${index + 1}`}
-                  allowImages
-                  compact
-                  className="!h-8 !w-8 !min-w-8 !p-0.5"
-                  iconClassName="!h-6 !w-6 !border-0 !bg-transparent"
-                />
-              ) : (
-                <IconAvatar
-                  icon={{ type: "unicode", value: preference.emoji || "🎨" }}
-                  label={preference.name}
-                  size="sm"
-                  bordered={false}
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-white">
-                  {preference.name}
-                </p>
-                <div className="mt-0.5 flex min-w-0 items-center gap-2">
-                  <span className="inline-flex rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300">
-                    {preference.purpose === "SEARCH"
-                      ? "Для поиска"
-                      : preference.purpose === "GENERATION"
-                        ? "Для генерации"
-                        : "Поиск и генерация"}
-                  </span>
-                  <span
-                    className="shrink-0 text-[10px] text-neutral-500"
-                    aria-label={`${preference.references.length} референсов`}
-                  >
-                    {preference.references.length} реф.
-                  </span>
+              <div className={settingsCardContent}>
+                {preference.emojiIconId ? (
+                  <IconPicker
+                    iconId={preference.emojiIconId}
+                    onChange={(emojiIconId, icon) =>
+                      onChange(
+                        preferences.map((item) =>
+                          item.id === preference.id
+                            ? {
+                                ...item,
+                                emojiIconId: emojiIconId ?? undefined,
+                                emoji:
+                                  icon?.type === "unicode"
+                                    ? icon.value
+                                    : item.emoji,
+                              }
+                            : item,
+                        ),
+                      )
+                    }
+                    buttonLabel="Эмодзи предпочтения"
+                    ariaLabel={`Эмодзи предпочтения ${index + 1}`}
+                    allowImages
+                    compact
+                    className="!h-8 !w-8 !min-w-8 !p-0.5"
+                    iconClassName="!h-6 !w-6 !border-0 !bg-transparent"
+                  />
+                ) : (
+                  <IconAvatar
+                    icon={{ type: "unicode", value: preference.emoji || "🎨" }}
+                    label={preference.name}
+                    size="xs"
+                    bordered={false}
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className={settingsCardTitle}>
+                    {preference.name}
+                  </p>
+                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="inline-flex rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300">
+                      {preference.purpose === "SEARCH"
+                        ? "Для поиска"
+                        : preference.purpose === "GENERATION"
+                          ? "Для генерации"
+                          : "Поиск и генерация"}
+                    </span>
+                    <span
+                      className="shrink-0 text-[10px] text-neutral-500"
+                      aria-label={`${preference.references.length} референсов`}
+                    >
+                      {preference.references.length} реф.
+                    </span>
+                  </div>
                 </div>
               </div>
-              <Button
-                type="button"
-                className="h-8 w-8 !p-0"
-                onClick={() => open({ ...preference })}
-                aria-label={`Редактировать предпочтение ${index + 1}`}
-                title="Редактировать"
-              >
-                <Pencil size={14} />
-              </Button>
-              <IconButton
-                type="button"
-                kind="delete"
-                className="!h-8 !w-8"
-                aria-label={`Удалить предпочтение ${index + 1}`}
-                title="Удалить предпочтение"
-                onClick={() =>
-                  onChange(
-                    preferences.filter((item) => item.id !== preference.id),
-                  )
-                }
+              <AiPostingSettingsCardActions
+                editLabel={`Редактировать предпочтение ${index + 1}`}
+                onEdit={() => open({ ...preference })}
+                deleteLabel={`Удалить предпочтение ${index + 1}`}
+                deleteTitle="Удалить предпочтение"
+                onDelete={() => onChange(preferences.filter((item) => item.id !== preference.id))}
               />
             </div>
           ))}
@@ -215,7 +218,7 @@ export function AiPostingMediaPreferenceEditor({
 
       {draft ? (
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-2 sm:p-4"
           role="presentation"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !uploading) open(null);
@@ -225,7 +228,7 @@ export function AiPostingMediaPreferenceEditor({
             role="dialog"
             aria-modal="true"
             aria-labelledby="media-preference-dialog-title"
-            className="max-h-[90vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl"
+            className="max-h-[calc(100dvh-1rem)] w-full min-w-0 max-w-2xl space-y-4 overflow-y-auto rounded-xl border border-neutral-700 bg-neutral-900 p-3 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-5"
           >
             <header className="flex items-center justify-between gap-3">
               <h3
@@ -309,17 +312,31 @@ export function AiPostingMediaPreferenceEditor({
                 ]}
                 onChange={setGuidanceTab}
               />
-              <FormField label={guidanceTab === "generationDescription" ? "Для генерации" : "Для поиска"}>
+              <FormField
+                label={
+                  guidanceTab === "generationDescription"
+                    ? "Для генерации"
+                    : "Для поиска"
+                }
+              >
                 <Textarea
-                  aria-label={guidanceTab === "generationDescription" ? "Для генерации" : "Для поиска"}
+                  aria-label={
+                    guidanceTab === "generationDescription"
+                      ? "Для генерации"
+                      : "Для поиска"
+                  }
                   disabled={uploading || analyzing}
                   value={draft[guidanceTab] ?? ""}
-                  onChange={(event) => updateDraft({ [guidanceTab]: event.target.value })}
+                  onChange={(event) =>
+                    updateDraft({ [guidanceTab]: event.target.value })
+                  }
                   maxLength={TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH}
                   rows={4}
-                  placeholder={guidanceTab === "generationDescription"
-                    ? "Как использовать референсы, выбрать ракурс, свет и фактуру"
-                    : "Как выглядит подходящее фото, что отсеять и какие запросы попробовать"}
+                  placeholder={
+                    guidanceTab === "generationDescription"
+                      ? "Как использовать референсы, выбрать ракурс, свет и фактуру"
+                      : "Как выглядит подходящее фото, что отсеять и какие запросы попробовать"
+                  }
                 />
               </FormField>
             </div>
@@ -364,7 +381,9 @@ export function AiPostingMediaPreferenceEditor({
                   const references = items.map((item) => item.url);
                   const next = { ...draft, references };
                   updateDraft({ references });
-                  if (references.some((url) => !draft.references.includes(url))) {
+                  if (
+                    references.some((url) => !draft.references.includes(url))
+                  ) {
                     void analyze(next);
                   } else {
                     setAnalysisStatus("idle");
@@ -382,19 +401,35 @@ export function AiPostingMediaPreferenceEditor({
                 showUrlInput={false}
               />
               {analysisStatus !== "idle" && (
-                <p role="status" className={analysisStatus === "failed" ? "mt-2 text-sm text-rose-300" : "mt-2 text-sm text-neutral-300"}>
-                  {analyzing ? "ИИ анализирует референсы…" : analysisStatus === "complete"
-                    ? "ИИ обновил описания для генерации и поиска."
-                    : "Анализ не завершился. Референсы и прежние описания сохранены в форме."}
+                <p
+                  role="status"
+                  className={
+                    analysisStatus === "failed"
+                      ? "mt-2 text-sm text-rose-300"
+                      : "mt-2 text-sm text-neutral-300"
+                  }
+                >
+                  {analyzing
+                    ? "ИИ анализирует референсы…"
+                    : analysisStatus === "complete"
+                      ? "ИИ обновил описания для генерации и поиска."
+                      : "Анализ не завершился. Референсы и прежние описания сохранены в форме."}
                 </p>
               )}
               {channelId && draft.references.length > 0 && !analyzing && (
-                <Button className="mt-2 !px-2 !py-1.5 text-xs" variant="secondary" disabled={uploading} onClick={() => void analyze(draft)}>
-                  {analysisStatus === "failed" ? "Повторить анализ" : "Обновить описания по референсам"}
+                <Button
+                  className="mt-2 !px-2 !py-1.5 text-xs"
+                  variant="secondary"
+                  disabled={uploading}
+                  onClick={() => void analyze(draft)}
+                >
+                  {analysisStatus === "failed"
+                    ? "Повторить анализ"
+                    : "Обновить описания по референсам"}
                 </Button>
               )}
             </div>
-            <footer className="flex justify-end gap-2 border-t border-neutral-800 pt-4">
+            <footer className="flex flex-wrap justify-end gap-2 border-t border-neutral-800 pt-4">
               <Button
                 type="button"
                 variant="secondary"

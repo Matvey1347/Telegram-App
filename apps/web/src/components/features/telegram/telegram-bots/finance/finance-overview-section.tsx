@@ -13,7 +13,6 @@ import {
   UsersRound,
 } from "lucide-react";
 import type { BotBillingOverviewView } from "@telegram-system/shared";
-import { IconAvatar } from "@/components/icons/icon-avatar";
 import { Card } from "@/components/ui/primitives";
 import { QueryContentState } from "@/components/ui/query-content-state";
 import { botBillingApi } from "@/lib/features/finance/bot-billing-api";
@@ -51,25 +50,21 @@ function Overview({ data }: { data: BotBillingOverviewView }) {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           icon={UsersRound}
-          emoji="👥"
           label="Registered users"
           value={analytics.registeredUsers}
         />
         <Metric
           icon={UserRoundCheck}
-          emoji="💎"
           label="Paying users"
           value={analytics.paidUsers}
         />
         <Metric
           icon={Gift}
-          emoji="🎁"
           label="Granted users"
           value={analytics.grantedUsers}
         />
         <Metric
           icon={AlertTriangle}
-          emoji="⚠️"
           label="Failed payments"
           value={analytics.failedPayments}
           attention={analytics.failedPayments > 0}
@@ -78,37 +73,31 @@ function Overview({ data }: { data: BotBillingOverviewView }) {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Metric
           icon={CreditCard}
-          emoji="💳"
           label="Active subscriptions"
           value={analytics.activeSubscriptions}
         />
         <Metric
           icon={Gift}
-          emoji="🆓"
           label="Without subscription"
           value={analytics.freeUsers}
         />
         <Metric
           icon={TrendingUp}
-          emoji="📈"
           label="Conversion"
           value={`${conversion.toFixed(1)}%`}
         />
         <Metric
           icon={ReceiptText}
-          emoji="🗓️"
           label="Monthly subscribers"
           value={analytics.monthly}
         />
         <Metric
           icon={BadgeDollarSign}
-          emoji="📆"
           label="Yearly subscribers"
           value={analytics.yearly}
         />
         <Metric
           icon={CircleDollarSign}
-          emoji="⛔"
           label="Canceled"
           value={analytics.canceled}
         />
@@ -244,7 +233,12 @@ function UsageTable({
   rows,
 }: {
   title: string;
-  rows: Array<{ key: string; label: string; detail: string; cost: number | null }>;
+  rows: Array<{
+    key: string;
+    label: string;
+    detail: string;
+    cost: number | null;
+  }>;
 }) {
   return (
     <div>
@@ -279,23 +273,19 @@ function Metric({
   value,
   attention = false,
   icon: Icon,
-  emoji,
 }: {
   label: string;
   value: number | string;
   attention?: boolean;
   icon: typeof AlertTriangle;
-  emoji: string;
 }) {
   return (
     <Card
       className={`flex items-center gap-3 p-3 ${attention ? "border-amber-700/70" : ""}`}
     >
-      <IconAvatar
-        icon={{ type: "unicode", value: emoji }}
-        label={label}
-        size="md"
-      />
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-neutral-700 bg-neutral-950 text-sky-300">
+        <Icon size={18} aria-hidden />
+      </span>
       <div className="min-w-0">
         <p className="truncate text-xs text-neutral-500">{label}</p>
         <p

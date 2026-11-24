@@ -74,6 +74,15 @@ function renderSection(
 }
 
 describe("AiPostingImagesSection", () => {
+  it("accepts one search site URL per line", () => {
+    const onImageSearchSources = vi.fn();
+    renderSection({ mode: "found", onImageSearchSources });
+    const field = screen.getByRole("textbox", { name: "Источники поиска" });
+    expect(field).toHaveValue("https://www.pinterest.com/\nhttps://commons.wikimedia.org/");
+    fireEvent.change(field, { target: { value: "https://commons.wikimedia.org/\nhttps://photos.example/" } });
+    expect(onImageSearchSources).toHaveBeenCalledWith(["https://commons.wikimedia.org/", "https://photos.example/"]);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.upload.mockResolvedValue({

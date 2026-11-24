@@ -15,15 +15,19 @@ describe('FinanceEntitlementService', () => {
     expect((prisma as any).botSubscription.findMany).toHaveBeenCalled();
   });
 
-  it('keeps Free AI trials lifetime and defines the Finance prices centrally', async () => {
+  it('blocks Free AI use and defines the Finance Plus offers centrally', async () => {
     const prisma = {
       botSubscription: { findMany: jest.fn().mockResolvedValue([]) },
       financeProfile: { findUnique: jest.fn().mockResolvedValue({ id: 'profile-1' }) },
-      aiUsageEvent: { count: jest.fn().mockResolvedValueOnce(10).mockResolvedValueOnce(2) },
+      aiUsageEvent: { count: jest.fn().mockResolvedValue(0) },
     } as never;
     const resolved = await new FinanceEntitlementService(prisma).resolve({ botIntegrationId: 'finance-bot', telegramBotUserId: 'user' });
-    expect(resolved).toMatchObject({ tier: 'FREE', usage: [{ feature: 'AI_INPUT', used: 10, limit: 10, remaining: 0, resetAt: null }, { feature: 'RECEIPT_SCAN', used: 2, limit: 3, remaining: 1, resetAt: null }] });
-    expect(FINANCE_PRODUCT_DEFINITIONS.PRO.price).toMatchObject({ amountMinor: 14900, currency: 'UAH' });
-    expect(FINANCE_PRODUCT_DEFINITIONS.ULTIMATE.price).toMatchObject({ amountMinor: 24900, currency: 'UAH' });
+    expect(resolved).toMatchObject({ tier: 'FREE', usage: [{ feature: 'AI_INPUT', used: 0, limit: 0, remaining: 0, resetAt: null }, { feature: 'RECEIPT_SCAN', used: 0, limit: 0, remaining: 0, resetAt: null }] });
+    expect(FINANCE_PRODUCT_DEFINITIONS.PRO.prices).toEqual([
+      { amountMinor: 700, currency: 'UAH', interval: 'DAY', intervalCount: 7 },
+      { amountMinor: 17900, currency: 'UAH', interval: 'MONTH', intervalCount: 1 },
+      { amountMinor: 39900, currency: 'UAH', interval: 'MONTH', intervalCount: 3 },
+      { amountMinor: 109900, currency: 'UAH', interval: 'YEAR', intervalCount: 1 },
+    ]);
   });
 });

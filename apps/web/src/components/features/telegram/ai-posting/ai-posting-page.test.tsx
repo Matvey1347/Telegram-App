@@ -105,6 +105,46 @@ describe("AiPostingPage", () => {
     mocks.resolveCustomEmojiDocuments.mockResolvedValue({ packs: [] });
   });
 
+  it("keeps expanded subspheres and card edit actions accessible across settings tabs", async () => {
+    const sphere = {
+      id: "wellbeing", name: "Психологія та внутрішня опора", emoji: "🌿", tier: "PRIMARY",
+      parentId: null, description: "", sources: [], mediaPreferenceId: null,
+    };
+    const child = { ...sphere, id: "rest", name: "Сон і відновлення після виснаження", parentId: sphere.id };
+    const rubric = { id: "review", name: "Детальний розбір життєвої ситуації", sphereId: sphere.id, emoji: "📝", description: "", goal: "", lengthIds: ["long"] };
+    const length = { id: "long", name: "Розгорнутий матеріал", emoji: "📖", minCharacters: 700, maxCharacters: 1200 };
+    const media = { id: "real-photo", name: "Природні фотографії повсякденного життя", emoji: "🎨", purpose: "BOTH", description: "", references: [] };
+    mocks.get.mockImplementation(async (url?: string) => ({
+      data: url?.endsWith("/chat") || url?.includes("/test-runs") ? [] : {
+        ...settings,
+        configuration: { ...settings.configuration, spheres: [sphere, child], rubrics: [rubric], lengths: [length], mediaPreferences: [media] },
+      },
+    }));
+    const url = new URL(window.location.href);
+    url.searchParams.set("aiPostingTab", "idea");
+    window.history.replaceState(window.history.state, "", url);
+    renderPage();
+
+    const disclosure = await screen.findByRole("button", { name: /Психологія та внутрішня опора.*подсфер/, expanded: false });
+    fireEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: `Редактировать подсферу ${child.name}` })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Рубрики" }));
+    fireEvent.click(screen.getByRole("button", { name: `Редактировать рубрику ${rubric.name}` }));
+    expect(screen.getByRole("dialog", { name: "Редактировать рубрику" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Готово" }));
+
+    fireEvent.click(screen.getByRole("tab", { name: "Длины" }));
+    fireEvent.click(screen.getByRole("button", { name: `Редактировать длину ${length.name}` }));
+    expect(screen.getByDisplayValue(length.name)).toBeVisible();
+
+    fireEvent.click(screen.getByRole("link", { name: "Медиа" }));
+    expect(screen.getByText(media.name)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать предпочтение 1" }));
+    expect(screen.getByRole("dialog", { name: "Редактировать предпочтение" })).toBeVisible();
+  });
+
   it("keeps the active settings section in the URL", async () => {
     const url = new URL(window.location.href);
     url.searchParams.set("aiPostingTab", "images");

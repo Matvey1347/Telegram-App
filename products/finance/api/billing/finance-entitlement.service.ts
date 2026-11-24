@@ -12,6 +12,7 @@ import {
 import { PrismaService } from '@api/prisma/prisma.service';
 import { acquirePostgresTransactionLock } from '@api/prisma/postgres-advisory-lock';
 import { BotEntitlementsService } from '@api/domains/telegram/bot-billing/bot-entitlements.service';
+import { isProductionEnvironment } from '@api/config/deployment-config';
 import {
   FINANCE_CAPABILITIES,
   FINANCE_PRODUCT_DEFINITIONS,
@@ -54,7 +55,7 @@ export class FinanceEntitlementService {
         })
       )?.id;
     const tracked: readonly FinanceUsageFeature[] =
-      access.tier === 'ULTIMATE'
+      access.capabilities.includes('AI_INSIGHTS')
         ? ['AI_INPUT', 'RECEIPT_SCAN', 'AI_INSIGHTS']
         : ['AI_INPUT', 'RECEIPT_SCAN'];
     const usage = profileId
@@ -97,7 +98,14 @@ export class FinanceEntitlementService {
           {
             source: { in: ['STRIPE', 'TELEGRAM_STARS'] },
             currentPeriodEnd: { gt: now },
-            providerSubscription: { is: { mode: BotBillingProviderMode.LIVE } },
+            AND: [{ OR: [{ checkoutExpiresAt: null }, { confirmedPaidThrough: { gt: now } }] }],
+            providerSubscription: {
+              is: {
+                mode: isProductionEnvironment()
+                  ? BotBillingProviderMode.LIVE
+                  : { in: [BotBillingProviderMode.LIVE, BotBillingProviderMode.TEST] },
+              },
+            },
           },
           {
             source: { in: ['MANUAL', 'GIFT'] },
@@ -112,6 +120,7 @@ export class FinanceEntitlementService {
       },
       select: {
         currentPeriodEnd: true,
+        confirmedPaidThrough: true,
         cancelAtPeriodEnd: true,
         plan: { select: { code: true } },
         grants: { where: { revokedAt: null }, select: { expiresAt: true } },
@@ -140,7 +149,11 @@ export class FinanceEntitlementService {
     )
       tier = 'PRO';
     const dates = subscriptions
-      .flatMap((s) => [s.currentPeriodEnd, ...s.grants.map((g) => g.expiresAt)])
+      .flatMap((s) => [
+        s.confirmedPaidThrough && s.currentPeriodEnd && s.confirmedPaidThrough < s.currentPeriodEnd
+          ? s.confirmedPaidThrough : s.currentPeriodEnd,
+        ...s.grants.map((g) => g.expiresAt),
+      ])
       .filter((d): d is Date => d instanceof Date);
     return {
       tier,
@@ -219,7 +232,7 @@ export class FinanceEntitlementService {
   ) {
     const access = await this.access(input);
     if (!access.capabilities.includes(capability)) {
-      throw new ForbiddenException('Finance AI insights require Ultimate');
+      throw new ForbiddenException('Finance AI insights require a paid plan');
     }
     return this.reserveForTier(input, access.tier, feature, model);
   }
@@ -236,6 +249,7 @@ export class FinanceEntitlementService {
   ) {
     const limit = this.limit(tier, feature);
     if (limit === null) return null;
+    if (limit === 0) throw new ForbiddenException('Finance AI requires a paid plan');
     const identity = await this.prisma.financeProfile.findFirst({
       where: {
         id: input.profileId,

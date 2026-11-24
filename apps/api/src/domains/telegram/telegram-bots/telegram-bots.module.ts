@@ -1,3 +1,7 @@
+import { FinanceProductionBotEnvironmentService } from '@consumer-finance/api/identity/finance-production-bot-environment.service';
+import { TelegramSupportModule } from '../telegram-support/telegram-support.module';
+import { FinanceAiConfigController } from '@consumer-finance/api/ai/finance-ai-config.controller';
+import { FinanceAiConfigService } from '@consumer-finance/api/ai/finance-ai-config.service';
 import { Module } from '@nestjs/common';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
@@ -37,8 +41,6 @@ import { FinanceChatFlowService } from '@consumer-finance/api/chat-flows/finance
 import { FinanceChatFlowPresenterService } from '@consumer-finance/api/chat-flows/finance-chat-flow-presenter.service';
 import { FinanceEntitlementService } from '@consumer-finance/api/billing/finance-entitlement.service';
 import { BotBillingModule } from '../bot-billing/bot-billing.module';
-import { FinanceAiConfigService } from '@consumer-finance/api/ai/finance-ai-config.service';
-import { FinanceAiConfigController } from '@consumer-finance/api/ai/finance-ai-config.controller';
 import { FinanceController } from '@consumer-finance/api/http/finance.controller';
 import { FinanceBrowserContextController } from '@consumer-finance/api/http/finance-browser-context.controller';
 import { FinanceLocalDevelopmentController } from '@consumer-finance/api/http/finance-local-development.controller';
@@ -104,19 +106,19 @@ import { ConfiguredBotAnalyticsService } from './core/configured-bot-analytics.s
 import { SystemBotBrandingStartupService } from './core/system-bot-branding-startup.service';
 
 @Module({
-  imports: [BotBillingModule],
+  imports: [BotBillingModule, TelegramSupportModule],
   controllers: [
     TelegramBotsController,
     TelegramBotRuntimeController,
     TelegramBotRuntimeAvatarController,
     FinanceBrowserContextController,
     FinanceLocalDevelopmentController,
-    FinanceAiConfigController,
     FinanceController,
     FinanceDebtController,
     FinanceRegularPaymentController,
     FinanceUltimateController,
     FinanceBillingAdminController,
+    FinanceAiConfigController,
     FinanceConsumerBillingController,
     FinanceSavingsController,
     FinanceInvestmentController,
@@ -152,7 +154,6 @@ import { SystemBotBrandingStartupService } from './core/system-bot-branding-star
     FinanceChatFlowService,
     FinanceChatFlowPresenterService,
     FinanceEntitlementService,
-    FinanceAiConfigService,
     FinanceContextService,
     FinanceConsumerSessionService,
     FinanceConsumerRuntimeEnvironmentService,
@@ -176,6 +177,7 @@ import { SystemBotBrandingStartupService } from './core/system-bot-branding-star
     FinanceInvestmentCashFlowService,
     FinanceAssetSummaryService,
     FinanceBillingService,
+    FinanceAiConfigService,
     FinanceTransferService,
     FinanceUltimateService,
     FinanceAssistantEntryService,
@@ -188,6 +190,7 @@ import { SystemBotBrandingStartupService } from './core/system-bot-branding-star
     FinanceConsumerRequestService,
     FinanceBrowserContextService,
     FinanceLocalDevelopmentService,
+    FinanceProductionBotEnvironmentService,
     FinanceDebtService,
     FinanceRegularPaymentService,
     FinanceRegularPaymentConfirmationService,

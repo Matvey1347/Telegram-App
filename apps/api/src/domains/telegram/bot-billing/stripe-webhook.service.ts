@@ -22,9 +22,26 @@ type StripeObject = Stripe.Event.Data.Object & {
   cancel_at_period_end?: boolean;
   canceled_at?: number | null;
   amount_paid?: number;
+  amount_total?: number;
+  paid_out_of_band?: boolean;
+  billing_reason?: string;
+  lines?: {
+    data?: Array<{
+      period?: { end?: number };
+      parent?: {
+        type?: string;
+        subscription_item_details?: { proration?: boolean };
+      };
+      type?: string;
+      proration?: boolean;
+    }>;
+  };
   currency?: string;
   parent?: {
-    subscription_details?: { subscription?: string | { id: string } | null };
+    subscription_details?: {
+      subscription?: string | { id: string } | null;
+      metadata?: Record<string, string>;
+    };
   } | null;
   items?: {
     data?: Array<{
@@ -80,6 +97,10 @@ export class StripeWebhookService {
     } catch {
       throw new BadRequestException('Invalid Stripe webhook signature');
     }
+    if (event.livemode !== (config.mode === 'LIVE'))
+      throw new BadRequestException(
+        'Stripe webhook mode does not match configuration',
+      );
     const object = event.data.object as StripeObject;
     const localSubscriptionId = this.localSubscriptionId(object);
     const providerSubscriptionId = this.providerSubscriptionId(object);
@@ -119,6 +140,41 @@ export class StripeWebhookService {
     });
     if (existing) return { received: true, duplicate: true };
 
+    let paidThrough: Date | undefined;
+    if (
+      local?.checkoutExpiresAt &&
+      event.type === 'invoice.paid' &&
+      (object.amount_paid ?? 0) > 0 &&
+      !object.paid_out_of_band &&
+      object.currency?.toUpperCase() === local.currency &&
+      this.idOf(object.customer) === local.providerCustomerId
+    ) {
+      if (
+        local.interval === 'DAY' &&
+        object.billing_reason === 'subscription_create' &&
+        providerSubscriptionId
+      ) {
+        const remote = await new Stripe(apiKey).subscriptions.retrieve(
+          providerSubscriptionId,
+        );
+        if (remote.trial_end) paidThrough = new Date(remote.trial_end * 1000);
+      } else {
+        const end = Math.max(
+          0,
+          ...(object.lines?.data ?? [])
+            .filter(
+              (line) =>
+                (line.parent?.type === 'subscription_item_details' ||
+                  line.type === 'subscription') &&
+                !line.parent?.subscription_item_details?.proration &&
+                !line.proration,
+            )
+            .map((line) => line.period?.end ?? 0),
+        );
+        if (end) paidThrough = new Date(end * 1000);
+      }
+    }
+
     await this.prisma.$transaction(
       async (tx) => {
         const subscription = localSubscriptionId
@@ -150,7 +206,7 @@ export class StripeWebhookService {
             mode: config.mode,
             providerEventId: event.id,
             type: this.eventType(event.type),
-            amountMinor: object.amount_paid ?? null,
+            amountMinor: object.amount_paid ?? object.amount_total ?? null,
             currency: object.currency?.toUpperCase() || null,
             occurredAt: new Date(event.created * 1000),
             payload: {
@@ -161,6 +217,14 @@ export class StripeWebhookService {
           },
         });
         if (!subscription) return;
+        if (
+          subscription.checkoutExpiresAt &&
+          object.customer &&
+          this.idOf(object.customer) !== subscription.providerCustomerId
+        )
+          throw new BadRequestException(
+            'Stripe webhook customer does not match subscription',
+          );
         const customerId = this.idOf(object.customer);
         if (event.type === 'checkout.session.completed') {
           if (!providerSubscriptionId)
@@ -191,6 +255,24 @@ export class StripeWebhookService {
           });
         }
         if (event.type.startsWith('customer.subscription.')) {
+          const previous = subscription.checkoutExpiresAt
+            ? await tx.botProviderSubscription.findUnique({
+                where: { subscriptionId: subscription.id },
+                select: { rawSnapshot: true },
+              })
+            : null;
+          const snapshot = previous?.rawSnapshot;
+          if (
+            snapshot &&
+            typeof snapshot === 'object' &&
+            !Array.isArray(snapshot) &&
+            typeof snapshot.eventCreated === 'number' &&
+            (snapshot.eventCreated > event.created ||
+              (snapshot.eventCreated === event.created &&
+                snapshot.status === 'canceled' &&
+                object.status !== 'canceled'))
+          )
+            return;
           const status = this.status(object.status);
           const period = object.items?.data?.[0];
           await tx.botSubscription.update({
@@ -219,6 +301,7 @@ export class StripeWebhookService {
                 providerStatus: object.status || 'unknown',
                 rawSnapshot: {
                   status: object.status || null,
+                  eventCreated: event.created,
                   cancelAtPeriodEnd: Boolean(object.cancel_at_period_end),
                 },
                 lastSyncedAt: new Date(),
@@ -229,16 +312,36 @@ export class StripeWebhookService {
                 mode: config.mode,
                 providerSubscriptionId,
                 providerStatus: object.status || 'unknown',
-                rawSnapshot: { status: object.status || null },
+                rawSnapshot: {
+                  status: object.status || null,
+                  eventCreated: event.created,
+                },
               },
             });
         }
-        if (event.type === 'invoice.paid')
+        if (event.type === 'invoice.paid' && !subscription.checkoutExpiresAt)
           await tx.botSubscription.update({
             where: { id: subscription.id },
             data: { status: BotSubscriptionStatus.ACTIVE },
           });
-        if (event.type === 'invoice.payment_failed')
+        if (
+          paidThrough &&
+          (!subscription.confirmedPaidThrough ||
+            paidThrough > subscription.confirmedPaidThrough)
+        )
+          await tx.botSubscription.update({
+            where: { id: subscription.id },
+            data: {
+              confirmedPaidThrough: paidThrough,
+              ...(subscription.interval === 'DAY' && !subscription.introPaidAt
+                ? { introPaidAt: new Date(event.created * 1000) }
+                : {}),
+            },
+          });
+        if (
+          event.type === 'invoice.payment_failed' &&
+          !subscription.checkoutExpiresAt
+        )
           await tx.botSubscription.update({
             where: { id: subscription.id },
             data: { status: BotSubscriptionStatus.PAST_DUE },
@@ -251,7 +354,10 @@ export class StripeWebhookService {
 
   private localSubscriptionId(object: StripeObject) {
     return (
-      object.metadata?.subscriptionId || object.client_reference_id || null
+      object.metadata?.subscriptionId ||
+      object.parent?.subscription_details?.metadata?.subscriptionId ||
+      object.client_reference_id ||
+      null
     );
   }
   private providerSubscriptionId(object: StripeObject) {
@@ -270,6 +376,7 @@ export class StripeWebhookService {
     if (status === 'past_due' || status === 'unpaid')
       return BotSubscriptionStatus.PAST_DUE;
     if (status === 'canceled') return BotSubscriptionStatus.CANCELED;
+    if (status === 'incomplete_expired') return BotSubscriptionStatus.EXPIRED;
     return BotSubscriptionStatus.INCOMPLETE;
   }
   private eventType(type: string) {

@@ -82,8 +82,8 @@ export function AiPostingPublicationCosts({ post }: { post: Publication }) {
                       <p className="font-medium">Поиск {index + 1} · {searchOutcome[round.outcome]}</p>
                       {round.queries.map((query, queryIndex) => (
                         <p key={queryIndex} className="break-words text-neutral-400">
-                          {query.catalog === "wordpress-photos" ? "WordPress Photo Directory"
-                            : query.catalog === "wikimedia" ? "Wikimedia Commons" : "Openverse / Wikimedia Commons"}
+                          {query.domain ?? (query.catalog === "pinterest" ? "Pinterest" : query.catalog === "wordpress-photos" ? "WordPress Photo Directory"
+                            : query.catalog === "wikimedia" ? "Wikimedia Commons" : "Openverse / Wikimedia Commons")}
                           {" · "}{query.text}{" · стр. "}{query.page}
                           {query.unavailable ? " · каталог недоступен" : ` · результатов: ${query.candidates}`}
                         </p>

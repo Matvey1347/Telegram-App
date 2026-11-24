@@ -539,7 +539,11 @@ export function CrossPromotionPlansPage({
           <LoadingState />
         ) : !visiblePlans.length && !visibleFolders.length ? (
           !plansQuery.isError && (planTab === "DRAFT" || !foldersQuery.isError) ? (
-            <EmptyState text={`No ${planTab.toLowerCase()} promotions.`} />
+            <EmptyState
+              text={planTab === "ACTIVE"
+                ? i18n?.t("ads.no_active_promotions") ?? "No active promotions."
+                : `No ${planTab.toLowerCase()} promotions.`}
+            />
           ) : null
         ) : (
           <div className="columns-1 gap-3 xl:columns-2">

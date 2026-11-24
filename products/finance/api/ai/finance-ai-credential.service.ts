@@ -1,44 +1,56 @@
-import {
-  BadGatewayException,
-  BadRequestException,
-  Injectable,
-} from '@nestjs/common';
-import { FinanceAiConnectionStatus, FinanceAiProvider } from '@prisma/client';
-import { TokenEncryptionService } from '@api/common/security/token-encryption.service';
-import { PrismaService } from '@api/prisma/prisma.service';
+import { BadGatewayException, Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { PrismaService } from "@api/prisma/prisma.service";
+import { TokenEncryptionService } from "@api/common/security/token-encryption.service";
 
-/** Resolves the existing workspace/bot OpenAI configuration for runtime calls. */
 @Injectable()
 export class FinanceAiCredentialService {
   constructor(
+    private readonly config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly encryption: TokenEncryptionService,
   ) {}
 
-  async key(profileId: string, botIntegrationId: string) {
-    const profile = await this.prisma.financeProfile.findUnique({
-      where: { id: profileId },
-      select: { botIntegration: { select: { workspaceId: true } } },
+  async key(_profileId: string, botIntegrationId: string) {
+    const bot = await this.prisma.telegramBotIntegration.findUnique({
+      where: { id: botIntegrationId, applicationType: "FINANCE" },
+      select: { workspaceId: true },
     });
-    if (!profile) throw new BadRequestException('Finance profile not found');
-    const rows = await this.prisma.aiProviderConfig.findMany({
-      where: {
-        workspaceId: profile.botIntegration.workspaceId,
-        provider: FinanceAiProvider.OPENAI,
-        connectionStatus: FinanceAiConnectionStatus.CONNECTED,
-        OR: [{ botIntegrationId }, { botIntegrationId: null }],
-      },
-    });
-    const config =
-      rows.find((row) => row.botIntegrationId === botIntegrationId) ||
-      rows.find((row) => row.botIntegrationId === null);
-    if (!config?.apiKeyEncrypted || !config.apiKeyIv || !config.apiKeyAuthTag) {
-      throw new BadGatewayException('Finance AI provider is not connected');
+    if (bot) {
+      const rows = await this.prisma.aiProviderConfig.findMany({
+        where: {
+          workspaceId: bot.workspaceId,
+          provider: "OPENAI",
+          connectionStatus: "CONNECTED",
+          OR: [{ botIntegrationId }, { botIntegrationId: null }],
+        },
+        select: {
+          botIntegrationId: true,
+          apiKeyEncrypted: true,
+          apiKeyIv: true,
+          apiKeyAuthTag: true,
+          connectionStatus: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      const row =
+        rows.find((item) => item.botIntegrationId === botIntegrationId) ??
+        rows.find((item) => item.botIntegrationId === null);
+      if (
+        row?.connectionStatus === "CONNECTED" &&
+        row.apiKeyEncrypted &&
+        row.apiKeyIv &&
+        row.apiKeyAuthTag
+      )
+        return this.encryption.decrypt({
+          encrypted: row.apiKeyEncrypted,
+          iv: row.apiKeyIv,
+          authTag: row.apiKeyAuthTag,
+        });
     }
-    return this.encryption.decrypt({
-      encrypted: config.apiKeyEncrypted,
-      iv: config.apiKeyIv,
-      authTag: config.apiKeyAuthTag,
-    });
+    const key = this.config.get<string>("INTERNAL_AI_OPENAI_API_KEY")?.trim();
+    if (!key)
+      throw new BadGatewayException("Finance AI provider is not configured");
+    return key;
   }
 }

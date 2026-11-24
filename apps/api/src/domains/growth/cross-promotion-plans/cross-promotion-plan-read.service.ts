@@ -12,6 +12,16 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { publisherPlacements } from './cross-promotion-plan-input';
 
 // Permanent Telegram posts can outlive the campaign shown in the promotion inbox.
+function maxMeasuredCount(values: Array<number | null>) {
+  const measured = values.filter((value): value is number => value != null);
+  return measured.length ? Math.max(...measured) : null;
+}
+
+function sumMeasuredCount(values: Array<number | null>) {
+  const measured = values.filter((value): value is number => value != null);
+  return measured.length ? measured.reduce((sum, value) => sum + value, 0) : null;
+}
+
 const OWN_PROMOTION_ACTIVITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 type CounterBaseline = {
@@ -273,42 +283,46 @@ export class CrossPromotionPlanReadService {
           },
         })
       : [];
+    const telegramPostByMessage = new Map(telegramPosts.map((post) =>
+      [`${post.telegramChannelId}:${post.telegramMessageId}`, post] as const,
+    ));
     // A legacy failed re-schedule could clear placementPostIds even though the
     // Telegram posts remain in our import. Recover only an exact post text at
     // its planned channel and time, so we never attribute an arbitrary post.
-    const recoveryCandidates = rows.flatMap((row) => {
-      const placements = placementsByPlan.get(row.id) ?? [];
-      const publicationPost = publicationPostsByPlan.get(row.id)!;
-      const recoveryText =
-        publicationPost.plainText?.trim() || publicationPost.text.trim();
-      if (placements.length || !recoveryText) return [];
-      const publisherPlacements = publicationPost.publisherPlacements ?? [];
-      return row.publisherChannelIds.flatMap((telegramChannelId) => {
-        const scheduledAt = publisherPlacements.find(
-          (placement) => placement.telegramChannelId === telegramChannelId,
-        )?.scheduledAt;
-        if (!scheduledAt) return [];
-        const instant = new Date(scheduledAt).getTime();
-        return Number.isNaN(instant)
-          ? []
-          : [
-              {
-                telegramChannelId,
-                text: recoveryText,
-                postDate: {
-                  gte: new Date(instant - 2 * 3_600_000),
-                  lte: new Date(instant + 2 * 3_600_000),
-                },
-              },
-            ];
+    const recoveryByPlan = new Map(rows.flatMap((row) => {
+      const post = publicationPostsByPlan.get(row.id)!;
+      if (placementsByPlan.get(row.id)?.length) return [];
+      const publications = post.publisherPublications?.length
+        ? post.publisherPublications
+        : [{ post, placements: post.publisherPlacements ?? [] }];
+      const candidates = publications.flatMap(({ post: draft, placements }) => {
+        const text = draft.plainText?.trim() || draft.text.trim();
+        if (!text) return [];
+        return placements.flatMap(({ telegramChannelId, scheduledAt }) => {
+          const instant = Date.parse(scheduledAt);
+          if (!Number.isFinite(instant)) return [];
+          return [{
+            telegramChannelId, text, instant,
+            postDate: {
+              gte: new Date(instant - 2 * 3_600_000),
+              lte: new Date(instant + 2 * 3_600_000),
+            },
+          }];
+        });
       });
-    });
+      return [[row.id, candidates] as const];
+    }));
+    const recoveryCandidates = [...recoveryByPlan.values()].flatMap((candidates) =>
+      candidates.map(({ telegramChannelId, text, postDate }) => ({ telegramChannelId, text, postDate })),
+    );
     const recoveredTelegramPosts = recoveryCandidates.length
       ? await this.prisma.telegramPost.findMany({
           where: { workspaceId, OR: recoveryCandidates },
           select: {
             telegramChannelId: true,
             telegramMessageId: true,
+            text: true,
+            postDate: true,
             viewsCount: true,
             reactionsCount: true,
           },
@@ -535,11 +549,13 @@ export class CrossPromotionPlanReadService {
           const channelPlacements = placements.filter(
             (placement) => placement.telegramChannelId === channelId,
           );
-          const managedPostsForChannel = managedPosts.filter((post) =>
-            channelPlacements.some(
-              (placement) => placement.managedPostId === post.id,
-            ),
-          );
+          const managedPostsForChannel = channelPlacements.flatMap((placement) => {
+            const managed = managedPostById.get(placement.managedPostId);
+            const slot = publicationPost.publisherPublications
+              ?.find(({ id }) => id === placement.publicationId)
+              ?.placements.find(({ telegramChannelId }) => telegramChannelId === channelId);
+            return managed && (!slot || Date.parse(slot.scheduledAt) <= now) ? [managed] : [];
+          });
           const scheduledTimes = configuredPlacements
             .filter((placement) => placement.telegramChannelId === channelId)
             .map((placement) => Date.parse(placement.scheduledAt))
@@ -549,21 +565,39 @@ export class CrossPromotionPlanReadService {
           // as an actual campaign reach before its configured publication time.
           const publicationHasStarted =
             !scheduledTimes.length || Math.min(...scheduledTimes) <= now;
-          const publishedRows = telegramPosts.filter(
-            (post) =>
-              post.telegramChannelId === channelId &&
-              managedPostsForChannel.some((managedPost) =>
-                managedPost.telegramMessageIds.includes(post.telegramMessageId),
-              ),
-          );
-          const resultPosts =
-            publicationHasStarted && publishedRows.length
-              ? publishedRows
-              : publicationHasStarted
-                ? recoveredTelegramPosts.filter(
-                    (post) => post.telegramChannelId === channelId,
-                  )
-                : [];
+          const resultPosts: Array<{ viewsCount: number | null; reactionsCount: number | null }> = [];
+          if (publicationHasStarted) {
+            const countedMessages = new Set<string>();
+            for (const managed of managedPostsForChannel) {
+              const messages = [...new Set(managed.telegramMessageIds)].flatMap((id) => {
+                const post = telegramPostByMessage.get(`${channelId}:${id}`);
+                return post && !countedMessages.has(id) ? [post] : [];
+              });
+              if (!messages.length) continue;
+              messages.forEach((post) => countedMessages.add(post.telegramMessageId));
+              // Telegram media albums can have several message IDs for one placement.
+              resultPosts.push({
+                viewsCount: maxMeasuredCount(messages.map((post) => post.viewsCount)),
+                reactionsCount: maxMeasuredCount(messages.map((post) => post.reactionsCount)),
+              });
+            }
+            for (const candidate of recoveryByPlan.get(row.id) ?? []) {
+              if (candidate.telegramChannelId !== channelId || candidate.instant > now) continue;
+              const match = recoveredTelegramPosts
+                .filter((post) => post.telegramChannelId === channelId &&
+                  post.text === candidate.text &&
+                  post.postDate >= candidate.postDate.gte &&
+                  post.postDate <= candidate.postDate.lte &&
+                  !countedMessages.has(post.telegramMessageId))
+                .sort((left, right) =>
+                  Math.abs(left.postDate.getTime() - candidate.instant) -
+                  Math.abs(right.postDate.getTime() - candidate.instant),
+                )[0];
+              if (!match) continue;
+              countedMessages.add(match.telegramMessageId);
+              resultPosts.push(match);
+            }
+          }
           return {
             telegramChannelId: channelId,
             title: channel?.title ?? 'Unavailable channel',
@@ -572,18 +606,8 @@ export class CrossPromotionPlanReadService {
               before == null || after == null
                 ? null
                 : Math.max(0, before - after),
-            postViews: resultPosts.length
-              ? resultPosts.reduce(
-                  (sum, post) => sum + Number(post.viewsCount ?? 0),
-                  0,
-                )
-              : null,
-            postReactions: resultPosts.length
-              ? resultPosts.reduce(
-                  (sum, post) => sum + Number(post.reactionsCount ?? 0),
-                  0,
-                )
-              : null,
+            postViews: sumMeasuredCount(resultPosts.map((post) => post.viewsCount)),
+            postReactions: sumMeasuredCount(resultPosts.map((post) => post.reactionsCount)),
           };
         }),
         partnerResults: row.partnerChannelIds.map((channelId: string) => {

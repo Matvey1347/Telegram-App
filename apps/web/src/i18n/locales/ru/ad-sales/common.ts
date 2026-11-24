@@ -50,6 +50,7 @@ const messages = {
   "ads.status_completed": "Завершённые",
   "ads.status_deleting": "Завершение",
   "ads.status_cancelled": "Отменено",
+  "ads.no_active_promotions": "Нет активных продвижений.",
   "ads.hide_filters": "Скрыть фильтры",
   "ads.section_campaigns": "Рекламные кампании",
   "ads.section_hypotheses": "Гипотезы",

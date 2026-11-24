@@ -30,7 +30,7 @@ export function supportsBillingPrice(input: {
 }) {
   const capabilities = BILLING_PROVIDER_CAPABILITIES[input.provider];
   return (
-    capabilities.intervals.includes(input.interval) &&
+    capabilities.intervals.some((interval) => interval === input.interval) &&
     (!capabilities.currencies ||
       capabilities.currencies.includes(input.currency))
   );

@@ -472,11 +472,13 @@ export class ConfiguredBotAnalyticsService {
     const selected = this.config
       .get<string>('TELEGRAM_SYSTEM_BOT_ENVIRONMENT')
       ?.trim();
-    const runtimes = (['LOCAL', 'PRODUCTION'] as const)
-      .map((environment) => this.systemBotRuntime(environment))
-      .filter((runtime): runtime is NonNullable<typeof runtime> =>
-        Boolean(runtime),
-      );
+    const runtimes = (['LOCAL', 'PRODUCTION'] as const).flatMap(environment => {
+      const runtime = this.systemBotRuntime(environment);
+      if (runtime) return [{ environment, username: runtime.username, configured: true }];
+      const username = this.config.get<string>(`TELEGRAM_SYSTEM_BOT_${environment}_USERNAME`)?.trim()
+        || this.selectedSystemBotLegacyValue(environment, 'USERNAME');
+      return username ? [{ environment, username, configured: false }] : [];
+    });
     const cachedAvatars = await this.cachedSystemBotAvatars(workspaceId);
     return runtimes.map((runtime) => {
       const cachedAvatar = cachedAvatars.find(
@@ -495,7 +497,7 @@ export class ConfiguredBotAnalyticsService {
           runtime.environment === 'LOCAL'
             ? '/brand/telegram-system-dev.png'
             : '/brand/telegram-system.png',
-        configured: true,
+        configured: runtime.configured,
         selected: selected === runtime.environment,
       };
     });
@@ -504,11 +506,18 @@ export class ConfiguredBotAnalyticsService {
   private systemBotRuntime(environment: Environment) {
     const username = this.config
       .get<string>(`TELEGRAM_SYSTEM_BOT_${environment}_USERNAME`)
-      ?.trim();
+      ?.trim() || this.selectedSystemBotLegacyValue(environment, 'USERNAME');
     const token = this.config
       .get<string>(`TELEGRAM_SYSTEM_BOT_${environment}_TOKEN`)
-      ?.trim();
+      ?.trim() || this.selectedSystemBotLegacyValue(environment, 'TOKEN');
     return username && token ? { environment, username, token } : null;
+  }
+
+  private selectedSystemBotLegacyValue(environment: Environment, key: 'USERNAME' | 'TOKEN') {
+    const selected = this.config.get<string>('TELEGRAM_SYSTEM_BOT_ENVIRONMENT')?.trim();
+    return selected === environment
+      ? this.config.get<string>(`TELEGRAM_SYSTEM_BOT_${key}`)?.trim()
+      : undefined;
   }
 
   private assertSystemBotWorkspace(workspaceId: string) {

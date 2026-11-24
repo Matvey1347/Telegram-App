@@ -111,6 +111,8 @@ export type TelegramBotFinanceApplicationSummary = {
   applicationType: "FINANCE";
   finance: Partial<Record<TelegramBotRuntimeEnvironment, {
     registeredUsers: number;
+    activeUsers?: number;
+    activePaidUsers?: number;
     paidUsers: number;
     activeSubscriptions: number;
     failedPayments: number;

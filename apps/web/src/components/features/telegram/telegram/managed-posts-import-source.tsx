@@ -34,6 +34,7 @@ export function ManagedPostsImportSource({
   onClear,
   onCopyContent,
   jsonOnly = false,
+  showEmptyEditor = false,
 }: {
   content: string;
   fileName: string | null;
@@ -43,6 +44,7 @@ export function ManagedPostsImportSource({
   onClear: () => void;
   onCopyContent: () => void;
   jsonOnly?: boolean;
+  showEmptyEditor?: boolean;
 }) {
   const { t } = useI18n();
   const acceptedFiles = jsonOnly
@@ -60,7 +62,7 @@ export function ManagedPostsImportSource({
       return;
     }
     const text = event.clipboardData.getData("text/plain");
-    if (!content && text) {
+    if (!content && text && !(event.target instanceof HTMLTextAreaElement)) {
       event.preventDefault();
       onContent(text);
     }
@@ -77,17 +79,18 @@ export function ManagedPostsImportSource({
   return (
     <div className="space-y-3">
       <FormField label={t("telegram.posts.import.data")}>
-        {content ? (
-          <div className="overflow-hidden rounded-lg border border-neutral-700 bg-neutral-950 focus-within:border-blue-600">
-            <div className="flex items-center justify-between gap-2 border-b border-neutral-800 px-2 py-1.5">
+        <div className={showEmptyEditor ? "overflow-hidden rounded-lg border border-blue-700 bg-neutral-950 focus-within:border-blue-500" : ""}>
+        {(content || showEmptyEditor) && (
+          <div className={showEmptyEditor ? "overflow-hidden" : "overflow-hidden rounded-lg border border-neutral-700 bg-neutral-950 focus-within:border-blue-600"}>
+            {content && <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-800 px-2 py-1.5">
               <span className="min-w-0 truncate text-xs text-neutral-400">
                 {fileName ?? t("telegram.posts.import.pastedText")}
               </span>
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="flex flex-wrap items-center gap-1">
                 <Button
                   type="button"
                   variant="secondary"
-                  className="h-9 w-[104px] px-2 py-0 text-sm"
+                  className="h-9 min-w-fit whitespace-nowrap px-3 py-0 text-sm"
                   aria-label={t("telegram.posts.import.copyData")}
                   disabled={disabled}
                   onClick={onCopyContent}
@@ -124,7 +127,7 @@ export function ManagedPostsImportSource({
                   {t("telegram.posts.import.clear")}
                 </Button>
               </div>
-            </div>
+            </div>}
             <Textarea
               value={content}
               onChange={(event) => onContent(event.target.value)}
@@ -132,14 +135,17 @@ export function ManagedPostsImportSource({
               rows={7}
               disabled={disabled}
               aria-label={t("telegram.posts.import.data")}
+              placeholder={showEmptyEditor ? t("telegram.posts.import.pasteJson") : undefined}
+              spellCheck={showEmptyEditor ? false : undefined}
               className="rounded-none border-0 font-mono text-xs focus:ring-0"
             />
           </div>
-        ) : (
+        )}
+        {!content && (
           <div
             role="region"
             aria-label={t("telegram.posts.import.dropArea")}
-            className={`flex min-h-28 flex-col items-center justify-center gap-2 rounded-lg border border-dashed bg-neutral-950 px-4 py-5 text-center transition ${
+            className={`flex min-h-28 flex-col items-center justify-center gap-2 border-dashed bg-neutral-950 px-4 py-5 text-center transition ${showEmptyEditor ? "border-t" : "rounded-lg border"} ${
               dragging
                 ? "border-blue-500 bg-blue-950/30 text-white"
                 : "border-neutral-700 text-neutral-300 focus-within:border-blue-600 hover:border-blue-600"
@@ -165,9 +171,9 @@ export function ManagedPostsImportSource({
             <span className="text-xs text-neutral-500">
               {t(jsonOnly ? "telegram.posts.import.unifiedFileTypes" : "telegram.posts.import.fileTypes")}
             </span>
-            <span className="inline-flex items-center gap-1 text-xs text-blue-300">
+            {!showEmptyEditor && <span className="inline-flex items-center gap-1 text-xs text-blue-300">
               {t("telegram.posts.import.pasteHint")}
-            </span>
+            </span>}
             <input
               ref={emptyFileInputRef}
               type="file"
@@ -182,6 +188,7 @@ export function ManagedPostsImportSource({
             />
           </div>
         )}
+        </div>
       </FormField>
     </div>
   );

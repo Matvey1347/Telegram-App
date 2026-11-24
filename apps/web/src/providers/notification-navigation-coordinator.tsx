@@ -16,7 +16,7 @@ import {
   isWorkspaceScopedQuery,
 } from "./query-provider";
 
-const WORKSPACE_CHANGE_EVENT = "telegram-system:workspace-changed";
+export const WORKSPACE_CHANGE_EVENT = "telegram-system:workspace-changed";
 
 function subscribeToWorkspaceChange(onChange: () => void) {
   window.addEventListener("storage", onChange);

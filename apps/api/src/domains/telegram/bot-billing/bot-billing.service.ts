@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
   BadRequestException,
   Injectable,
@@ -36,6 +37,7 @@ import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.
 import { BotBillingAnalyticsService } from './bot-billing-analytics.service';
 import { isProductionEnvironment } from '../../../config/deployment-config';
 import { BotBillingProviderSettings } from './bot-billing-provider-settings';
+import { reconcileFixedBillingCatalog } from './fixed-billing-catalog';
 import { BotBillingCheckout } from './bot-billing-checkout';
 import { BotBillingReadModels } from './bot-billing-read-models';
 
@@ -48,10 +50,29 @@ export type FixedBillingCatalogDefinition = {
   amountMinor: number;
   currency: string;
   interval: BotBillingInterval;
+  intervalCount: number;
 };
 
 @Injectable()
 export class BotBillingService {
+  private readonly catalogLogger = new Logger(BotBillingService.name);
+  private catalogRefresh?: (
+    botId?: string,
+    workspaceId?: string,
+  ) => Promise<void>;
+
+  registerCatalogRefresh(
+    refresh: (botId?: string, workspaceId?: string) => Promise<void>,
+  ) {
+    this.catalogRefresh = refresh;
+  }
+
+  private refreshCatalogAfterConfig(botId?: string, workspaceId?: string) {
+    void this.catalogRefresh?.(botId, workspaceId).catch(() =>
+      this.catalogLogger.warn('Could not refresh Finance Stripe catalog'),
+    );
+  }
+
   private readonly providerSettings: BotBillingProviderSettings;
   private readonly checkout: BotBillingCheckout;
   private readonly readModels: BotBillingReadModels;
@@ -111,7 +132,7 @@ export class BotBillingService {
     });
     if (finance)
       throw new BadRequestException(
-        'Finance uses the fixed Free, Pro and Ultimate catalog; synchronize canonical plans instead',
+        'Finance uses its fixed Free and PLUS offers; synchronize canonical plans instead',
       );
   }
 
@@ -135,7 +156,7 @@ export class BotBillingService {
     );
   }
 
-  saveProviderConfig(
+  async saveProviderConfig(
     userId: string,
     input: {
       botIntegrationId?: string;
@@ -144,21 +165,34 @@ export class BotBillingService {
       dto: UpsertBillingProviderConfigDto;
     },
   ) {
-    return this.providerSettings.saveProviderConfig(userId, input);
+    const result = await this.providerSettings.saveProviderConfig(
+      userId,
+      input,
+    );
+    if (input.provider === 'STRIPE' && result.status === 'CONNECTED') {
+      const membership = await this.admin(userId);
+      this.refreshCatalogAfterConfig(
+        input.botIntegrationId,
+        membership.workspaceId,
+      );
+    }
+    return result;
   }
 
-  useWorkspaceProviderDefault(
+  async useWorkspaceProviderDefault(
     userId: string,
     botIntegrationId: string,
     provider: Provider,
     mode: Mode,
   ) {
-    return this.providerSettings.useWorkspaceProviderDefault(
+    const result = await this.providerSettings.useWorkspaceProviderDefault(
       userId,
       botIntegrationId,
       provider,
       mode,
     );
+    if (provider === 'STRIPE') this.refreshCatalogAfterConfig(botIntegrationId);
+    return result;
   }
 
   async createPlan(
@@ -194,12 +228,23 @@ export class BotBillingService {
     const currency = dto.currency.toUpperCase();
     return this.prisma.$transaction(async (tx) => {
       const latest = await tx.botPlanPrice.aggregate({
-        where: { planId, currency, interval: dto.interval },
+        where: {
+          planId,
+          currency,
+          interval: dto.interval,
+          intervalCount: dto.intervalCount || 1,
+        },
         _max: { version: true },
       });
       // A replacement is a new immutable version. Existing subscribers keep their price row/snapshot.
       await tx.botPlanPrice.updateMany({
-        where: { planId, currency, interval: dto.interval, isPublic: true },
+        where: {
+          planId,
+          currency,
+          interval: dto.interval,
+          intervalCount: dto.intervalCount || 1,
+          isPublic: true,
+        },
         data: { isPublic: false },
       });
       return tx.botPlanPrice.create({
@@ -207,6 +252,7 @@ export class BotBillingService {
           planId,
           currency,
           interval: dto.interval,
+          intervalCount: dto.intervalCount || 1,
           amountMinor: dto.amountMinor,
           version: (latest._max.version || 0) + 1,
         },
@@ -337,6 +383,7 @@ export class BotBillingService {
             orderBy: [
               { currency: 'asc' },
               { interval: 'asc' },
+              { intervalCount: 'asc' },
               { version: 'desc' },
             ],
           },
@@ -352,6 +399,7 @@ export class BotBillingService {
           status: true,
           currency: true,
           interval: true,
+          intervalCount: true,
           amountMinor: true,
           priceVersion: true,
           currentPeriodEnd: true,
@@ -361,10 +409,14 @@ export class BotBillingService {
       this.prisma.botBillingProviderConfig.findMany({
         where: {
           workspaceId: bot.workspaceId,
-          connectionStatus: BotBillingConnectionStatus.CONNECTED,
           OR: [{ botIntegrationId }, { botIntegrationId: null }],
         },
-        select: { provider: true, mode: true, botIntegrationId: true },
+        select: {
+          provider: true,
+          mode: true,
+          botIntegrationId: true,
+          connectionStatus: true,
+        },
       }),
     ]);
     const resolvedProviders = new Map<string, (typeof providers)[number]>();
@@ -377,6 +429,10 @@ export class BotBillingService {
         resolvedProviders.set(key, item);
     }
     const available = [...resolvedProviders.values()]
+      .filter(
+        (item) =>
+          item.connectionStatus === BotBillingConnectionStatus.CONNECTED,
+      )
       .filter((item) => item.mode === 'LIVE' || !isProductionEnvironment())
       .map((item) => ({
         provider: item.provider,
@@ -391,6 +447,7 @@ export class BotBillingService {
     telegramBotUserId: string;
     priceId: string;
     requestedMode?: Mode;
+    preventOverlap?: boolean;
     couponCode?: string;
     successUrl: string;
     cancelUrl: string;
@@ -405,112 +462,24 @@ export class BotBillingService {
     definitions: readonly FixedBillingCatalogDefinition[],
   ) {
     const bot = await this.bot(userId, botIntegrationId);
-    const [application, providerConfigs] = await Promise.all([
-      this.prisma.telegramBotIntegration.findFirst({
-        where: { id: bot.id, applicationType },
-        select: { id: true },
-      }),
-      this.prisma.botBillingProviderConfig.findMany({
-        where: {
-          workspaceId: bot.workspaceId,
-          provider: BotBillingProvider.STRIPE,
-          connectionStatus: BotBillingConnectionStatus.CONNECTED,
-          OR: [{ botIntegrationId }, { botIntegrationId: null }],
-        },
-        select: { botIntegrationId: true, mode: true },
-      }),
-    ]);
-    if (!application)
-      throw new BadRequestException(
-        'The fixed catalog does not match this bot application',
-      );
-    const modes = (['TEST', 'LIVE'] as const).filter((mode) => {
-      const matching = providerConfigs.filter((config) => config.mode === mode);
-      return (
-        matching.some(
-          (config) => config.botIntegrationId === botIntegrationId,
-        ) || matching.some((config) => config.botIntegrationId === null)
-      );
-    });
-    if (!modes.length)
-      throw new BadRequestException('Stripe TEST or LIVE is not connected');
-    const result: Array<{
-      code: string;
-      planId: string;
-      priceId: string;
-      mode: Mode;
-      providerPriceId: string;
-    }> = [];
-    for (const definition of definitions) {
-      const plan = await this.prisma.botSubscriptionPlan.upsert({
-        where: {
-          botIntegrationId_code: { botIntegrationId, code: definition.code },
-        },
-        update: { name: definition.name, isActive: true },
-        create: {
-          workspaceId: bot.workspaceId,
-          botIntegrationId,
-          code: definition.code,
-          name: definition.name,
-          isActive: true,
-        },
-      });
-      let price = await this.prisma.botPlanPrice.findFirst({
-        where: {
-          planId: plan.id,
-          currency: definition.currency,
-          interval: definition.interval,
-          amountMinor: definition.amountMinor,
-          isActive: true,
-        },
-        orderBy: { version: 'desc' },
-      });
-      if (!price) {
-        const previous = await this.prisma.botPlanPrice.aggregate({
-          where: {
-            planId: plan.id,
-            currency: definition.currency,
-            interval: definition.interval,
-          },
-          _max: { version: true },
-        });
-        await this.prisma.botPlanPrice.updateMany({
-          where: {
-            planId: plan.id,
-            currency: definition.currency,
-            interval: definition.interval,
-            isPublic: true,
-          },
-          data: { isPublic: false },
-        });
-        price = await this.prisma.botPlanPrice.create({
-          data: {
-            planId: plan.id,
-            currency: definition.currency,
-            interval: definition.interval,
-            amountMinor: definition.amountMinor,
-            version: (previous._max?.version || 0) + 1,
-            isPublic: true,
-          },
-        });
-      }
-      for (const mode of modes) {
-        const providerPriceId = await this.stripe.ensurePrice({
-          botIntegrationId,
-          mode,
-          plan,
-          price,
-        });
-        result.push({
-          code: definition.code,
-          planId: plan.id,
-          priceId: price.id,
-          mode,
-          providerPriceId,
-        });
-      }
-    }
-    return result;
+    return this.reconcileFixedCatalog(bot, applicationType, definitions, true);
+  }
+
+  async reconcileFixedCatalog(
+    bot: { id: string; workspaceId: string },
+    applicationType: TelegramBotApplicationType,
+    definitions: readonly FixedBillingCatalogDefinition[],
+    strict = false,
+  ) {
+    return reconcileFixedBillingCatalog(
+      this.prisma,
+      this.stripe,
+      this.catalogLogger,
+      bot,
+      applicationType,
+      definitions,
+      strict,
+    );
   }
 
   syncCouponToStripe(

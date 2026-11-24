@@ -44,6 +44,7 @@ export class BotBillingProviderSettings {
 
   private toProviderView(
     row: {
+      id: string;
       provider: BotBillingProvider;
       mode: BotBillingProviderMode;
       connectionStatus: BotBillingConnectionStatus;
@@ -67,6 +68,9 @@ export class BotBillingProviderSettings {
       publicKeyMasked: row?.publicKeyMasked || null,
       secretKeyConfigured: Boolean(row?.secretKeyEncrypted),
       webhookSecretConfigured: Boolean(row?.webhookSecretEncrypted),
+      ...(row && provider === 'STRIPE'
+        ? { webhookPath: `/api/billing/webhooks/stripe/${row.id}` }
+        : {}),
       lastCheckedAt: row?.lastCheckedAt?.toISOString() || null,
       lastValidationError: row?.lastValidationError || null,
       capabilities: BILLING_PROVIDER_CAPABILITIES[provider],
@@ -237,6 +241,15 @@ export class BotBillingProviderSettings {
     const existing = await this.prisma.botBillingProviderConfig.findFirst({
       where: identity,
     });
+    if (
+      input.botIntegrationId &&
+      input.provider === 'STRIPE' &&
+      (secretValue || webhookValue)
+    )
+      await this.assertFinanceStripeOverrideCanChange(
+        input.botIntegrationId,
+        input.mode,
+      );
     // A first override inherits the complete resolved default. Blank inputs
     // therefore preserve effective credentials instead of shadowing them.
     const inherited =
@@ -337,6 +350,35 @@ export class BotBillingProviderSettings {
     );
   }
 
+  private async assertFinanceStripeOverrideCanChange(
+    botIntegrationId: string,
+    mode: Mode,
+  ) {
+    const bot = await this.prisma.telegramBotIntegration.findUnique({
+      where: { id: botIntegrationId },
+      select: { applicationType: true },
+    });
+    if (bot?.applicationType !== 'FINANCE') return;
+    const active = await this.prisma.botSubscription.findFirst({
+      where: {
+        botIntegrationId,
+        source: 'STRIPE',
+        OR: [
+          { status: 'INCOMPLETE', checkoutExpiresAt: { gt: new Date() } },
+          {
+            status: { in: ['ACTIVE', 'PAST_DUE'] },
+            providerSubscription: { is: { mode } },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+    if (active)
+      throw new BadRequestException(
+        'Finish active Stripe subscriptions and checkouts before changing accounts.',
+      );
+  }
+
   async useWorkspaceProviderDefault(
     userId: string,
     botIntegrationId: string,
@@ -344,6 +386,8 @@ export class BotBillingProviderSettings {
     mode: Mode,
   ) {
     const bot = await this.bot(userId, botIntegrationId);
+    if (provider === 'STRIPE')
+      await this.assertFinanceStripeOverrideCanChange(botIntegrationId, mode);
     await this.prisma.botBillingProviderConfig.deleteMany({
       where: { workspaceId: bot.workspaceId, botIntegrationId, provider, mode },
     });

@@ -64,9 +64,11 @@ export type ConsumerBillingCatalog = {
     prices: Array<{
       id: string;
       currency: string;
-      interval: "MONTH" | "YEAR";
+      interval: "DAY" | "MONTH" | "YEAR";
+      intervalCount: number;
       amountMinor: number;
       version: number;
+      available?: boolean;
     }>;
   }>;
   subscriptions: Array<{

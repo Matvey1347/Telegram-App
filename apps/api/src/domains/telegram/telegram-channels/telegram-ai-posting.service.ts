@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT, TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from '@telegram-system/shared';
+import { telegramAiPostingImageSourceUrl, telegramAiPostingImageSourceUrls, DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT, TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import {
@@ -104,7 +104,7 @@ export class TelegramAiPostingService {
     const mode = saved?.mode === 'REVIEW' ? 'REVIEW' : 'TEST';
     const retainedKeys = [
       'historyMode', 'historyFrom', 'variedLength', 'emojiPolicy', 'ending',
-      'hashtags', 'imageMode', 'hybridSearchPercent',
+      'hashtags', 'imageMode', 'hybridSearchPercent', 'imageSearchSources',
       'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia',
       'channelAvatarWatermarkSize', 'channelAvatarWatermarkOpacity',
       'channelAvatarWatermarkX', 'channelAvatarWatermarkY',
@@ -194,10 +194,11 @@ export class TelegramAiPostingService {
         '',
         '## Медиа',
         '• imageMode — found использует найденные медиа; ai генерирует изображения; hybrid сочетает поиск и генерацию.',
+        '• imageSearchSources — массив полных HTTP(S)-ссылок на сайты в порядке поиска. Сохраняй текущий список, если менять его не просили.',
         '• hybridSearchPercent — целая доля поиска от 0 до 100 (по умолчанию 70); оставшаяся доля выделяется генерации.',
         '• useChannelAvatarInMedia — true добавляет аватар канала к создаваемому медиа, если это поддерживается настройками обработки.',
         '• imageAvoidances — массив визуальных направлений/объектов, которых нужно избегать. Не добавляй желаемые стили сюда.',
-        '• mediaPreferences — предпочтения оформления. Каждый объект: id (стабильный ключ), name (короткое название), emoji (эмодзи), emojiIconId (необязательный ID сохранённого icon; если он задан, сохраняй его без изменения), description (общая визуальная концепция до 500 символов), generationDescription (композиция, свет, движение, фактура и правила работы с приложенными референсами, до 1200 символов), searchDescription (признаки подходящего реального снимка, критерии отказа и короткие примеры английских запросов в кавычках, до 1200 символов), references (массив URL визуальных примеров), purpose: SEARCH — использовать при поиске, GENERATION — при генерации, BOTH — в обоих случаях. Новое предпочтение создавай только по запросу/контексту.',
+        '• mediaPreferences — не более 30 предпочтений. Сохраняй id, name, emoji, emojiIconId и references существующих предпочтений без изменений. Каждый объект обязан содержать id, непустое name до 80 символов, emoji, description до 500 символов, references (массив до 8 URL, пустой массив для нового предпочтения без референсов) и purpose: SEARCH, GENERATION или BOTH. generationDescription и searchDescription — строки до 1200 символов каждая. Новое предпочтение создавай только по запросу/контексту.',
         '',
         '## Сферы и подсферы',
         '• spheres — направления содержания канала. Корневая сфера задаёт широкую тему, подсфера уточняет её и имеет parentId родителя. Сфера: id, parentId (null для основной сферы), name, emoji, tier (PRIMARY или SECONDARY), description, sources (необязательные URL, обычно сайты/RSS для этой сферы), mediaPreferenceId (id предпочтения или null).',
@@ -218,7 +219,7 @@ export class TelegramAiPostingService {
         JSON.stringify({
           language: 'ru | en | uk | de | es | ""', audience: 'string (до 4000)', topic: 'string (до 4000)',
           historyMode: 'all | since | none', historyFrom: 'YYYY-MM-DD | ""', variedLength: 'boolean', emojiPolicy: 'start | contextual', ending: 'string', hashtags: 'disabled | start | end | ending_inline',
-          imageMode: 'found | ai | hybrid', hybridSearchPercent: 'integer 0–100', useChannelAvatarInMedia: 'boolean', imageAvoidances: ['string'],
+          imageMode: 'found | ai | hybrid', hybridSearchPercent: 'integer 0–100', imageSearchSources: 'https://website.example/ []', useChannelAvatarInMedia: 'boolean', imageAvoidances: ['string'],
           mediaPreferences: [{ id: 'string', name: 'string', emoji: 'string', emojiIconId: 'string | optional saved icon ID', description: 'string', generationDescription: 'string', searchDescription: 'string', references: ['URL'], purpose: 'SEARCH | GENERATION | BOTH' }],
           spheres: [{ id: 'string', parentId: 'string | null', name: 'string', emoji: 'string', tier: 'PRIMARY | SECONDARY', description: 'string', sources: ['URL'], mediaPreferenceId: 'string | null' }],
           rubrics: [{ id: 'string', sphereId: 'string | null', name: 'string', emoji: 'string', description: 'string', goal: 'string', lengthIds: ['length id'] }],
@@ -228,7 +229,7 @@ export class TelegramAiPostingService {
       schema: {
         channelIdea: { audience: 'string, до 4000 символов', topic: 'string, до 4000 символов', language: 'ru | en | uk | de | es | пустая строка для автоопределения' },
         writing: { historyMode: 'all | since | none', historyFrom: 'YYYY-MM-DD при since', variedLength: 'boolean', emojiPolicy: 'start | contextual', ending: 'Telegram-разметка', hashtags: 'disabled | start | end | ending_inline' },
-        media: { imageMode: 'found | ai | hybrid', hybridSearchPercent: 'integer 0–100', useChannelAvatarInMedia: 'boolean', imageAvoidances: 'string[]', mediaPreferences: '{id,name,emoji,emojiIconId?:string,description,generationDescription?:string,searchDescription?:string,references:string[],purpose:SEARCH|GENERATION|BOTH}[]' },
+        media: { imageMode: 'found | ai | hybrid', hybridSearchPercent: 'integer 0–100', imageSearchSources: 'https://website.example/ []', useChannelAvatarInMedia: 'boolean', imageAvoidances: 'string[]', mediaPreferences: '{id,name,emoji,emojiIconId?:string,description,generationDescription?:string,searchDescription?:string,references:string[],purpose:SEARCH|GENERATION|BOTH}[]' },
         spheres: '{id,parentId,name,emoji,tier:PRIMARY|SECONDARY,description,sources:string[],mediaPreferenceId}[]',
         rubrics: '{id,sphereId,name,emoji,description,goal,lengthIds:string[]}[]',
         lengths: '{id,name,emoji,minCharacters,maxCharacters:number|null}[]',
@@ -262,13 +263,36 @@ export class TelegramAiPostingService {
     const imported = value.configuration as Record<string, unknown>;
     const supportedFields = new Set([
       'audience', 'topic', 'language', 'historyMode', 'historyFrom',
-      'variedLength', 'emojiPolicy', 'ending', 'hashtags', 'imageMode', 'hybridSearchPercent',
+      'variedLength', 'emojiPolicy', 'ending', 'hashtags', 'imageMode', 'hybridSearchPercent', 'imageSearchSources',
       'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia',
       'spheres', 'rubrics', 'lengths',
     ]);
     if (!Object.keys(imported).some((key) => supportedFields.has(key)))
       throw new BadRequestException('AI_POSTING_IMPORT_NO_SUPPORTED_FIELDS');
-    const configuration = { ...(current.configuration as Record<string, unknown>), ...imported };
+    const existing = current.configuration as Record<string, unknown>;
+    const configuration = { ...existing, ...imported };
+    if (Array.isArray(imported.mediaPreferences)) {
+      const previous = Array.isArray(existing.mediaPreferences) ? existing.mediaPreferences : [];
+      configuration.mediaPreferences = imported.mediaPreferences.map((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+        const preference = item as Record<string, unknown>;
+        const matches = previous.filter((entry) => {
+          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+          const saved = entry as Record<string, unknown>;
+          return saved.id === preference.id || (
+            typeof saved.name === 'string' && typeof preference.name === 'string' &&
+            saved.name.trim().toLocaleLowerCase() === preference.name.trim().toLocaleLowerCase()
+          );
+        });
+        const saved = matches.length === 1 ? matches[0] as Record<string, unknown> : {};
+        return {
+          ...preference,
+          emoji: preference.emoji ?? saved.emoji ?? '🎨',
+          ...(preference.emojiIconId === undefined && saved.emojiIconId ? { emojiIconId: saved.emojiIconId } : {}),
+          references: preference.references ?? saved.references ?? [],
+        };
+      });
+    }
     const saved = await this.save(userId, channelId, {
       configuration,
       mode: current.mode === 'REVIEW' ? 'REVIEW' : 'TEST',
@@ -277,7 +301,7 @@ export class TelegramAiPostingService {
     const sections = [
       { id: 'idea', label: 'Идея канала', keys: ['audience', 'topic', 'language'] },
       { id: 'writing', label: 'Как писать', keys: ['historyMode', 'historyFrom', 'variedLength', 'emojiPolicy', 'ending', 'hashtags'] },
-      { id: 'media', label: 'Медиа', keys: ['imageMode', 'hybridSearchPercent', 'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia'] },
+      { id: 'media', label: 'Медиа', keys: ['imageMode', 'hybridSearchPercent', 'imageSearchSources', 'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia'] },
       { id: 'spheres', label: 'Сферы', keys: ['spheres'] },
       { id: 'rubrics', label: 'Рубрики', keys: ['rubrics'] },
       { id: 'lengths', label: 'Длины', keys: ['lengths'] },
@@ -326,6 +350,10 @@ export class TelegramAiPostingService {
       throw new BadRequestException('AI_POSTING_HASHTAGS_INVALID');
     if (!['found', 'ai', 'hybrid'].includes(String(configuration.imageMode)))
       throw new BadRequestException('AI_POSTING_IMAGE_MODE_INVALID');
+    const imageSearchSources = configuration.imageSearchSources ?? [];
+    if (!Array.isArray(imageSearchSources) || imageSearchSources.length > 12 ||
+        imageSearchSources.some((source) => source !== 'wordpress-photos' && !telegramAiPostingImageSourceUrl(source)))
+      throw new BadRequestException('AI_POSTING_IMAGE_SOURCES_INVALID');
     const hybridSearchPercent = configuration.hybridSearchPercent ?? DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT;
     if (typeof hybridSearchPercent !== 'number' || !Number.isInteger(hybridSearchPercent) || hybridSearchPercent < 0 || hybridSearchPercent > 100)
       throw new BadRequestException('AI_POSTING_SEARCH_PERCENT_INVALID');
@@ -336,7 +364,7 @@ export class TelegramAiPostingService {
     if ((watermarkSize !== undefined && (!Number.isInteger(watermarkSize) || Number(watermarkSize) < 5 || Number(watermarkSize) > 30)) ||
       (watermarkOpacity !== undefined && (!Number.isInteger(watermarkOpacity) || Number(watermarkOpacity) < 10 || Number(watermarkOpacity) > 100)))
       throw new BadRequestException('AI_POSTING_AVATAR_OPTION_INVALID');
-    if (configuration.mediaPreferences !== undefined && (!Array.isArray(configuration.mediaPreferences) || configuration.mediaPreferences.length > 10 || configuration.mediaPreferences.some((value) => {
+    if (configuration.mediaPreferences !== undefined && (!Array.isArray(configuration.mediaPreferences) || configuration.mediaPreferences.length > TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES || configuration.mediaPreferences.some((value) => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return true;
       const preference = value as Record<string, unknown>;
       if ([preference.generationDescription, preference.searchDescription].some(
@@ -360,6 +388,7 @@ export class TelegramAiPostingService {
       hashtags: configuration.hashtags,
       imageMode: configuration.imageMode,
       hybridSearchPercent,
+      imageSearchSources: telegramAiPostingImageSourceUrls(imageSearchSources),
       mediaPreferences: Array.isArray(configuration.mediaPreferences) ? configuration.mediaPreferences.map((value) => {
         const preference = value as Record<string, unknown>;
         return {

@@ -1,4 +1,5 @@
 import { ArrowLeftRight, Film, MessageCircle, PenLine, Sparkles } from "lucide-react";
+import { useI18n } from "@/providers/i18n-provider";
 
 export type AiPostingSettingsTab =
   | "chat"
@@ -12,7 +13,7 @@ const options = [
   { value: "idea", label: "Идея канала", icon: Sparkles },
   { value: "writing", label: "Как писать", icon: PenLine },
   { value: "images", label: "Медиа", icon: Film },
-  { value: "transfer", label: "Импорт / экспорт", icon: ArrowLeftRight },
+  { value: "transfer", icon: ArrowLeftRight },
 ] as const;
 
 export function AiPostingSettingsTabs({
@@ -24,13 +25,14 @@ export function AiPostingSettingsTabs({
   onChange: (tab: AiPostingSettingsTab) => void;
   hrefForTab?: (tab: AiPostingSettingsTab) => string;
 }) {
+  const { t } = useI18n();
   return (
     <div
       role="group"
       aria-label="Разделы AI Posting"
       className="flex w-fit max-w-full flex-wrap gap-1 rounded-md border border-neutral-700 bg-neutral-950 p-1"
     >
-      {options.map(({ value: tab, label, icon: Icon }) => (
+      {options.map(({ value: tab, icon: Icon, ...option }) => (
         <a
           key={tab}
           href={hrefForTab?.(tab) ?? `?aiPostingTab=${tab}`}
@@ -47,7 +49,7 @@ export function AiPostingSettingsTabs({
           }`}
         >
           <Icon size={13} aria-hidden="true" />
-          <span>{label}</span>
+          <span>{"label" in option ? option.label : t("telegram.posts.aiPostingTransfer.tab")}</span>
         </a>
       ))}
     </div>

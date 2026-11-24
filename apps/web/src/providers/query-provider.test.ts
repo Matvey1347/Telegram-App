@@ -70,6 +70,7 @@ describe("workspace query isolation", () => {
     "ad-campaign-admission-view-analytics",
     "campaign-invite-link-history",
     "telegram-bots",
+    "telegram-support",
     "telegram-system-bot",
     "telegram-source-channels",
     "telegram-user-accounts",

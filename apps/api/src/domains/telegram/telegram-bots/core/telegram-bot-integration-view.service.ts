@@ -69,12 +69,16 @@ export class TelegramBotIntegrationViewService {
       (total, summary) => ({
         registeredUsers: total.registeredUsers + summary.registeredUsers,
         paidUsers: total.paidUsers + summary.paidUsers,
+        activeUsers: total.activeUsers + summary.activeUsers,
+        activePaidUsers: total.activePaidUsers + summary.activePaidUsers,
         activeSubscriptions:
           total.activeSubscriptions + summary.activeSubscriptions,
         failedPayments: total.failedPayments + summary.failedPayments,
       }),
       {
         registeredUsers: 0,
+        activeUsers: 0,
+        activePaidUsers: 0,
         paidUsers: 0,
         activeSubscriptions: 0,
         failedPayments: 0,

@@ -113,7 +113,7 @@ describe("TelegramBotCard", () => {
 
   it("treats a single connected runtime as one bot until another version is added", async () => {
     const user = userEvent.setup();
-    const localBot = bot("FINANCE");
+    const localBot = bot("NONE");
     localBot.runtimes[0] = {
       ...localBot.runtimes[0],
       environment: "LOCAL",
@@ -208,14 +208,12 @@ describe("TelegramBotCard", () => {
       screen.getByRole("button", { name: "Actions for Admissions bot" }),
     );
     const menuItems = screen.getAllByRole("menuitem");
-    expect(menuItems[0]).toHaveAccessibleName("Finance Dashboard");
+    expect(menuItems[0]).toHaveAccessibleName("Dashboard");
     expect(
-      screen.getByRole("menuitem", { name: "Finance Dashboard" }),
+      screen.getByRole("menuitem", { name: "Dashboard" }),
     ).toHaveAttribute("href", "/telegram-bots/bot-1/finance");
-    expect(
-      screen.getByRole("menuitem", { name: "Change app" }),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("change-bot-app-icon")).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Change app" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Edit token" })).toBeNull();
     expect(screen.getByTestId("configure-bot-app-icon")).toBeInTheDocument();
   });
 
@@ -299,7 +297,7 @@ describe("TelegramBotCard", () => {
 
   it("shows a pending refresh for the canonical production runtime", async () => {
     const user = userEvent.setup();
-    renderCard("FINANCE", "PRODUCTION");
+    renderCard("NONE", "PRODUCTION");
     await user.click(
       screen.getByRole("button", { name: "Actions for Admissions bot" }),
     );

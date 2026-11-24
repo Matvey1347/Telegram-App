@@ -4,9 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import { GroshlyFinanceApp } from "./groshly-finance-app";
 
 vi.mock("@finance-web/groshly/main", () => ({ GroshlyApp: () => null }));
-vi.mock("@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap", () => ({
-  useTelegramMiniAppBootstrap: () => ({ status: "browser" }),
-}));
 vi.mock("@consumer-finance/web/components/hooks/use-finance-bot-branding", () => ({
   useFinanceBotBranding: () => ({ logoUrl: "", faviconUrl: "" }),
 }));
@@ -17,6 +14,7 @@ vi.mock("@consumer-finance/web/lib/api/consumer-finance-insights-api", () => ({
 }));
 vi.mock("@consumer-finance/web/components/app/consumer-finance-login", () => ({
   ConsumerFinanceLogin: () => <button>Telegram sign in</button>,
+  ConsumerFinanceBootstrapError: () => <p role="alert">Unable to sign in to Mini App</p>,
 }));
 
 describe("GroshlyFinanceApp unauthenticated entry", () => {
@@ -24,10 +22,22 @@ describe("GroshlyFinanceApp unauthenticated entry", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <GroshlyFinanceApp botId="finance-bot" />
+        <GroshlyFinanceApp botId="finance-bot" bootstrap={{ status: "browser" }} />
       </QueryClientProvider>,
     );
 
     expect(await screen.findByRole("button", { name: "Telegram sign in" })).toBeInTheDocument();
+  });
+
+  it("keeps a rejected Telegram launch inside the Mini App", async () => {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <GroshlyFinanceApp botId="finance-bot" bootstrap={{ status: "ready", initData: "telegram-launch" }} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Unable to sign in to Mini App");
+    expect(screen.queryByRole("button", { name: "Telegram sign in" })).toBeNull();
   });
 });

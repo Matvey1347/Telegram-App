@@ -45,7 +45,7 @@ export type TestPublication = {
   editorialMetadata?: {
     sphere: { id: string; name: string; emoji: string; tier: string } | null;
     rubric: { id: string; name: string; emoji: string } | null;
-    length: { id: string; name: string; emoji: string } | null;
+    length: { id: string; name: string; emoji: string; minCharacters?: number; maxCharacters?: number | null } | null;
   };
   reviewNotes: string[];
   costs: Record<string, string | null>;

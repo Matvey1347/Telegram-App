@@ -45,7 +45,7 @@ import {
 import { TelegramCustomEmojiPacksModal } from "../telegram/telegram-custom-emoji-packs-modal";
 import { EditableTelegramPreviewText } from "../telegram/telegram-post-preview";
 import { workspaceKeys } from "@/lib/query-keys";
-import { DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT, type ResolvedEmoji } from "@telegram-system/shared";
+import { DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT, telegramAiPostingImageSourceUrls, type ResolvedEmoji } from "@telegram-system/shared";
 import type { TelegramChannelSelectOption } from "@/lib/api-types/telegram/telegram-channels";
 
 type Config = {
@@ -60,6 +60,7 @@ type Config = {
   hashtags: string;
   imageMode: string;
   hybridSearchPercent?: number;
+  imageSearchSources?: string[];
   mediaPreferences?: AiPostingMediaPreference[];
   spheres: AiPostingSphere[];
   rubrics: AiPostingRubric[];
@@ -105,6 +106,7 @@ function comparableConfig(value?: Config): Config {
     ending: config.ending ?? "",
     hashtags: config.hashtags ?? "disabled",
     imageMode: config.imageMode ?? "ai",
+    imageSearchSources: telegramAiPostingImageSourceUrls(config.imageSearchSources),
     hybridSearchPercent: config.hybridSearchPercent ?? DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT,
     mediaPreferences: normalizeAiPostingMediaPreferences(config),
     spheres: config.spheres ?? [],
@@ -281,7 +283,7 @@ export function AiPostingPage({
     !save.isPending;
   const section = "space-y-4 bg-neutral-900/60";
   return (
-    <div className="mt-4 space-y-4">
+    <div className="@container mt-4 min-w-0 space-y-4">
       {settings.isLoading ? (
         <Card className={section + " text-sm text-neutral-400"}>
           Загружаем настройки…
@@ -297,7 +299,7 @@ export function AiPostingPage({
             channelTitle={channelTitle}
             active={settings.data?.mode === "REVIEW"}
           />
-          <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <div className="grid min-w-0 grid-cols-1 gap-4 @min-[58rem]:grid-cols-[minmax(0,390px)_minmax(0,1fr)]">
             <section aria-label="Тестовые публикации" className="min-w-0">
               <AiPostingTestConsole
                 key={channelId}
@@ -352,7 +354,7 @@ export function AiPostingPage({
                     Определите аудиторию и ценность канала. Язык задаёт язык
                     публикаций.
                   </p>
-                  <div className="grid min-w-0 gap-3 md:grid-cols-2">
+                  <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,16rem),1fr))] gap-3">
                     <FormField label="Для кого этот канал">
                       <Textarea
                         value={config.audience}
@@ -536,6 +538,8 @@ export function AiPostingPage({
                   channelId={channelId}
                   mode={config.imageMode}
                   hybridSearchPercent={effectiveConfig.hybridSearchPercent}
+                  imageSearchSources={effectiveConfig.imageSearchSources}
+                  onImageSearchSources={(imageSearchSources) => patch({ imageSearchSources })}
                   onHybridSearchPercent={(hybridSearchPercent) => patch({ hybridSearchPercent })}
                   preferences={effectiveConfig.mediaPreferences}
                   avoidances={config.imageAvoidances ?? []}

@@ -1,9 +1,10 @@
+import type { TelegramAiPostingEditorialAssignment } from './telegram-ai-posting-editorial-selection';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import type { PrismaService } from '../../../prisma/prisma.service';
 import { decodeAiPostingRunPublications } from './telegram-ai-posting-run-data';
-import { AI_POSTING_BACKGROUND_RUN_FILTER, AI_POSTING_STALE_RUN_MS, TelegramAiPostingRunStopped } from './telegram-ai-posting-progress';
+import { AI_POSTING_BACKGROUND_RUN_FILTER, AI_POSTING_BACKGROUND_STALE_RUN_MS, TelegramAiPostingRunStopped } from './telegram-ai-posting-progress';
 import {
   writeTelegramAiPostingTestRun,
   type TestPublication,
@@ -60,7 +61,7 @@ export async function createTelegramAiPostingGenerationRun(
     const scope = { workspaceId, telegramChannelId: channelId };
     if (background) {
       const pendingScope = { ...scope, ...AI_POSTING_BACKGROUND_RUN_FILTER, status: 'RUNNING' };
-      const staleSince = new Date(Date.now() - AI_POSTING_STALE_RUN_MS);
+      const staleSince = new Date(Date.now() - AI_POSTING_BACKGROUND_STALE_RUN_MS);
       await client.telegramAiPostingTestRun.updateMany({
         where: { ...pendingScope, updatedAt: { lt: staleSince } },
         data: { status: 'INTERRUPTED', version: { increment: 1 } },
@@ -110,6 +111,8 @@ export type TelegramAiPostingRetrySlot = {
   failureIndex: number;
   publicationIndex: number;
   imageMode?: 'found' | 'ai';
+  editorialAssignment?: TelegramAiPostingEditorialAssignment;
+  legacyVote?: boolean;
 };
 
 export async function assertTelegramAiPostingRunActive(prisma: PrismaService, workspaceId: string, id: string) {

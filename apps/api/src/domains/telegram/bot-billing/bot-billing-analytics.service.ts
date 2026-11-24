@@ -203,14 +203,20 @@ export class BotBillingAnalyticsService {
         | 'paidUsers'
         | 'activeSubscriptions'
         | 'failedPayments'
-      >
+      > & { activeUsers: number; activePaidUsers: number }
     >();
     if (!runtimeIds.length) return summaries;
 
-    const [users, subscriptionMetrics] = await Promise.all([
+    const [users, activeUsers, subscriptionMetrics] = await Promise.all([
       this.prisma.telegramBotUser.groupBy({
         by: ['runtimeInstanceId'],
         where: { workspaceId, runtimeInstanceId: { in: runtimeIds } },
+        _count: { _all: true },
+      }),
+      this.prisma.telegramBotUser.groupBy({
+        by: ['runtimeInstanceId'],
+        where: { workspaceId, runtimeInstanceId: { in: runtimeIds },
+          lastInteractionAt: { gte: new Date(Date.now() - 30 * 86_400_000) } },
         _count: { _all: true },
       }),
       this.prisma.$queryRaw<
@@ -218,6 +224,7 @@ export class BotBillingAnalyticsService {
           runtimeInstanceId: string;
           activeSubscriptions: number;
           paidUsers: number;
+          activePaidUsers: number;
           failedPayments: number;
         }>
       >(Prisma.sql`
@@ -235,16 +242,20 @@ export class BotBillingAnalyticsService {
             )
           )::int AS "activeSubscriptions",
           COUNT(DISTINCT subscription."telegramBotUserId") FILTER (WHERE
-            provider_subscription."mode" IS DISTINCT FROM 'TEST'
+            provider_subscription."mode" = 'LIVE'
             AND subscription."source" IN ('STRIPE', 'TELEGRAM_STARS')
-            AND (
-              subscription."status" = 'ACTIVE'
-              OR (
-                subscription."status" = 'CANCELED'
-                AND subscription."currentPeriodEnd" > NOW()
-              )
-            )
+            AND subscription."status" IN ('ACTIVE', 'CANCELED')
+            AND subscription."currentPeriodEnd" > NOW()
+            AND (subscription."checkoutExpiresAt" IS NULL OR subscription."confirmedPaidThrough" > NOW())
           )::int AS "paidUsers",
+          COUNT(DISTINCT subscription."telegramBotUserId") FILTER (WHERE
+            provider_subscription."mode" = 'LIVE'
+            AND subscription."source" IN ('STRIPE', 'TELEGRAM_STARS')
+            AND subscription."status" IN ('ACTIVE', 'CANCELED')
+            AND subscription."currentPeriodEnd" > NOW()
+            AND (subscription."checkoutExpiresAt" IS NULL OR subscription."confirmedPaidThrough" > NOW())
+            AND bot_user."lastInteractionAt" >= NOW() - INTERVAL '30 days'
+          )::int AS "activePaidUsers",
           COUNT(*) FILTER (WHERE
             provider_subscription."mode" IS DISTINCT FROM 'TEST'
             AND subscription."status" = 'PAST_DUE'
@@ -262,6 +273,7 @@ export class BotBillingAnalyticsService {
     const usersByBot = new Map(
       users.map((row) => [row.runtimeInstanceId, row._count._all]),
     );
+    const activityByBot = new Map(activeUsers.map(row => [row.runtimeInstanceId, row._count._all]));
     const metricsByBot = new Map(
       subscriptionMetrics.map((row) => [row.runtimeInstanceId, row]),
     );
@@ -269,6 +281,8 @@ export class BotBillingAnalyticsService {
       const metrics = metricsByBot.get(runtimeId);
       summaries.set(runtimeId, {
         registeredUsers: usersByBot.get(runtimeId) || 0,
+        activeUsers: activityByBot.get(runtimeId) || 0,
+        activePaidUsers: metrics?.activePaidUsers || 0,
         paidUsers: metrics?.paidUsers || 0,
         activeSubscriptions: metrics?.activeSubscriptions || 0,
         failedPayments: metrics?.failedPayments || 0,

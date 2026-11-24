@@ -188,17 +188,19 @@ export class TelegramAiPostingTestRunService {
       const publication = value as Record<string, unknown>;
       return {
         ...publication,
-        text:
-          typeof publication.text === 'string'
-            ? telegramHtmlToManagedMarkup(publication.text)
-            : '',
+        text: typeof publication.text === 'string'
+          ? telegramHtmlToManagedMarkup(publication.text) : '',
       } as TestPublication;
     });
     const sourceDiagnostics = decoded.sourceDiagnostics;
     const item = publications[index];
     if (!item) throw new NotFoundException('AI Posting publication not found');
+    const imageTextLimit = Number(item.editorialMetadata?.length?.minCharacters) >= 700 ? 4096 : 1024;
+    const textLimit = item.imageUrl ? imageTextLimit : 4096;
     if (item.savedPostId || item.status === 'SAVED_DRAFT')
       throw new ConflictException('AI_POSTING_PUBLICATION_ALREADY_SAVED');
+    if ((action === 'approve' || action === 'save') && (!item.imageUrl || (item.mediaReadiness && item.mediaReadiness !== 'READY')))
+      throw new ConflictException('AI_POSTING_IMAGE_REQUIRED');
     if (action === 'regenerate-text') {
       const settings = await this.prisma.telegramAiPostingSettings.findFirst({
         where: { workspaceId, telegramChannelId: channelId },
@@ -211,12 +213,9 @@ export class TelegramAiPostingTestRunService {
       if (!settings)
         throw new NotFoundException('AI_POSTING_SETTINGS_REQUIRED');
       const config = settings.configuration as Record<string, any>;
-      const language =
-        (await resolveTelegramAiPostingLanguage(this.prisma, {
-          workspaceId,
-          channelId,
-          configuredLanguage: config.language,
-        })) || 'English';
+      const language = (await resolveTelegramAiPostingLanguage(this.prisma, {
+        workspaceId, channelId, configuredLanguage: config.language,
+      })) || 'English';
       const runs = run.operations as unknown as Run[];
       const textAttempt =
         item.operations.filter((operation) => operation.stage === 'text')
@@ -311,7 +310,7 @@ export class TelegramAiPostingTestRunService {
         ),
         config,
       );
-      if (item.text.length > (item.imageUrl ? 1024 : 4096))
+      if (item.text.length > textLimit)
         throw new BadGatewayException('AI_POSTING_TELEGRAM_LENGTH');
       if (typeof rewritten.imagePrompt === 'string')
         item.imagePrompt = rewritten.imagePrompt;
@@ -486,7 +485,7 @@ export class TelegramAiPostingTestRunService {
         );
         if (!saved) throw new ConflictException('AI_POSTING_SETTINGS_CHANGED');
       }
-      if (item.text.length > 1024)
+      if (item.text.length > imageTextLimit)
         throw new ConflictException('AI_POSTING_TELEGRAM_LENGTH_WITH_IMAGE');
       const preference = resolveTelegramAiPostingMediaPreference(config, item);
       let resolved: Awaited<
@@ -498,24 +497,28 @@ export class TelegramAiPostingTestRunService {
           workspaceId,
           channelId,
           topic: item.topic,
-          imageMode: item.mediaMode ?? (!item.imageUrl && item.mediaReadiness === 'MISSING' && config.imageMode === 'hybrid'
+          publicationText: item.text.slice(0, 950),
+          imageMode: preference?.purpose === 'SEARCH' && item.editorialMetadata?.sphere ? 'found' : item.mediaMode ?? (!item.imageUrl && item.mediaReadiness === 'MISSING' && config.imageMode === 'hybrid'
             ? 'found'
             : config.imageMode === 'hybrid' || config.imageMode === 'found' ? config.imageMode : 'ai'),
-          searchPageOffset: item.mediaSearch?.nextPageOffset,
-          fallbackToGeneration: config.imageMode !== 'hybrid',
+          imageSearchSources: config.imageSearchSources ?? [],
+          searchPageOffset: typeof value === 'string' && value.trim() ? 0 : item.mediaSearch?.nextPageOffset,
+          fallbackToGeneration: preference?.purpose !== 'SEARCH' || !item.editorialMetadata?.sphere,
+          usePhotoDirectory: false,
           referenceImageUrls: preference?.references ?? [],
           preferencePurpose: preference?.purpose,
           visualPreference: preference?.description || preference?.name,
           generationDescription: preference?.generationDescription,
+          revisionDirection: typeof value === 'string' ? value.trim().slice(0, 500) : undefined,
           searchDescription: preference?.searchDescription,
-          searchQuery: item.imageSearchQuery || [item.topic, preference?.name, typeof value === 'string' ? value.trim().slice(0, 100) : ''].filter(Boolean).join(' '),
+          searchQuery: [typeof value === 'string' ? value.trim().slice(0, 180) : '', item.imageSearchQuery || [item.topic, preference?.name].filter(Boolean).join(' ')].filter(Boolean).join(', '),
           channelAvatarUrl: settings.telegramChannel?.photoUrl,
           channelUsername: settings.telegramChannel?.username,
           channelTitle: settings.telegramChannel?.title,
           imageCandidates: [],
           prompt: [
             preference?.generationDescription ? item.imagePrompt.split(/\.?\s*Visual preference:/u, 1)[0] : item.imagePrompt,
-            typeof value === 'string' ? value.trim().slice(0, 500) : '',
+
             nextAvoidances.length
               ? `Avoid similar compositions and visual directions: ${nextAvoidances.slice(-5).join('; ')}`
               : '',
@@ -651,7 +654,7 @@ export class TelegramAiPostingTestRunService {
     if (action === 'reject' && !value?.trim())
       throw new ConflictException('AI_POSTING_REJECTION_REASON_REQUIRED');
     if (action === 'edit') {
-      if (!value?.trim() || value.length > (item.imageUrl ? 1024 : 4096))
+      if (!value?.trim() || value.length > textLimit)
         throw new ConflictException('AI_POSTING_EDIT_TEXT_INVALID');
       item.text = value;
       item.status = 'EDITED';
@@ -660,7 +663,7 @@ export class TelegramAiPostingTestRunService {
     } else if (action === 'approve') {
       if (item.status === 'REJECTED')
         throw new ConflictException('AI_POSTING_REJECTED_CONTENT_MUST_CHANGE');
-      if (!item.text.trim() || item.text.length > (item.imageUrl ? 1024 : 4096))
+      if (!item.text.trim() || item.text.length > textLimit)
         throw new ConflictException('AI_POSTING_EDIT_TEXT_INVALID');
       item.status = 'APPROVED';
       item.rejectionReason = null;
@@ -672,7 +675,7 @@ export class TelegramAiPostingTestRunService {
         throw new ConflictException('AI_POSTING_APPROVAL_REQUIRED');
       if (value !== undefined && value !== item.text)
         throw new ConflictException('AI_POSTING_APPROVED_CONTENT_CHANGED');
-      if (!item.text.trim() || item.text.length > (item.imageUrl ? 1024 : 4096))
+      if (!item.text.trim() || item.text.length > textLimit)
         throw new ConflictException('AI_POSTING_EDIT_TEXT_INVALID');
       const prepared = await this.posts.prepareManagedPostCreate(
         userId,
@@ -711,9 +714,7 @@ export class TelegramAiPostingTestRunService {
           aiPostingRecheckRequired: false,
           ...classification,
           imageUrls: item.imageUrl ? [item.imageUrl] : [],
-          mediaItems: item.imageUrl
-            ? [{ kind: 'PHOTO', url: item.imageUrl }]
-            : [],
+          mediaItems: item.imageUrl ? [{ kind: 'PHOTO', url: item.imageUrl }] : [],
         });
         await tx.aiOperation.updateMany({
           where: {

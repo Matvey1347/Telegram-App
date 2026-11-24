@@ -1,5 +1,49 @@
 # Finance FREE + PLUS billing rollout
 
+## Finance hosted by Nexeloq
+
+The Finance app at `/finance/:botId` uses the workspace Stripe configuration
+in Global Bot Configuration. Finance reads the server's existing
+`INTERNAL_AI_OPENAI_API_KEY` for AI. Existing encrypted AI configuration rows
+are retained for data compatibility.
+
+1. Apply the host API's Finance billing periods migration to the target database.
+2. In Global Bot Configuration, verify the Stripe TEST connection and webhook
+   signing secret. Register the existing `/api/billing/webhooks/stripe/:configId`
+   endpoint for Checkout completion, subscription create/update/delete,
+   `invoice.paid`, and `invoice.payment_failed`.
+3. The host prepares the catalog at startup and when Stripe settings change.
+   Monetization shows separate TEST and LIVE sync states. Local startup only
+   creates TEST objects. LIVE prices are prepared by the production API.
+   Catalog preparation has no polling and holds database locks only for
+   local price preparation and mapping writes.
+4. In TEST, verify an unpaid profile cannot use AI. Complete a Checkout and
+   check that only the signed paid invoice enables access. Cancel renewal,
+   verify access through the paid date, and verify it expires after that.
+   Check the 7 UAH charge for the 7-day introductory period and the 179 UAH renewal separately.
+   Run the LIVE rollout separately with the LIVE webhook and account.
+
+Checkout, webhooks and entitlement checks run on demand. There is no added
+polling, scheduled work, or channel fan-out. Billing events use the existing
+billing history table.
+
+Groshly's browser subscription screen uses the existing authenticated Finance
+session. It submits the price ID from the catalog to checkout, and the API
+chooses TEST in development and LIVE in production. Verify the return to
+`/app/subscription` and refresh the payment status after Stripe sends its
+webhook. In Telegram, the subscription screen shows status and history.
+
+Global Bot Configuration displays the OpenAI environment default. Finance
+resolves validated credentials in this order: bot override, workspace
+override, environment. Use the bot Integrations toggle to edit overrides.
+The Nexeloq system bot card is workspace scoped. The production deployment
+must set `TELEGRAM_SYSTEM_BOT_DASHBOARD_WORKSPACE_ID` to its intended workspace.
+
+## Standalone API migration plan
+
+The remaining sections describe the separate standalone deployment and its
+migration tooling.
+
 ## Ownership and compatibility
 
 The independent Finance API and its database own new Stripe Checkout,

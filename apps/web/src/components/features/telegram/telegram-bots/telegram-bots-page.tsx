@@ -6,13 +6,14 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import {
-  Button,
-  PageHeader,
-} from "@/components/ui/primitives";
+import { Button, PageHeader } from "@/components/ui/primitives";
 import { QueryContentState } from "@/components/ui/query-content-state";
 import { telegramBotsApi, type TelegramBot } from "@/lib/api";
-import type { TelegramBotApplicationType, TelegramBotRuntimeEnvironment } from "@telegram-system/shared";
+import type {
+  SupportProduct,
+  TelegramBotApplicationType,
+  TelegramBotRuntimeEnvironment,
+} from "@telegram-system/shared";
 import { telegramAccountKeys } from "@/lib/query-keys";
 import { invalidateTelegramAccessQueries } from "@/lib/features/telegram/telegram-query-invalidation";
 import {
@@ -22,12 +23,15 @@ import {
 import { useAppToast } from "@/providers/toast-provider";
 import { TelegramBotCard } from "./telegram-bot-card";
 import { ConfiguredBotCards } from "./configured-bot-cards";
-import { configuredBotsApi } from "@/lib/features/telegram/configured-bots-api";
 import {
   type BotDeleteChoice,
   type BotDeleteConfirmation,
   type BotRuntimeConfig,
 } from "./telegram-bot-action-modals";
+import {
+  TelegramSupportInbox,
+  useTelegramSupport,
+} from "./telegram-support-inbox";
 
 const TelegramBotActionModalsLazy = dynamic(
   () =>
@@ -42,40 +46,39 @@ function errorMessage(error: unknown, fallback: string) {
   return responseError?.response?.data?.message || fallback;
 }
 
-function normalizeBotUsername(username: string | null | undefined) {
-  const normalized = username?.trim().replace(/^@/, "").toLowerCase();
-  return normalized || null;
-}
-
 export function TelegramBotsPage() {
   const qc = useQueryClient();
+  const support = useTelegramSupport();
+  const [tab, setTab] = useState<"bots" | "support">("bots");
+  const [product, setProduct] = useState<SupportProduct>();
+  const supportBots = support.data ?? [];
+  const needsReply = supportBots.reduce(
+    (total, bot) => total + bot.needsReply,
+    0,
+  );
+  const openSupport = (next?: SupportProduct) => {
+    setProduct(next);
+    setTab("support");
+  };
   const { pushToast } = useAppToast();
   const [createOpen, setCreateOpen] = useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = useState<BotDeleteConfirmation | null>(null);
-  const [deleteChoice, setDeleteChoice] = useState<BotDeleteChoice | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] =
+    useState<BotDeleteConfirmation | null>(null);
+  const [deleteChoice, setDeleteChoice] = useState<BotDeleteChoice | null>(
+    null,
+  );
   const [switching, setSwitching] = useState<TelegramBot | null>(null);
-  const [runtimeConfig, setRuntimeConfig] = useState<BotRuntimeConfig | null>(null);
-  const [profileConfig, setProfileConfig] = useState<BotRuntimeConfig | null>(null);
+  const [runtimeConfig, setRuntimeConfig] = useState<BotRuntimeConfig | null>(
+    null,
+  );
+  const [profileConfig, setProfileConfig] = useState<BotRuntimeConfig | null>(
+    null,
+  );
   const botsQuery = useQuery({
     queryKey: telegramAccountKeys.bots(),
     queryFn: telegramBotsApi.list,
   });
-  const configuredBotsQuery = useQuery({
-    queryKey: telegramAccountKeys.configuredBots(),
-    queryFn: configuredBotsApi.overview,
-  });
-  const managedEnvironmentUsernames = new Set(
-    configuredBotsQuery.data?.financeBot?.bots
-      .map((bot) => normalizeBotUsername(bot.username))
-      .filter((username): username is string => Boolean(username)) ?? [],
-  );
-  const bots = (botsQuery.data || []).filter(
-    (bot) =>
-      !bot.runtimes.some((runtime) => {
-        const username = normalizeBotUsername(runtime.username);
-        return username ? managedEnvironmentUsernames.has(username) : false;
-      }),
-  );
+  const bots = botsQuery.data ?? [];
   const createMutation = useMutation({
     mutationFn: telegramBotsApi.create,
     onSuccess: (bot) => {
@@ -220,8 +223,40 @@ export function TelegramBotsPage() {
           </div>
         }
       />
-      <ConfiguredBotCards />
-      {bots.length || botsQuery.isLoading || botsQuery.isError ? (
+      <div className="mb-4 flex gap-2" aria-label="Telegram Bots sections">
+        <Button
+          variant={tab === "bots" ? undefined : "secondary"}
+          onClick={() => setTab("bots")}
+        >
+          Bots
+        </Button>
+        <Button
+          variant={tab === "support" ? undefined : "secondary"}
+          onClick={() => openSupport()}
+        >
+          Support{" "}
+          {needsReply > 0 && (
+            <span className="ml-1 rounded-full bg-amber-400 px-2 text-neutral-950">
+              {needsReply}
+            </span>
+          )}
+        </Button>
+      </div>
+      {tab === "support" && (
+        <TelegramSupportInbox
+          product={product}
+          onProduct={setProduct}
+          bots={supportBots}
+        />
+      )}
+      {tab === "bots" && (
+        <ConfiguredBotCards
+          support={supportBots.find((bot) => bot.product === "NEXELOQ")}
+          onSupport={() => openSupport("NEXELOQ")}
+        />
+      )}
+      {tab === "bots" &&
+      (bots.length || botsQuery.isLoading || botsQuery.isError) ? (
         <div className="mt-6">
           <QueryContentState
             isLoading={botsQuery.isLoading}
@@ -236,6 +271,10 @@ export function TelegramBotsPage() {
                 <TelegramBotCard
                   key={bot.id}
                   bot={bot}
+                  support={supportBots.find(
+                    (item) => item.product === "GROSHLY",
+                  )}
+                  onSupport={() => openSupport("GROSHLY")}
                   checkingEnvironment={
                     checkMutation.isPending &&
                     checkMutation.variables?.id === bot.id
@@ -261,7 +300,12 @@ export function TelegramBotsPage() {
           </QueryContentState>
         </div>
       ) : null}
-      {createOpen || switching || runtimeConfig || profileConfig || deleteConfirmation || deleteChoice ? (
+      {createOpen ||
+      switching ||
+      runtimeConfig ||
+      profileConfig ||
+      deleteConfirmation ||
+      deleteChoice ? (
         <TelegramBotActionModalsLazy
           createOpen={createOpen}
           createSaving={createMutation.isPending}

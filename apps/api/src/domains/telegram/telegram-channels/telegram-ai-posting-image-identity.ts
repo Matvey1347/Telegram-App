@@ -48,3 +48,37 @@ export function hasTelegramAiPostingImage(
   }
   return false;
 }
+
+
+/** Stable catalog image identity across the original and resized URLs. */
+export function telegramAiPostingImageUrlKey(value: string) {
+  try {
+    const url = new URL(value);
+    if (url.hostname === 'upload.wikimedia.org') {
+      const path = url.pathname.replace('/thumb/', '/').replace(/\/[^/]+px-[^/]+$/u, '');
+      return `catalog-image:${url.hostname}${path}`;
+    }
+    if (url.hostname === 'i.pinimg.com') {
+      return `catalog-image:${url.hostname}${url.pathname.replace(/^\/[^/]+/u, '')}`;
+    }
+  } catch {
+    return value;
+  }
+  return value;
+}
+
+/** No await between checking the chosen image and reserving it for this batch. */
+export function claimTelegramAiPostingImage(
+  claims: Set<string> | undefined,
+  identity: Awaited<ReturnType<typeof telegramAiPostingImageIdentity>>,
+  url?: string,
+) {
+  if (!claims) return true;
+  const urlKey = url ? telegramAiPostingImageUrlKey(url) : undefined;
+  if ((urlKey && claims.has(urlKey)) || hasTelegramAiPostingImage(claims, identity))
+    return false;
+  if (urlKey) claims.add(urlKey);
+  claims.add(identity.fingerprint);
+  claims.add(identity.visualFingerprint);
+  return true;
+}

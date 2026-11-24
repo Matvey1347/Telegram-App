@@ -14,7 +14,7 @@ describe('FinanceConsumerBillingController', () => {
     else process.env.FRONTEND_URL = previousFrontend;
   });
 
-  it('closes old purchases and portal without changing subscription reads', () => {
+  it('starts Stripe checkout and returns portal access for the authenticated Finance user', () => {
     const requests = {
       authenticate: jest.fn().mockReturnValue({
         profileId: 'profile-1',
@@ -28,11 +28,23 @@ describe('FinanceConsumerBillingController', () => {
       {} as never,
     );
 
-    expect(() => controller.checkout('bot-1', {} as Request)).toThrow(ForbiddenException);
+    controller.checkout('bot-1', {} as Request, { priceId: 'price-1', mode: 'TEST' });
     expect(() => controller.starsCheckout('bot-1', {} as Request)).toThrow(ForbiddenException);
-    expect(() => controller.paymentPortal('bot-1', {} as Request)).toThrow(ForbiddenException);
-    expect(billing.createStripeCheckout).not.toHaveBeenCalled();
+    controller.paymentPortal('bot-1', {} as Request);
+    expect(billing.createStripeCheckout).toHaveBeenCalledWith({
+      botIntegrationId: 'bot-1',
+      telegramBotUserId: 'telegram-user-1',
+      priceId: 'price-1',
+      requestedMode: 'TEST',
+      couponCode: undefined,
+      successUrl: 'https://finance.example/finance/bot-1?screen=billing&checkout=success',
+      cancelUrl: 'https://finance.example/finance/bot-1?screen=billing&checkout=cancel',
+    });
+    expect(billing.stripePortal).toHaveBeenCalledWith({
+      botIntegrationId: 'bot-1',
+      telegramBotUserId: 'telegram-user-1',
+      returnUrl: 'https://finance.example/finance/bot-1?screen=billing',
+    });
     expect(billing.createStarsCheckout).not.toHaveBeenCalled();
-    expect(billing.stripePortal).not.toHaveBeenCalled();
   });
 });

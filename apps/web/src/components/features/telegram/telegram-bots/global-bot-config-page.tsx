@@ -2,17 +2,8 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  BotBillingProviderConfigView,
-  FinanceAiConfigView,
-} from "@telegram-system/shared";
-import {
-  Bot,
-  Check,
-  CircleAlert,
-  RefreshCw,
-  Star,
-} from "lucide-react";
+import type { BotBillingProviderConfigView } from "@telegram-system/shared";
+import { Check, CircleAlert, RefreshCw, Star } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import {
   Button,
@@ -23,12 +14,11 @@ import {
   PageHeader,
   ToggleRow,
 } from "@/components/ui/primitives";
-import {
-  botBillingApi,
-  financeAiConfigApi,
-} from "@/lib/features/finance/bot-billing-api";
+import { botBillingApi } from "@/lib/features/finance/bot-billing-api";
 import { botBillingKeys } from "@/lib/query-keys";
 import { StripeWebhookSigningSecretLabel } from "./finance/stripe-webhook-events-tooltip";
+
+import { FinanceAiSettings } from "./finance/finance-ai-settings";
 
 type ProviderRow = Awaited<
   ReturnType<typeof botBillingApi.workspaceProviders>
@@ -39,20 +29,16 @@ export function GlobalBotConfigPage() {
     queryKey: botBillingKeys.workspaceProviders(),
     queryFn: botBillingApi.workspaceProviders,
   });
-  const ai = useQuery({
-    queryKey: botBillingKeys.workspaceFinanceAi(),
-    queryFn: financeAiConfigApi.workspace,
-  });
   return (
     <AppShell>
       <PageHeader
         title="Global bot configuration"
         subtitle="Workspace defaults inherited by every bot unless you add a bot-specific override."
       />
-      {providers.isLoading || ai.isLoading ? (
+      {providers.isLoading ? (
         <LoadingState text="Loading integrations" />
       ) : null}
-      {providers.isError || ai.isError ? (
+      {providers.isError ? (
         <Card className="border-rose-900/70 bg-rose-950/20">
           <p className="text-sm text-rose-200">
             Could not load workspace defaults.
@@ -62,7 +48,6 @@ export function GlobalBotConfigPage() {
             variant="secondary"
             onClick={() => {
               void providers.refetch();
-              void ai.refetch();
             }}
           >
             <RefreshCw size={16} />
@@ -70,8 +55,9 @@ export function GlobalBotConfigPage() {
           </Button>
         </Card>
       ) : null}
-      {providers.data && ai.data ? (
+      {providers.data ? (
         <div className="space-y-4">
+          <FinanceAiSettings />
           <StripeSection
             rows={providers.data.filter((row) => row.provider === "STRIPE")}
           />
@@ -80,7 +66,6 @@ export function GlobalBotConfigPage() {
               (row) => row.provider === "TELEGRAM_STARS" && row.mode === "LIVE",
             )}
           />
-          <AiSection config={ai.data} />
         </div>
       ) : null}
     </AppShell>
@@ -323,77 +308,6 @@ function StarsSection({ row }: { row?: ProviderRow }) {
           Could not update Telegram Stars. Please try again.
         </p>
       ) : null}
-    </Card>
-  );
-}
-
-function AiSection({ config }: { config: FinanceAiConfigView }) {
-  const qc = useQueryClient();
-  const [apiKey, setApiKey] = useState("");
-  const save = useMutation({
-    mutationFn: async () => {
-      await financeAiConfigApi.saveWorkspace({
-        ...(apiKey ? { apiKey } : {}),
-      });
-      return financeAiConfigApi.validateWorkspace();
-    },
-    onSuccess: (next) => {
-      qc.setQueryData(botBillingKeys.workspaceFinanceAi(), next);
-      setApiKey("");
-    },
-  });
-  return (
-    <Card>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <IntegrationTitle
-          icon={<Bot className="text-emerald-300" size={22} />}
-          title="OpenAI"
-          description="Global AI connection shared by bots in this workspace"
-        />
-        <StatusBadge status={config.status} />
-      </div>
-      <div className="mt-5 max-w-3xl">
-        <FormField
-          label={config.apiKeyConfigured ? "API key (configured)" : "API key"}
-        >
-          <Input
-            type="password"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder={
-              config.apiKeyConfigured
-                ? "Leave blank to keep the saved key"
-                : "sk-…"
-            }
-          />
-        </FormField>
-      </div>
-      <div className="mt-3 rounded-lg border border-sky-900/70 bg-sky-950/30 p-3 text-sm text-sky-100">
-        <div className="flex gap-2">
-          <p>
-            Connect the provider once. Each bot feature automatically uses its
-            tested model policy, and every request is recorded for cost reporting.
-          </p>
-        </div>
-      </div>
-      {config.lastValidationError ? (
-        <p className="mt-3 text-xs text-rose-300">
-          {config.lastValidationError}
-        </p>
-      ) : null}
-      {save.isError ? (
-        <p className="mt-3 text-xs text-rose-300">
-          Could not save the OpenAI configuration.
-        </p>
-      ) : null}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button
-          disabled={save.isPending || (!apiKey && !config.apiKeyConfigured)}
-          onClick={() => save.mutate()}
-        >
-          {save.isPending ? "Validating…" : "Save and validate"}
-        </Button>
-      </div>
     </Card>
   );
 }

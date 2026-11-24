@@ -85,6 +85,16 @@ one host can own a token's webhook. For rollback, restore the recorded proxy
 target and the prior owner and webhook configuration. Deploy and verify the
 selected version in the production acceptance task.
 
+If Telegram rejects the production Groshly bot token, verify the replacement
+with BotFather and set `FINANCE_BOT_PRODUCTION_TOKEN`,
+`FINANCE_BOT_PRODUCTION_USERNAME`, and the existing
+`FINANCE_BOT_DASHBOARD_WORKSPACE_ID` on the compatibility API. Startup
+verifies the Telegram bot's identity, preserves the logical Finance integration,
+and activates the replacement token. The same token must not be operated by
+two hosts. Verify `getWebhookInfo` against the expected HTTPS runtime route,
+then check browser/PWA sign-in and open the Mini App directly from the Telegram
+menu. A Telegram launch uses signed launch data without opening a bot chat.
+
 The standalone API remains independent of the customer path during recovery.
 Before any future data cutover, run the read-only
 `pnpm --filter finance-api migration:plan`, verify source/destination identity,

@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   BotBillingProvider,
   BotBillingProviderMode,
@@ -9,6 +13,7 @@ import {
 } from '@prisma/client';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import { StripeBillingProvider } from './stripe-billing.provider';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import {
@@ -35,13 +40,16 @@ export class BotBillingCheckout {
     telegramBotUserId: string;
     priceId: string;
     requestedMode?: Mode;
+    preventOverlap?: boolean;
     couponCode?: string;
     successUrl: string;
     cancelUrl: string;
   }) {
     const mode = isProductionEnvironment()
       ? BotBillingProviderMode.LIVE
-      : input.requestedMode || BotBillingProviderMode.LIVE;
+      : input.preventOverlap
+        ? BotBillingProviderMode.TEST
+        : input.requestedMode || BotBillingProviderMode.LIVE;
     const price = await this.prisma.botPlanPrice.findFirst({
       where: {
         id: input.priceId,
@@ -52,6 +60,24 @@ export class BotBillingCheckout {
       include: { plan: true },
     });
     if (!price) throw new NotFoundException('Public billing price not found');
+    const isFinanceIntro = price.interval === 'DAY';
+    const recurringPrice = isFinanceIntro
+      ? await this.prisma.botPlanPrice.findFirst({
+          where: {
+            planId: price.planId,
+            isActive: true,
+            isPublic: true,
+            interval: 'MONTH',
+            intervalCount: 1,
+            currency: price.currency,
+          },
+          orderBy: { version: 'desc' },
+        })
+      : price;
+    if (!recurringPrice)
+      throw new BadRequestException(
+        'The introductory plan has no monthly renewal price',
+      );
     const subscriber = await this.prisma.telegramBotUser.findFirst({
       where: {
         id: input.telegramBotUserId,
@@ -61,6 +87,10 @@ export class BotBillingCheckout {
     });
     if (!subscriber || subscriber.workspaceId !== price.plan.workspaceId)
       throw new NotFoundException('Billing subscriber not found');
+    if (isFinanceIntro && input.couponCode)
+      throw new BadRequestException(
+        'Coupons cannot be combined with the introductory offer',
+      );
     const coupon = input.couponCode
       ? await this.validCoupon({
           botIntegrationId: input.botIntegrationId,
@@ -76,7 +106,7 @@ export class BotBillingCheckout {
       mode,
     );
     const syncedPriceId = this.providerPriceId(
-      price.providerPriceIdentity,
+      recurringPrice.providerPriceIdentity,
       mode,
       stripeConfigId,
     );
@@ -86,8 +116,17 @@ export class BotBillingCheckout {
         botIntegrationId: input.botIntegrationId,
         mode,
         plan: price.plan,
-        price,
+        price: recurringPrice,
       }));
+    const introProviderPriceId = isFinanceIntro
+      ? await this.stripe.ensurePrice({
+          botIntegrationId: input.botIntegrationId,
+          mode,
+          plan: price.plan,
+          price,
+          oneTime: true,
+        })
+      : undefined;
     const promotionCodeId = coupon
       ? this.providerPromotionCode(
           coupon.providerCouponIdentity,
@@ -104,29 +143,80 @@ export class BotBillingCheckout {
       workspaceId: subscriber.workspaceId,
       telegramBotUserId: subscriber.id,
       mode,
+      ...(input.preventOverlap ? { verifyAccount: true } : {}),
     });
-    const subscription = await this.prisma.botSubscription.create({
-      data: {
-        workspaceId: subscriber.workspaceId,
-        botIntegrationId: input.botIntegrationId,
-        telegramBotUserId: subscriber.id,
-        planId: price.planId,
-        planPriceId: price.id,
-        source: 'STRIPE',
-        status: 'INCOMPLETE',
-        currency: price.currency,
-        interval: price.interval,
-        amountMinor: price.amountMinor,
-        priceVersion: price.version,
-        providerCustomerId: customerId,
-      },
-    });
+    const reserve = (
+      db: Pick<Prisma.TransactionClient, 'botSubscription'>,
+      expiresAt?: Date,
+    ) =>
+      db.botSubscription.create({
+        data: {
+          workspaceId: subscriber.workspaceId,
+          botIntegrationId: input.botIntegrationId,
+          telegramBotUserId: subscriber.id,
+          planId: price.planId,
+          planPriceId: price.id,
+          source: 'STRIPE',
+          status: 'INCOMPLETE',
+          currency: price.currency,
+          interval: price.interval,
+          intervalCount: price.intervalCount,
+          amountMinor: price.amountMinor,
+          priceVersion: price.version,
+          providerCustomerId: customerId,
+          checkoutExpiresAt: expiresAt,
+        },
+      });
+    const subscription = input.preventOverlap
+      ? await this.prisma.$transaction(async (tx) => {
+          await acquirePostgresTransactionLock(
+            tx,
+            `finance-checkout:${subscriber.id}`,
+          );
+          const now = new Date();
+          const open = await tx.botSubscription.findFirst({
+            where: {
+              botIntegrationId: input.botIntegrationId,
+              telegramBotUserId: subscriber.id,
+              OR: [
+                {
+                  source: 'STRIPE',
+                  status: 'INCOMPLETE',
+                  checkoutExpiresAt: { gt: now },
+                },
+                {
+                  source: { in: ['STRIPE', 'TELEGRAM_STARS'] },
+                  status: { in: ['ACTIVE', 'PAST_DUE'] },
+                  providerSubscription: { is: { mode } },
+                },
+                ...(isFinanceIntro
+                  ? [
+                      {
+                        introPaidAt: { not: null },
+                        providerSubscription: { is: { mode } },
+                      },
+                    ]
+                  : []),
+              ],
+            },
+            select: { id: true },
+          });
+          if (open)
+            throw new ConflictException(
+              'A subscription or checkout already exists',
+            );
+          return reserve(tx, new Date(now.getTime() + 32 * 60_000));
+        })
+      : await reserve(this.prisma);
     try {
       const checkout = await this.stripe.checkout({
         botIntegrationId: input.botIntegrationId,
         mode,
         customerId,
         priceId: providerPriceId,
+        oneTimePriceId: introProviderPriceId,
+        trialPeriodDays: isFinanceIntro ? price.intervalCount : undefined,
+        expiresAt: subscription.checkoutExpiresAt ?? undefined,
         subscriptionId: subscription.id,
         successUrl: input.successUrl,
         cancelUrl: input.cancelUrl,
@@ -144,6 +234,8 @@ export class BotBillingCheckout {
         });
       return { ...checkout, subscriptionId: subscription.id };
     } catch (error) {
+      // A timeout can leave a payable session at Stripe until its expiry.
+      if (input.preventOverlap) throw error;
       await this.prisma.botSubscription.delete({
         where: { id: subscription.id },
       });
@@ -254,7 +346,12 @@ export class BotBillingCheckout {
         status: {
           in: [BotSubscriptionStatus.ACTIVE, BotSubscriptionStatus.PAST_DUE],
         },
-        providerSubscription: { is: { provider: BotBillingProvider.STRIPE } },
+        providerSubscription: {
+          is: {
+            provider: BotBillingProvider.STRIPE,
+            ...(isProductionEnvironment() ? { mode: 'LIVE' } : {}),
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
       include: { providerSubscription: true },
@@ -289,6 +386,7 @@ export class BotBillingCheckout {
         botIntegrationId: input.botIntegrationId,
         telegramBotUserId: input.telegramBotUserId,
         provider: BotBillingProvider.STRIPE,
+        ...(isProductionEnvironment() ? { mode: 'LIVE' } : {}),
       },
       orderBy: { updatedAt: 'desc' },
     });

@@ -125,7 +125,7 @@ export function hasMeaningfulCrossPromotionDraft(
     draft.partnerAdvertiserId ||
     draft.partnerContact?.trim() ||
     draft.partnerTelegram?.trim() ||
-    draft.targets.length ||
+    draft.targets.some((target) => Boolean(target.promoId || target.inviteLinkId)) ||
     hasPostContent(draft.post) ||
     Boolean(
       draft.additionalPublisherPosts?.some((item) => hasPostContent(item.post)),

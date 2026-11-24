@@ -4,7 +4,7 @@ export type BotBillingConnectionStatus =
   | "NOT_CONFIGURED"
   | "CONNECTED"
   | "INVALID";
-export type BotBillingInterval = "MONTH" | "YEAR";
+export type BotBillingInterval = "DAY" | "MONTH" | "YEAR";
 export type BotSubscriptionSource =
   | "STRIPE"
   | "TELEGRAM_STARS"
@@ -19,7 +19,7 @@ export type BotSubscriptionStatus =
 
 export type BotBillingProviderCapabilities = {
   recurring: boolean;
-  intervals: BotBillingInterval[];
+  intervals: Exclude<BotBillingInterval, "DAY">[];
   currencies?: string[];
   coupons: boolean;
   refunds: boolean;
@@ -34,6 +34,7 @@ export type BotBillingProviderConfigView = {
   publicKeyMasked?: string | null;
   secretKeyConfigured: boolean;
   webhookSecretConfigured: boolean;
+  webhookPath?: string;
   lastCheckedAt?: string | null;
   lastValidationError?: string | null;
   capabilities: BotBillingProviderCapabilities;
@@ -41,7 +42,7 @@ export type BotBillingProviderConfigView = {
 
 export type FinanceAiConfigView = {
   provider: "OPENAI";
-  source: "WORKSPACE_DEFAULT" | "BOT_OVERRIDE" | "NONE";
+  source: "WORKSPACE_DEFAULT" | "BOT_OVERRIDE" | "NONE" | "ENV";
   status: "NOT_CONFIGURED" | "CONNECTED" | "INVALID";
   apiKeyConfigured: boolean;
   lastCheckedAt: string | null;
@@ -81,6 +82,7 @@ export type BotBillingSubscriberPage = {
     amountMinor: number | null;
     currency: string | null;
     interval: BotBillingInterval | null;
+    intervalCount: number | null;
     source: BotSubscriptionSource;
     provider: BotBillingProvider | null;
     status: BotSubscriptionStatus;

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createTelegramAiPostingMediaRunState } from './telegram-ai-posting-media-preferences';
 import { telegramAiPostingImageIdentity } from './telegram-ai-posting-image-identity';
 import sharp from 'sharp';
 import {
@@ -84,6 +85,19 @@ describe('TelegramAiPostingImageService', () => {
     expect(buildTelegramAiPostingImagePrompt(input, false)).toContain('everyday documentary frame');
   });
 
+  it('makes an explicit image revision the required scene even with reference photos', () => {
+    const revised = 'Two colleagues sit face to face discussing a proposal over a notebook.';
+    const prompt = buildTelegramAiPostingImagePrompt({
+      topic: 'A discussion at work',
+      prompt: 'A woman walks down an office corridor',
+      generationDescription: 'Use soft documentary light',
+      revisionDirection: revised,
+    }, true);
+    expect(prompt).toContain(revised);
+    expect(prompt).toContain('takes priority');
+    expect(prompt).not.toContain('walks down an office corridor');
+  });
+
   it('does not store an image whose bytes already appeared in this run', async () => {
     const fingerprint = createHash('sha256').update(imageBytes).digest('hex');
     const result = await service.resolve({
@@ -92,6 +106,30 @@ describe('TelegramAiPostingImageService', () => {
     });
     expect(result).toMatchObject({ readiness: 'FAILED', failureCode: 'AI_POSTING_IMAGE_DUPLICATE' });
     expect(media.persistImageBytes).not.toHaveBeenCalled();
+  });
+
+  it('reserves a selected search image only once across parallel publications', async () => {
+    const mediaRunState = createTelegramAiPostingMediaRunState();
+    sources.searchOpenImages.mockResolvedValue([
+      { url: 'https://example.org/shared.png', sourceId: 'openverse', sourceType: 'image-search' },
+    ]);
+    const results = await Promise.all([
+      service.resolve({ ...request('found'), mediaRunState }),
+      service.resolve({ ...request('found'), mediaRunState }),
+    ]);
+    expect(results.map(({ readiness }) => readiness).sort()).toEqual(['MISSING', 'READY']);
+    expect(media.persistImageBytes).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the search quota error without requesting AI when the batch used its fallback', async () => {
+    const result = await service.resolve({
+      ...request('found'),
+      fallbackToGeneration: true,
+      claimGenerationFallback: () => false,
+    });
+    expect(result).toMatchObject({ readiness: 'MISSING', failureCode: 'AI_POSTING_IMAGE_SEARCH_SHARE_LIMIT' });
+    expect(result.mediaSearch?.rounds.length).toBeGreaterThan(1);
+    expect(gateway.execute).not.toHaveBeenCalled();
   });
 
   it('searches across open image sources in hybrid mode and persists the result', async () => {
@@ -160,17 +198,53 @@ describe('TelegramAiPostingImageService', () => {
     expect(gateway.execute).not.toHaveBeenCalled();
   });
 
+  it('does not redownload a Wikimedia photo already used at a different size', async () => {
+    const thumbnail = 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Example.jpg/960px-Example.jpg';
+    sources.searchOpenImages.mockResolvedValue([{ url: thumbnail, sourceId: 'wikimedia-commons', sourceType: 'image-search' }]);
+    const result = await service.resolve({
+      ...request('found'),
+      usedImages: new Set(['https://upload.wikimedia.org/wikipedia/commons/a/ab/Example.jpg']),
+    });
+    expect(result.image).toBeNull();
+    expect(sources.downloadImage).not.toHaveBeenCalled();
+  });
+
+  it('tries distinct Pinterest phrases first and continues to Commons when Brave is unconfigured', async () => {
+    sources.searchOpenImages.mockImplementation(async (_query, _page, catalog) => {
+      if (catalog === 'pinterest') throw new Error('IMAGE_SEARCH_NOT_CONFIGURED');
+      return [{ url: 'https://upload.wikimedia.org/image.jpg', sourceId: 'wikimedia-commons', sourceType: 'image-search' }];
+    });
+    const result = await service.resolve({
+      ...request('found'),
+      searchQuery: 'bedside reading lamp, evening book nightstand, warm bedroom light',
+      imageSearchSources: ['https://www.pinterest.com/', 'https://commons.wikimedia.org/'],
+    });
+    expect(result.image?.sourceId).toBe('wikimedia-commons');
+    expect(result.mediaSearch?.rounds[0]).toMatchObject({
+      queries: [
+        { text: 'bedside reading lamp', catalog: 'pinterest', unavailable: true },
+        { text: 'evening book nightstand', catalog: 'pinterest', unavailable: true },
+        { text: 'warm bedroom light', catalog: 'pinterest', unavailable: true },
+      ],
+      observation: expect.stringContaining('Brave'),
+    });
+    expect(result.mediaSearch?.rounds[1]?.outcome).toBe('SELECTED');
+  });
+
   it('creates an image after exhausting external search on a publication', async () => {
     const result = await service.resolve({
       ...request('found'),
       fallbackToGeneration: true,
       preferencePurpose: 'SEARCH',
       searchQuery: 'woman writing notebook, hands writing desk',
+      imageSearchSources: ['https://www.pinterest.com/', 'https://commons.wikimedia.org/', 'https://photos.example/'],
     });
 
     expect(result.image?.sourceId).toBe('openai-image-generation');
-    expect(result.mediaSearch?.rounds).toHaveLength(3);
-    expect(sources.searchOpenImages).toHaveBeenCalledWith('woman writing notebook', 2);
+    expect(result.mediaSearch?.rounds[0]?.queries[0]).toMatchObject({ catalog: 'pinterest' });
+    expect(sources.searchOpenImages).toHaveBeenCalledWith('woman writing notebook', 1, 'wikimedia');
+    expect(sources.searchOpenImages).toHaveBeenCalledWith('woman writing notebook', 1, 'website', 'photos.example');
+    expect(sources.searchOpenImages.mock.calls.every(([, , catalog]) => catalog !== 'wordpress-photos')).toBe(true);
     expect(gateway.execute).toHaveBeenCalledTimes(1);
     expect(gateway.execute).toHaveBeenCalledWith(expect.objectContaining({ category: 'TELEGRAM_POSTING_IMAGE' }));
     expect(result.operation).toMatchObject({ mediaStep: 'GENERATE' });

@@ -1,3 +1,5 @@
+export const MAX_TELEGRAM_AI_POSTING_BATCH_SIZE = 10;
+
 export const DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT = 70;
 
 export function isTelegramAiPostingEmptyTextFailure(failure: { code: string; reasons?: string[] }) {
@@ -6,6 +8,11 @@ export function isTelegramAiPostingEmptyTextFailure(failure: { code: string; rea
       failure.reasons?.some((reason) => reason.includes('непустой текст публикации')));
 }
 
+export function canRetryTelegramAiPostingText(failure: { code: string; reasons?: string[]; retryText?: boolean }) {
+  return Boolean(failure.retryText || failure.code === 'AI_POSTING_CAPTION_INVALID' || isTelegramAiPostingEmptyTextFailure(failure));
+}
+
+export const TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES = 30;
 export const TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES = 8;
 export const TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH = 1200;
 export const TELEGRAM_AI_POSTING_MAX_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -116,10 +123,39 @@ export function telegramAiPostingRunSlots(run: {
 
 export type TelegramAiPostingMediaStep = 'SEARCH_REVIEW' | 'REFERENCE_REVIEW' | 'GENERATE';
 
-export type TelegramAiPostingImageCatalog = 'auto' | 'wikimedia' | 'wordpress-photos';
+export const TELEGRAM_AI_POSTING_IMAGE_SOURCES = ['pinterest', 'auto', 'wikimedia', 'wordpress-photos'] as const;
+export type TelegramAiPostingImageCatalog = typeof TELEGRAM_AI_POSTING_IMAGE_SOURCES[number] | 'website';
+
+export const DEFAULT_TELEGRAM_AI_POSTING_IMAGE_URLS = [
+  "https://www.pinterest.com/",
+  "https://commons.wikimedia.org/",
+] as const;
+
+export function telegramAiPostingImageSourceUrl(value: unknown): string | null {
+  if (value === 'pinterest') return DEFAULT_TELEGRAM_AI_POSTING_IMAGE_URLS[0];
+  if (value === 'auto' || value === 'wikimedia') return DEFAULT_TELEGRAM_AI_POSTING_IMAGE_URLS[1];
+  if (typeof value !== 'string' || value.length > 500) return null;
+  try {
+    const url = new URL(value.trim());
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
+      !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z][a-z0-9-]*$/iu.test(url.hostname)) return null;
+    url.hash = '';
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+export function telegramAiPostingImageSourceUrls(values: unknown): string[] {
+  const urls = Array.isArray(values) ? values.flatMap((value) => {
+    const url = telegramAiPostingImageSourceUrl(value);
+    return url ? [url] : [];
+  }) : [];
+  return urls.length ? [...new Set(urls)] : [...DEFAULT_TELEGRAM_AI_POSTING_IMAGE_URLS];
+}
 
 export type TelegramAiPostingImageSearchRound = {
-  queries: Array<{ text: string; page: number; catalog: TelegramAiPostingImageCatalog; candidates: number; unavailable?: boolean }>;
+  queries: Array<{ text: string; page: number; catalog: TelegramAiPostingImageCatalog; domain?: string; candidates: number; unavailable?: boolean }>;
   inspected: number;
   usable: number;
   outcome: 'SELECTED' | 'NO_RESULTS' | 'NO_USABLE_IMAGES' | 'NO_MATCH' | 'REVIEW_UNAVAILABLE';

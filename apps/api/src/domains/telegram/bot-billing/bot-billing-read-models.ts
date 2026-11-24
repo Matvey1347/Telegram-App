@@ -177,34 +177,79 @@ export class BotBillingReadModels {
 
   async plans(userId: string, botIntegrationId: string) {
     const bot = await this.bot(userId, botIntegrationId);
-    return this.prisma.botSubscriptionPlan.findMany({
-      where: { botIntegrationId, workspaceId: bot.workspaceId },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        description: true,
-        isActive: true,
-        createdAt: true,
-        prices: {
-          select: {
-            id: true,
-            currency: true,
-            interval: true,
-            amountMinor: true,
-            version: true,
-            isPublic: true,
-            isActive: true,
+    const [plans, configs] = await Promise.all([
+      this.prisma.botSubscriptionPlan.findMany({
+        where: { botIntegrationId, workspaceId: bot.workspaceId },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          description: true,
+          isActive: true,
+          createdAt: true,
+          prices: {
+            select: {
+              id: true,
+              currency: true,
+              interval: true,
+              intervalCount: true,
+              amountMinor: true,
+              version: true,
+              isPublic: true,
+              isActive: true,
+              providerPriceIdentity: true,
+            },
+            orderBy: [
+              { currency: 'asc' },
+              { interval: 'asc' },
+              { version: 'desc' },
+            ],
           },
-          orderBy: [
-            { currency: 'asc' },
-            { interval: 'asc' },
-            { version: 'desc' },
-          ],
         },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.botBillingProviderConfig.findMany({
+        where: {
+          workspaceId: bot.workspaceId,
+          provider: 'STRIPE',
+          OR: [{ botIntegrationId }, { botIntegrationId: null }],
+        },
+        select: {
+          id: true,
+          mode: true,
+          botIntegrationId: true,
+          connectionStatus: true,
+        },
+      }),
+    ]);
+    return plans.map((plan) => ({
+      ...plan,
+      prices: plan.prices.map(({ providerPriceIdentity, ...price }) => ({
+        ...price,
+        stripeSynced: (['TEST', 'LIVE'] as const).filter((mode) => {
+          const config =
+            configs.find(
+              (item) =>
+                item.mode === mode &&
+                item.botIntegrationId === botIntegrationId,
+            ) ??
+            configs.find(
+              (item) => item.mode === mode && item.botIntegrationId === null,
+            );
+          const identity = providerPriceIdentity as {
+            STRIPE?: Partial<
+              Record<typeof mode, { configId?: string; priceId?: string }>
+            >;
+          } | null;
+          const entry = identity?.STRIPE?.[mode];
+          return (
+            config?.connectionStatus === 'CONNECTED' &&
+            entry?.configId === config.id &&
+            Boolean(entry?.priceId)
+          );
+        }),
+      })),
+    }));
   }
 
   async coupons(userId: string, botIntegrationId: string) {
@@ -295,6 +340,7 @@ export class BotBillingReadModels {
         amountMinor: true,
         currency: true,
         interval: true,
+        intervalCount: true,
         currentPeriodStart: true,
         currentPeriodEnd: true,
         cancelAtPeriodEnd: true,
@@ -320,6 +366,7 @@ export class BotBillingReadModels {
         amountMinor: row.amountMinor,
         currency: row.currency,
         interval: row.interval,
+        intervalCount: row.intervalCount,
         source: row.source,
         provider: row.providerSubscription?.provider || null,
         status: row.status,

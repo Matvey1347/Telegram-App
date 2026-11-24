@@ -1,11 +1,17 @@
 import type { TelegramBot } from "@/lib/api";
-import type { TelegramBotRuntimeEnvironment } from "@telegram-system/shared";
+import type {
+  SupportBotView,
+  TelegramBotRuntimeEnvironment,
+} from "@telegram-system/shared";
 import { AccessBotSummary } from "./access-bot-summary";
 import { BotCardShell } from "./bot-card-shell";
+import { SupportCardLink } from "./telegram-support-inbox";
 import { FinanceBotSummary } from "./finance-bot-summary";
 
 export function TelegramBotCard({
   bot,
+  support,
+  onSupport,
   checkingEnvironment,
   onCheck,
   onRequestDelete,
@@ -14,6 +20,8 @@ export function TelegramBotCard({
   onEditProfile,
 }: {
   bot: TelegramBot;
+  support?: SupportBotView;
+  onSupport?: () => void;
   checkingEnvironment: TelegramBotRuntimeEnvironment | null;
   onCheck: (environment: TelegramBotRuntimeEnvironment) => void;
   onRequestDelete: (environment: TelegramBotRuntimeEnvironment) => void;
@@ -32,13 +40,18 @@ export function TelegramBotCard({
       onConfigureRuntime={onConfigureRuntime}
       onEditProfile={onEditProfile}
     >
-      {appType === "FINANCE" ? () => (
-        <FinanceBotSummary
-          summary={
-            bot.applicationSummary?.finance?.PRODUCTION ??
-            bot.applicationSummary?.finance?.LOCAL
-          }
-        />
+      {appType === "FINANCE" ? (
+        () => (
+          <div className="space-y-3">
+            <FinanceBotSummary
+              summary={
+                bot.applicationSummary?.finance?.PRODUCTION ??
+                bot.applicationSummary?.finance?.LOCAL
+              }
+            />
+            {onSupport && <SupportCardLink bot={support} onOpen={onSupport} />}
+          </div>
+        )
       ) : (
         <AccessBotSummary summary={bot.channelAccessSummary} />
       )}

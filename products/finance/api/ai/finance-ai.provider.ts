@@ -1,6 +1,7 @@
 import {
   BadGatewayException,
   BadRequestException,
+  ForbiddenException,
   Injectable,
 } from '@nestjs/common';
 import { FinanceAiProvider } from '@prisma/client';
@@ -318,6 +319,7 @@ export class FinanceAiProviderService {
     fileSize?: number;
     mime?: string;
   }) {
+    await this.assertVoiceAccess(input);
     const maxBytes = 8 * 1024 * 1024;
     if (!input.fileId)
       throw new BadRequestException('Telegram voice file is required');
@@ -363,6 +365,7 @@ export class FinanceAiProviderService {
     bytes: Buffer;
     mime: string;
   }) {
+    await this.assertVoiceAccess(input);
     const maxBytes = 8 * 1024 * 1024;
     if (!input.bytes.length || input.bytes.length > maxBytes)
       throw new BadRequestException('Voice message exceeds the 8 MB limit');
@@ -380,6 +383,27 @@ export class FinanceAiProviderService {
       profileId: input.profileId,
       botIntegrationId: input.botIntegrationId,
     });
+  }
+
+  private async assertVoiceAccess(input: {
+    profileId: string;
+    botIntegrationId: string;
+  }) {
+    const profile = await this.prisma.financeProfile.findFirst({
+      where: { id: input.profileId, botIntegrationId: input.botIntegrationId },
+      select: { telegramBotUserId: true },
+    });
+    if (!profile) throw new BadRequestException('Finance profile not found');
+    const allowed = await this.entitlements.hasCapability(
+      {
+        profileId: input.profileId,
+        botIntegrationId: input.botIntegrationId,
+        telegramBotUserId: profile.telegramBotUserId,
+      },
+      'VOICE_INPUT',
+    );
+    if (!allowed)
+      throw new ForbiddenException('Finance voice input requires a paid plan');
   }
 
   private async transcribeVoiceBytes(input: {

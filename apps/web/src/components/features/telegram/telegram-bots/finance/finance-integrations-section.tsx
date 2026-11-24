@@ -1,10 +1,11 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { Check, CircleAlert, Cpu, Star } from "lucide-react";
+import { Check, CircleAlert, Star } from "lucide-react";
 import type { BotBillingProviderConfigView } from "@telegram-system/shared";
-import { Card } from "@/components/ui/primitives";
+import { Button, Card, Input, ToggleRow } from "@/components/ui/primitives";
 import { QueryContentState } from "@/components/ui/query-content-state";
 import {
   botBillingApi,
@@ -12,39 +13,78 @@ import {
 } from "@/lib/features/finance/bot-billing-api";
 import { botBillingKeys } from "@/lib/query-keys";
 
+import { FinanceAiSettings } from "./finance-ai-settings";
+
 export function FinanceIntegrationsSection({ botId }: { botId: string }) {
+  const client = useQueryClient();
+  const [editing, setEditing] = useState(false);
   const providers = useQuery({
     queryKey: botBillingKeys.providers(botId),
     queryFn: () => botBillingApi.providers(botId),
   });
+  const aiKey = botBillingKeys.financeAi(botId);
   const ai = useQuery({
-    queryKey: botBillingKeys.financeAi(botId),
+    queryKey: aiKey,
     queryFn: () => financeAiConfigApi.get(botId),
   });
+  const customAi = ai.data?.source === "BOT_OVERRIDE";
+  const overrides =
+    providers.data?.filter(
+      (row) => row.source === "BOT_OVERRIDE" && row.provider === "STRIPE",
+    ) ?? [];
+  const reset = useMutation({
+    mutationFn: async () => {
+      for (const row of overrides)
+        await botBillingApi.useGlobalProvider(botId, row.provider, row.mode);
+      if (customAi)
+        client.setQueryData(aiKey, await financeAiConfigApi.reset(botId));
+    },
+    onSettled: () =>
+      client.invalidateQueries({ queryKey: botBillingKeys.providers(botId) }),
+  });
+  const custom = editing || overrides.length > 0 || customAi;
   return (
     <QueryContentState
-      isLoading={providers.isLoading || ai.isLoading}
-      isError={providers.isError || ai.isError}
-      isEmpty={!providers.data || !ai.data}
+      isLoading={providers.isLoading}
+      isError={providers.isError}
+      isEmpty={!providers.data}
       loadingText="Loading integrations"
       errorText="Could not load integrations."
       emptyText="Integrations are unavailable"
       onRetry={() => {
         void providers.refetch();
-        void ai.refetch();
       }}
     >
-      {providers.data && ai.data ? (
+      {providers.data ? (
         <div className="space-y-4">
+          <Card>
+            <ToggleRow
+              label="Custom settings"
+              description="Turn off to use Global settings."
+              checked={custom}
+              disabled={reset.isPending}
+              onChange={(value) => {
+                setEditing(value);
+                if (!value && (overrides.length || customAi)) reset.mutate();
+              }}
+            />
+            {reset.isError && (
+              <p role="alert">Could not restore Global settings.</p>
+            )}
+          </Card>
           <InheritedStripe
             rows={providers.data.filter((row) => row.provider === "STRIPE")}
           />
+          {custom &&
+            (["TEST", "LIVE"] as const).map((mode) => (
+              <StripeOverride key={mode} mode={mode} botId={botId} />
+            ))}
+          <FinanceAiSettings botId={botId} editable={custom} inline />
           <InheritedStars
             row={providers.data.find(
               (row) => row.provider === "TELEGRAM_STARS" && row.mode === "LIVE",
             )}
           />
-          <InheritedAi status={ai.data.status} source={ai.data.source} />
         </div>
       ) : null}
     </QueryContentState>
@@ -116,8 +156,8 @@ function InheritedStripe({ rows }: { rows: BotBillingProviderConfigView[] }) {
         </div>
       </div>
       <p className="mt-4 rounded-lg border border-blue-900/70 bg-blue-950/20 px-3 py-2 text-sm text-blue-100">
-        This bot inherits Stripe credentials from Global bot configuration.
-        Manage keys and validation there.
+        Stripe uses the workspace defaults until a custom key is saved for that
+        mode.
       </p>
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         {(["TEST", "LIVE"] as const).map((mode) => (
@@ -160,7 +200,9 @@ function InheritedStripeMode({
           label="Configuration"
           value={
             connected
-              ? "Inherited from global settings"
+              ? row?.source === "BOT_OVERRIDE"
+                ? "Custom settings"
+                : "Inherited from global settings"
               : "No global connection available"
           }
         />
@@ -181,6 +223,11 @@ function InheritedStripeMode({
           value={row?.webhookSecretConfigured ? "Configured" : "Not configured"}
         />
       </dl>
+      {row?.webhookPath && (
+        <p className="mt-3 break-all text-xs text-neutral-400">
+          Webhook: <code>{row.webhookPath}</code>
+        </p>
+      )}
       {row?.lastValidationError ? (
         <p className="mt-3 text-xs text-rose-300">{row.lastValidationError}</p>
       ) : null}
@@ -217,28 +264,58 @@ function InheritedStars({ row }: { row?: BotBillingProviderConfigView }) {
   );
 }
 
-function InheritedAi({
-  status,
-  source,
+function StripeOverride({
+  botId,
+  mode,
 }: {
-  status: "NOT_CONFIGURED" | "CONNECTED" | "INVALID";
-  source: string;
+  botId: string;
+  mode: "TEST" | "LIVE";
 }) {
+  const client = useQueryClient();
+  const [secret, setSecret] = useState("");
+  const [webhook, setWebhook] = useState("");
+  const save = useMutation({
+    mutationFn: () =>
+      botBillingApi.saveProvider(botId, "STRIPE", mode, {
+        secretKey: secret.trim() || undefined,
+        webhookSecret: webhook.trim() || undefined,
+      }),
+    onSuccess: async () => {
+      setSecret("");
+      setWebhook("");
+      await client.invalidateQueries({
+        queryKey: botBillingKeys.providers(botId),
+      });
+    },
+  });
   return (
-    <Card>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <IntegrationTitle
-          icon={<Cpu size={20} className="text-sky-300" />}
-          title="AI provider"
-          description="AI models used by Finance Bot"
-        />
-        <StatusBadge status={status} />
-      </div>
-      <p className="mt-4 rounded-lg border border-neutral-800 bg-neutral-950/40 px-3 py-2 text-sm text-neutral-300">
-        {source === "WORKSPACE_DEFAULT"
-          ? "Connected through the global OpenAI configuration. Models are selected automatically per feature."
-          : "No global OpenAI connection is available for this bot."}
-      </p>
+    <Card className="space-y-3">
+      <h3 className="font-medium">Custom Stripe · {mode}</h3>
+      <Input
+        type="password"
+        aria-label={`Stripe ${mode} secret key`}
+        placeholder="Secret key"
+        value={secret}
+        onChange={(event) => setSecret(event.target.value)}
+      />
+      <Input
+        type="password"
+        aria-label={`Stripe ${mode} webhook secret`}
+        placeholder="Webhook signing secret"
+        value={webhook}
+        onChange={(event) => setWebhook(event.target.value)}
+      />
+      <Button
+        disabled={save.isPending || !(secret.trim() || webhook.trim())}
+        onClick={() => save.mutate()}
+      >
+        Save {mode}
+      </Button>
+      {save.isError && (
+        <p role="alert" className="text-rose-300">
+          Could not save Stripe settings.
+        </p>
+      )}
     </Card>
   );
 }

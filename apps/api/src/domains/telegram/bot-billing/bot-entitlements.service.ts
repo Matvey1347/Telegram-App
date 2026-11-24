@@ -32,6 +32,14 @@ export class BotEntitlementsService {
           {
             source: { in: ['STRIPE', 'TELEGRAM_STARS'] },
             currentPeriodEnd: { gt: now },
+            AND: [
+              {
+                OR: [
+                  { checkoutExpiresAt: null },
+                  { confirmedPaidThrough: { gt: now } },
+                ],
+              },
+            ],
             // Test provider events must never create a live Finance
             // entitlement. Manual and gift grants deliberately have no
             // provider environment and are managed by their own expiry.

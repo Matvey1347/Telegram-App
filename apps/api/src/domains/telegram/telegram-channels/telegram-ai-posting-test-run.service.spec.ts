@@ -256,6 +256,16 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
     expect(saved.sourceDiagnostics).toEqual([diagnostic]);
   });
 
+  it.each([['approve', 'PENDING'], ['save', 'APPROVED']] as const)(
+    'blocks %s when the publication has no image',
+    async (action, status) => {
+      const ctx = setup({ status, imageUrl: null, mediaReadiness: 'MISSING' });
+      await expect(act(ctx.service, action)).rejects.toThrow('AI_POSTING_IMAGE_REQUIRED');
+      expect(ctx.posts.prepareManagedPostCreate).not.toHaveBeenCalled();
+      expect(ctx.storedRun.version).toBe(1);
+    },
+  );
+
   it('saves the valid sphere, rubric and length with the approved publication', async () => {
     const ctx = setup({
       editorialMetadata: {
@@ -480,7 +490,7 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
     );
     expect(ctx.images.resolve).toHaveBeenCalledWith(
       expect.objectContaining({
-        prompt: expect.stringContaining('Use a warm, quiet palette'),
+        revisionDirection: 'Use a warm, quiet palette',
       }),
     );
     expect(regenerated.publications[0]).toMatchObject({
@@ -598,19 +608,15 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
   });
 
   it('preserves image readiness, operations, costs, provenance and diagnostics when saving', async () => {
-    const ctx = setup({
-      status: 'APPROVED',
-      mediaReadiness: 'MISSING',
-      imageUrl: null,
-    });
+    const ctx = setup({ status: 'APPROVED' });
     await act(ctx.service, 'save');
     expect(ctx.storedRun.publications).toMatchObject({
       sourceDiagnostics: [diagnostic],
       items: [
         {
           status: 'SAVED_DRAFT',
-          mediaReadiness: 'MISSING',
-          imageUrl: null,
+          mediaReadiness: 'READY',
+          imageUrl: 'https://media.example/approved.jpg',
           operations: [expect.objectContaining({ operationId: 'image-op' })],
           costs: {
             planning: '0.01',

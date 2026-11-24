@@ -1,4 +1,4 @@
-import { TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from "@telegram-system/shared";
+import { TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from "@telegram-system/shared";
 
 export type AiPostingMediaPreference = {
   id: string;
@@ -23,7 +23,7 @@ export function normalizeAiPostingMediaPreferences(config: {
       : [];
 
   if (Array.isArray(config.mediaPreferences)) {
-    return config.mediaPreferences.slice(0, 10).flatMap((value, index) => {
+    return config.mediaPreferences.slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES).flatMap((value, index) => {
       if (!value || typeof value !== "object" || Array.isArray(value))
         return [];
       const item = value as Record<string, unknown>;

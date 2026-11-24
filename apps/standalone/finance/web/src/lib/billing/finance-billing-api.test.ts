@@ -1,24 +1,50 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { financeBillingApi } from "./finance-billing-api";
 
-afterEach(() => vi.unstubAllGlobals());
+const api = vi.hoisted(() => ({ billing: vi.fn(), checkout: vi.fn() }));
+vi.mock("@consumer-finance/web/lib/api/consumer-finance-planning-api", () => ({
+  consumerFinancePlanningApi: api,
+}));
 
-describe("Finance billing browser session", () => {
-  it("posts Telegram proof to Finance using first-party cookies and never sends it to billing reads", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ authenticated: true }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ tier: "FREE", offers: [], history: [] }) });
-    vi.stubGlobal("fetch", fetchMock);
-
-    await financeBillingApi.establishTelegramSession("finance-bot", "signed-proof");
-    await financeBillingApi.get("finance-bot");
-
-    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/finance/session/telegram-browser", expect.objectContaining({
-      method: "POST",
-      credentials: "include",
-      body: JSON.stringify({ financeBotId: "finance-bot", initData: "signed-proof" }),
-    }));
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/finance/finance-bot/billing", expect.objectContaining({ credentials: "include" }));
-    expect(JSON.stringify(fetchMock.mock.calls[1])).not.toContain("signed-proof");
+describe("Groshly billing", () => {
+  it("uses the signed-in consumer's catalog and sends the server price to Stripe Checkout", async () => {
+    api.billing.mockResolvedValue({
+      current: { tier: "FREE" },
+      subscriptions: [],
+      paymentHistory: [],
+      providers: [{ provider: "STRIPE", mode: "TEST" }],
+      plans: [
+        {
+          code: "PRO",
+          canPurchase: true,
+          prices: [
+            {
+              id: "monthly",
+              currency: "UAH",
+              interval: "MONTH",
+              intervalCount: 1,
+              version: 2,
+              amountMinor: 17900,
+            },
+          ],
+        },
+      ],
+    });
+    const catalog = await financeBillingApi.get("finance-bot");
+    expect(catalog.offers).toMatchObject([
+      { code: "MONTH", available: true, mode: "TEST" },
+    ]);
+    await financeBillingApi.checkout(
+      "finance-bot",
+      catalog.offers[0].id,
+      catalog.offers[0].mode,
+    );
+    expect(api.billing).toHaveBeenCalledWith("finance-bot");
+    expect(api.checkout).toHaveBeenCalledWith(
+      "finance-bot",
+      "STRIPE",
+      "monthly",
+      "TEST",
+    );
   });
 });

@@ -46,16 +46,16 @@ export function MutualPromotionFolderCard({
 
       <div className="pointer-events-none relative z-10 px-3 pt-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             <div className="flex min-w-0 items-center gap-2">
               <h3 className="truncate text-base font-semibold text-white">{title}</h3>
               {typeBadge}
             </div>
-            <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-neutral-400">
+            <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] text-neutral-400">
               <CalendarClock size={14} className="shrink-0" />
-              <span>{formatDateTime(folder.startsAt)}</span>
+              <time className="whitespace-nowrap" dateTime={folder.startsAt}>{formatDateTime(folder.startsAt)}</time>
               <span className="text-neutral-600">→</span>
-              <span>{formatDateTime(folder.endsAt)}</span>
+              <time className="whitespace-nowrap" dateTime={folder.endsAt}>{formatDateTime(folder.endsAt)}</time>
             </p>
           </div>
           <div className="pointer-events-auto flex items-start gap-1">
@@ -96,13 +96,12 @@ function ChannelPerformance({ channels }: { channels: MutualPromotionFolderListI
       aria-label="Channel performance"
     >
       {channels.map((channel) => (
-        <div key={`${channel.role}:${channel.id}`} className="px-2.5 py-1.5">
-          <div className="flex min-w-0 items-center gap-2">
+        <div key={`${channel.role}:${channel.id}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
             <TelegramEntityAvatar imageUrl={channel.photoUrl} alt="" kind="channel" size="xs" />
             <span className="min-w-0 flex-1 truncate text-xs font-medium text-neutral-100">{channel.title}</span>
-            <MutualPromotionParticipantRoleBadge role={channel.role} compact />
           </div>
-          <dl className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-7 text-[10px]">
+          <dl className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-[10px]">
             <ChannelStat
               label="Joined + requests"
               value={channel.stats.acquiredCount == null ? "—" : `+${formatCount(channel.stats.acquiredCount)}`}
@@ -119,6 +118,7 @@ function ChannelPerformance({ channels }: { channels: MutualPromotionFolderListI
               <ChannelStat label="Price" value={<MutualPromotionPaidSubscriberPrice channel={channel} />} />
             ) : null}
           </dl>
+          <MutualPromotionParticipantRoleBadge role={channel.role} compact />
         </div>
       ))}
     </div>

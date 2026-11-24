@@ -85,15 +85,20 @@ function initializeDraftSession<T>(
     latest.current.onRestore(value, draft);
     return;
   }
-  const drafts = readWorkspaceModalDrafts(window.localStorage, config).map(
-    (draft) => {
+  const storedDrafts = readWorkspaceModalDrafts(window.localStorage, config);
+  const drafts = storedDrafts
+    .filter((draft) => {
+      if (latest.current.isMeaningful(draft.form)) return true;
+      removeWorkspaceModalDraft(window.localStorage, config, draft.id);
+      return false;
+    })
+    .map((draft) => {
       if (draft.preview || !latest.current.previewFor) return draft;
       return writeWorkspaceModalDraft(window.localStorage, config, {
         ...draft,
         preview: latest.current.previewFor(draft.form),
       });
-    },
-  );
+    });
   const seed = latest.current.createInitialValue();
   setPending(drafts);
   setCurrent(newEnvelope(seed, schemaVersion));

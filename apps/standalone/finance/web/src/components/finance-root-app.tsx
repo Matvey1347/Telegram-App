@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { GroshlyFinanceApp } from "@finance-web/components/groshly-finance-app";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
-import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
+import { ConsumerFinanceBootstrapError, ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
+import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
 
 type FinanceContext = { financeBotId: string };
 
@@ -21,6 +22,7 @@ function readFinanceContext(value: unknown): FinanceContext | null {
 }
 
 export function FinanceRootApp({ botId, entry = "app", initialLocale = "uk", initialTheme = "light" }: { botId?: string; entry?: "app" | "login"; initialLocale?: "uk" | "en"; initialTheme?: "light" | "dark" } = {}) {
+  const bootstrap = useTelegramMiniAppBootstrap();
   const [state, setState] = useState<FinanceContextState>(() =>
     botId ? { status: "ready", financeBotId: botId } : { status: "loading" },
   );
@@ -49,13 +51,18 @@ export function FinanceRootApp({ botId, entry = "app", initialLocale = "uk", ini
   }, [botId]);
 
   const activeBotId = botId ?? (state.status === "ready" ? state.financeBotId : undefined);
-  if (activeBotId) {
-    return entry === "login"
-      ? <ConsumerFinanceLogin key={activeBotId} botId={activeBotId} initialLocale={initialLocale} initialTheme={initialTheme} onAuthenticated={() => window.location.replace("/app")} />
-      : <GroshlyFinanceApp key={activeBotId} botId={activeBotId} />;
+  if (activeBotId && bootstrap.status === "error") {
+    return <ConsumerFinanceBootstrapError locale={initialLocale} onRetry={() => window.location.reload()} />;
   }
 
-  if (state.status === "loading") {
+  if (activeBotId && (bootstrap.status === "ready" || bootstrap.status === "browser")) {
+    if (entry === "login" && bootstrap.status === "browser") {
+      return <ConsumerFinanceLogin key={activeBotId} botId={activeBotId} initialLocale={initialLocale} initialTheme={initialTheme} onAuthenticated={() => window.location.replace("/app")} />;
+    }
+    return <GroshlyFinanceApp key={activeBotId} botId={activeBotId} bootstrap={bootstrap} />;
+  }
+
+  if (state.status === "loading" || bootstrap.status === "loading") {
     return <GroshlyLoadingScreen />;
   }
 

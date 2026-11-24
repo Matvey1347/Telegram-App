@@ -1,7 +1,7 @@
 import { PromosService } from './promos.service';
 
 describe('PromosService.findAll', () => {
-  it('excludes heavy content and creator detail from the compact list', async () => {
+  it('selects the Telegram post and creator summary without binary image data', async () => {
     type PromoListQuery = {
       where: { workspaceId: string };
       select: Record<string, unknown>;
@@ -39,11 +39,14 @@ describe('PromosService.findAll', () => {
         telegramChannel: { workspaceId: 'workspace-1', archivedAt: null },
       }),
     );
-    expect(findOperation.select).not.toHaveProperty('text');
+    expect(findOperation.select).toHaveProperty('text', true);
+    expect(findOperation.select).toHaveProperty('mediaItems', true);
     expect(findOperation.select).toHaveProperty('previewText', true);
     expect(findOperation.select).toHaveProperty('previewImageUrl', true);
     expect(findOperation.select).not.toHaveProperty('imageData');
-    expect(findOperation.select).not.toHaveProperty('createdByUser');
+    expect(findOperation.select).toHaveProperty('createdByUser', {
+      select: { id: true, name: true },
+    });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 

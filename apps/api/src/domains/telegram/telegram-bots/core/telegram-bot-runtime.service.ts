@@ -116,14 +116,6 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       input.botIntegrationId,
       input.environment,
     );
-    if (
-      existing?.runtimeStatus === TelegramBotRuntimeStatus.ACTIVE &&
-      this.environment.owns(input.environment)
-    ) {
-      // The owner can safely detach its old webhook before replacing the token.
-      // A non-owner only stores the replacement as disabled for its owner to activate.
-      await this.botApi.deleteWebhook(this.decryptToken(existing));
-    }
     const identity = await this.botApi.getMe(input.token);
     if (!identity.id)
       throw new BadRequestException('Invalid Telegram bot token');
@@ -132,6 +124,15 @@ export class TelegramBotRuntimeService implements OnModuleInit {
       String(identity.id),
       existing?.id,
     );
+    if (
+      existing?.runtimeStatus === TelegramBotRuntimeStatus.ACTIVE &&
+      this.environment.owns(input.environment) &&
+      existing.botId !== String(identity.id)
+    ) {
+      // A different bot needs its old webhook detached. A token rotation for
+      // the same bot can install the new webhook using its new credential.
+      await this.botApi.deleteWebhook(this.decryptToken(existing));
+    }
     const encrypted = this.encryption.encrypt(input.token);
     const runtime = await this.prisma.telegramBotRuntimeInstance.upsert({
       where: {

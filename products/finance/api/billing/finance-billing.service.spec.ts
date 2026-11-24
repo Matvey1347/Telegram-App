@@ -1,7 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
-import { FinanceBillingService } from '@consumer-finance/api/billing/finance-billing.service';
+import { BadRequestException } from "@nestjs/common";
+import { FinanceBillingService } from "@consumer-finance/api/billing/finance-billing.service";
 
-describe('FinanceBillingService', () => {
+describe("FinanceBillingService", () => {
   function setup() {
     const prisma = {
       botPlanPrice: { findFirst: jest.fn() },
@@ -13,40 +13,60 @@ describe('FinanceBillingService', () => {
         providers: [],
         subscriptions: [
           {
-            id: 'subscription-1',
-            currentPeriodEnd: new Date('2026-10-01T00:00:00.000Z'),
+            id: "subscription-1",
+            currentPeriodEnd: new Date("2026-10-01T00:00:00.000Z"),
           },
         ],
         plans: [
           {
-            id: 'persisted-pro',
-            code: 'PRO',
+            id: "persisted-pro",
+            code: "PRO",
             prices: [
               {
-                id: 'pro-uah',
-                currency: 'UAH',
-                interval: 'MONTH',
-                amountMinor: 14900,
+                id: "pro-uah",
+                currency: "UAH",
+                interval: "MONTH",
+                intervalCount: 1,
+                amountMinor: 17900,
                 version: 2,
               },
               {
-                id: 'stale-pro',
-                currency: 'UAH',
-                interval: 'MONTH',
+                id: "stale-pro",
+                currency: "UAH",
+                interval: "MONTH",
+                intervalCount: 1,
                 amountMinor: 19900,
                 version: 3,
               },
               {
-                id: 'annual-pro',
-                currency: 'UAH',
-                interval: 'YEAR',
-                amountMinor: 14900,
+                id: "annual-pro",
+                currency: "UAH",
+                interval: "YEAR",
+                intervalCount: 1,
+                amountMinor: 109900,
                 version: 1,
               },
               {
-                id: 'pro-stars',
-                currency: 'XTR',
-                interval: 'MONTH',
+                id: "quarter-pro",
+                currency: "UAH",
+                interval: "MONTH",
+                intervalCount: 3,
+                amountMinor: 39900,
+                version: 1,
+              },
+              {
+                id: "intro-pro",
+                currency: "UAH",
+                interval: "DAY",
+                intervalCount: 7,
+                amountMinor: 700,
+                version: 1,
+              },
+              {
+                id: "pro-stars",
+                currency: "XTR",
+                interval: "MONTH",
+                intervalCount: 1,
                 amountMinor: 250,
                 version: 1,
               },
@@ -56,15 +76,15 @@ describe('FinanceBillingService', () => {
       }),
       createStripeCheckout: jest
         .fn()
-        .mockResolvedValue({ url: 'https://checkout' }),
+        .mockResolvedValue({ url: "https://checkout" }),
       createStarsCheckout: jest
         .fn()
-        .mockResolvedValue({ invoiceLink: 'https://t.me/invoice' }),
+        .mockResolvedValue({ invoiceLink: "https://t.me/invoice" }),
       syncFixedCatalog: jest.fn().mockResolvedValue([]),
     };
     const entitlements = {
       resolve: jest.fn().mockResolvedValue({
-        tier: 'FREE',
+        tier: "FREE",
         capabilities: [],
         usage: [],
         activeUntil: null,
@@ -83,19 +103,19 @@ describe('FinanceBillingService', () => {
     };
   }
 
-  it('maps exactly the canonical Free, Pro and Ultimate definitions', async () => {
+  it("maps exactly the canonical Free, Pro and Ultimate definitions", async () => {
     const { service, billing, entitlements } = setup();
 
     const result = await service.catalog({
-      botIntegrationId: 'bot-1',
-      telegramBotUserId: 'user-1',
-      profileId: 'profile-1',
+      botIntegrationId: "bot-1",
+      telegramBotUserId: "user-1",
+      profileId: "profile-1",
     });
 
     expect(result.plans.map((plan) => plan.code)).toEqual([
-      'FREE',
-      'PRO',
-      'ULTIMATE',
+      "FREE",
+      "PRO",
+      "ULTIMATE",
     ]);
     expect(result.plans[0]).toEqual(
       expect.objectContaining({
@@ -104,62 +124,65 @@ describe('FinanceBillingService', () => {
       }),
     );
     expect(result.plans[0].features).toEqual(
-      expect.arrayContaining(['DETAILED_ANALYTICS', 'PERIOD_COMPARISON']),
+      expect.arrayContaining(["DETAILED_ANALYTICS", "PERIOD_COMPARISON"]),
     );
     expect(result.plans[1].prices).toEqual([
-      expect.objectContaining({ id: 'pro-uah', amountMinor: 14900 }),
-      expect.objectContaining({ id: 'pro-stars', amountMinor: 250 }),
+      expect.objectContaining({ id: "pro-uah", amountMinor: 17900 }),
+      expect.objectContaining({ id: "annual-pro", amountMinor: 109900 }),
+      expect.objectContaining({ id: "quarter-pro", amountMinor: 39900 }),
+      expect.objectContaining({ id: "intro-pro", amountMinor: 700 }),
+      expect.objectContaining({ id: "pro-stars", amountMinor: 250 }),
     ]);
     expect(result.plans.map((plan) => plan.canPurchase)).toEqual([
       false,
       true,
-      true,
+      false,
     ]);
     expect(result.plans[2].usageLimits.AI_INSIGHTS).toBe(100);
-    expect(result.current.tier).toBe('FREE');
+    expect(result.current.tier).toBe("FREE");
     expect(result.subscriptions[0].currentPeriodEnd).toBe(
-      '2026-10-01T00:00:00.000Z',
+      "2026-10-01T00:00:00.000Z",
     );
     expect(result.paymentHistory).toEqual([]);
     expect(billing.catalog).toHaveBeenCalledTimes(1);
     expect(entitlements.resolve).toHaveBeenCalledTimes(1);
   });
 
-  it('returns recent payment events for the authenticated subscriber', async () => {
+  it("returns recent payment events for the authenticated subscriber", async () => {
     const { service, prisma } = setup();
     prisma.botBillingEvent.findMany.mockResolvedValue([
       {
-        id: 'event-1',
-        type: 'PAYMENT_SUCCEEDED',
-        provider: 'STRIPE',
-        amountMinor: 14900,
-        currency: 'UAH',
-        occurredAt: new Date('2026-09-09T09:30:00.000Z'),
-        subscription: { plan: { code: 'PRO' } },
+        id: "event-1",
+        type: "PAYMENT_SUCCEEDED",
+        provider: "STRIPE",
+        amountMinor: 17900,
+        currency: "UAH",
+        occurredAt: new Date("2026-09-09T09:30:00.000Z"),
+        subscription: { plan: { code: "PRO" } },
       },
     ]);
 
     const result = await service.catalog({
-      botIntegrationId: 'bot-1',
-      telegramBotUserId: 'user-1',
-      profileId: 'profile-1',
+      botIntegrationId: "bot-1",
+      telegramBotUserId: "user-1",
+      profileId: "profile-1",
     });
 
     expect(result.paymentHistory).toEqual([
       expect.objectContaining({
-        id: 'event-1',
-        status: 'SUCCEEDED',
-        occurredAt: '2026-09-09T09:30:00.000Z',
-        planCode: 'PRO',
+        id: "event-1",
+        status: "SUCCEEDED",
+        occurredAt: "2026-09-09T09:30:00.000Z",
+        planCode: "PRO",
       }),
     ]);
     expect(prisma.botBillingEvent.findMany).toHaveBeenCalledWith({
       where: {
-        botIntegrationId: 'bot-1',
-        type: { in: ['PAYMENT_SUCCEEDED', 'PAYMENT_FAILED'] },
-        subscription: { telegramBotUserId: 'user-1' },
+        botIntegrationId: "bot-1",
+        type: { in: ["PAYMENT_SUCCEEDED", "PAYMENT_FAILED"] },
+        subscription: { telegramBotUserId: "user-1" },
       },
-      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
       take: 20,
       select: {
         id: true,
@@ -173,76 +196,78 @@ describe('FinanceBillingService', () => {
     });
   });
 
-  it('rejects a non-canonical Stripe price before creating checkout', async () => {
+  it("rejects a non-canonical Stripe price before creating checkout", async () => {
     const { service, prisma, billing } = setup();
     prisma.botPlanPrice.findFirst.mockResolvedValue({
-      currency: 'USD',
-      interval: 'MONTH',
-      amountMinor: 14900,
-      plan: { code: 'PRO' },
+      currency: "USD",
+      interval: "MONTH",
+      intervalCount: 1,
+      amountMinor: 17900,
+      plan: { code: "PRO" },
     });
 
     await expect(
       service.createStripeCheckout({
-        botIntegrationId: 'bot-1',
-        telegramBotUserId: 'user-1',
-        priceId: 'bad-price',
-        successUrl: 'https://example.test/success',
-        cancelUrl: 'https://example.test/cancel',
+        botIntegrationId: "bot-1",
+        telegramBotUserId: "user-1",
+        priceId: "bad-price",
+        successUrl: "https://example.test/success",
+        cancelUrl: "https://example.test/cancel",
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(billing.createStripeCheckout).not.toHaveBeenCalled();
   });
 
-  it('allows a canonical upgrade and delegates checkout unchanged', async () => {
+  it("allows a canonical upgrade and delegates checkout unchanged", async () => {
     const { service, prisma, billing } = setup();
     prisma.botPlanPrice.findFirst.mockResolvedValue({
-      currency: 'UAH',
-      interval: 'MONTH',
-      amountMinor: 14900,
-      plan: { code: 'PRO' },
+      currency: "UAH",
+      interval: "MONTH",
+      intervalCount: 1,
+      amountMinor: 17900,
+      plan: { code: "PRO" },
     });
 
     await expect(
       service.createStripeCheckout({
-        botIntegrationId: 'bot-1',
-        telegramBotUserId: 'user-1',
-        priceId: 'pro-uah',
-        successUrl: 'https://example.test/success',
-        cancelUrl: 'https://example.test/cancel',
+        botIntegrationId: "bot-1",
+        telegramBotUserId: "user-1",
+        priceId: "pro-uah",
+        successUrl: "https://example.test/success",
+        cancelUrl: "https://example.test/cancel",
       }),
-    ).resolves.toEqual({ url: 'https://checkout' });
+    ).resolves.toEqual({ url: "https://checkout" });
     expect(billing.createStripeCheckout).toHaveBeenCalledTimes(1);
   });
 
-  it('advertises no second checkout while a paid plan is active', async () => {
+  it("advertises no second checkout while a paid plan is active", async () => {
     const { service, entitlements } = setup();
     entitlements.resolve.mockResolvedValue({
-      tier: 'PRO',
+      tier: "PRO",
       capabilities: [],
       usage: [],
-      activeUntil: '2026-10-01T00:00:00.000Z',
+      activeUntil: "2026-10-01T00:00:00.000Z",
       cancelAtPeriodEnd: false,
     });
 
     const result = await service.catalog({
-      botIntegrationId: 'bot-1',
-      telegramBotUserId: 'user-1',
-      profileId: 'profile-1',
+      botIntegrationId: "bot-1",
+      telegramBotUserId: "user-1",
+      profileId: "profile-1",
     });
 
     expect(result.plans.every((plan) => !plan.canPurchase)).toBe(true);
   });
 
-  it('advertises no checkout while a recoverable payment is past due', async () => {
+  it("advertises no checkout while a recoverable payment is past due", async () => {
     const { service, billing } = setup();
     billing.catalog.mockResolvedValue({
       providers: [],
       subscriptions: [
         {
-          id: 'past-due-1',
-          source: 'STRIPE',
-          status: 'PAST_DUE',
+          id: "past-due-1",
+          source: "STRIPE",
+          status: "PAST_DUE",
           currentPeriodEnd: null,
           cancelAtPeriodEnd: false,
         },
@@ -251,26 +276,26 @@ describe('FinanceBillingService', () => {
     });
 
     const result = await service.catalog({
-      botIntegrationId: 'bot-1',
-      telegramBotUserId: 'user-1',
-      profileId: 'profile-1',
+      botIntegrationId: "bot-1",
+      telegramBotUserId: "user-1",
+      profileId: "profile-1",
     });
 
-    expect(result.current.tier).toBe('FREE');
+    expect(result.current.tier).toBe("FREE");
     expect(result.plans.every((plan) => !plan.canPurchase)).toBe(true);
   });
 
   it.each([
-    ['PRO', 'PRO', 14900],
-    ['ULTIMATE', 'PRO', 14900],
-    ['PRO', 'ULTIMATE', 24900],
+    ["PRO", "PRO", 17900],
+    ["ULTIMATE", "PRO", 17900],
   ] as const)(
-    'rejects a %s member checkout for %s before calling the provider',
+    "rejects a %s member checkout for %s before calling the provider",
     async (currentTier, targetTier, amountMinor) => {
       const { service, prisma, billing, entitlements } = setup();
       prisma.botPlanPrice.findFirst.mockResolvedValue({
-        currency: 'UAH',
-        interval: 'MONTH',
+        currency: "UAH",
+        interval: "MONTH",
+        intervalCount: 1,
         amountMinor,
         plan: { code: targetTier },
       });
@@ -284,27 +309,28 @@ describe('FinanceBillingService', () => {
 
       await expect(
         service.createStripeCheckout({
-          botIntegrationId: 'bot-1',
-          telegramBotUserId: 'user-1',
-          priceId: 'pro-uah',
-          successUrl: 'https://example.test/success',
-          cancelUrl: 'https://example.test/cancel',
+          botIntegrationId: "bot-1",
+          telegramBotUserId: "user-1",
+          priceId: "pro-uah",
+          successUrl: "https://example.test/success",
+          cancelUrl: "https://example.test/cancel",
         }),
-      ).rejects.toThrow('Finance checkout requires no active paid plan');
+      ).rejects.toThrow("Finance checkout requires no active paid plan");
       expect(billing.createStripeCheckout).not.toHaveBeenCalled();
     },
   );
 
-  it('rejects a paid-plan Stars checkout before creating a second subscription', async () => {
+  it("rejects a paid-plan Stars checkout before creating a second subscription", async () => {
     const { service, prisma, billing, entitlements } = setup();
     prisma.botPlanPrice.findFirst.mockResolvedValue({
-      currency: 'XTR',
-      interval: 'MONTH',
+      currency: "XTR",
+      interval: "MONTH",
+      intervalCount: 1,
       amountMinor: 400,
-      plan: { code: 'ULTIMATE' },
+      plan: { code: "ULTIMATE" },
     });
     entitlements.resolve.mockResolvedValue({
-      tier: 'PRO',
+      tier: "PRO",
       capabilities: [],
       usage: [],
       activeUntil: null,
@@ -313,72 +339,91 @@ describe('FinanceBillingService', () => {
 
     await expect(
       service.createStarsCheckout({
-        botIntegrationId: 'bot-1',
-        telegramBotUserId: 'user-1',
-        priceId: 'ultimate-stars',
+        botIntegrationId: "bot-1",
+        telegramBotUserId: "user-1",
+        priceId: "ultimate-stars",
       }),
-    ).rejects.toThrow('Finance checkout requires no active paid plan');
+    ).rejects.toThrow("Finance checkout requires no active paid plan");
     expect(billing.createStarsCheckout).not.toHaveBeenCalled();
   });
 
-  it.each(['STRIPE', 'TELEGRAM_STARS'] as const)(
-    'rejects %s checkout while a recoverable paid subscription is past due',
+  it.each(["STRIPE", "TELEGRAM_STARS"] as const)(
+    "rejects %s checkout while a recoverable paid subscription is past due",
     async (provider) => {
       const { service, prisma, billing } = setup();
       prisma.botPlanPrice.findFirst.mockResolvedValue({
-        currency: provider === 'STRIPE' ? 'UAH' : 'XTR',
-        interval: 'MONTH',
-        amountMinor: provider === 'STRIPE' ? 24900 : 400,
-        plan: { code: 'ULTIMATE' },
+        currency: provider === "STRIPE" ? "UAH" : "XTR",
+        interval: "MONTH",
+        intervalCount: 1,
+        amountMinor: provider === "STRIPE" ? 17900 : 400,
+        plan: { code: "PRO" },
       });
-      prisma.botSubscription.findFirst.mockResolvedValue({ id: 'past-due-1' });
+      prisma.botSubscription.findFirst.mockResolvedValue({ id: "past-due-1" });
 
       const checkout =
-        provider === 'STRIPE'
+        provider === "STRIPE"
           ? service.createStripeCheckout({
-              botIntegrationId: 'bot-1',
-              telegramBotUserId: 'user-1',
-              priceId: 'ultimate-uah',
-              successUrl: 'https://example.test/success',
-              cancelUrl: 'https://example.test/cancel',
+              botIntegrationId: "bot-1",
+              telegramBotUserId: "user-1",
+              priceId: "ultimate-uah",
+              successUrl: "https://example.test/success",
+              cancelUrl: "https://example.test/cancel",
             })
           : service.createStarsCheckout({
-              botIntegrationId: 'bot-1',
-              telegramBotUserId: 'user-1',
-              priceId: 'ultimate-stars',
+              botIntegrationId: "bot-1",
+              telegramBotUserId: "user-1",
+              priceId: "ultimate-stars",
             });
 
       await expect(checkout).rejects.toThrow(
-        'Finance checkout requires no active paid plan',
+        "Finance checkout requires no active paid plan",
       );
       expect(billing.createStripeCheckout).not.toHaveBeenCalled();
       expect(billing.createStarsCheckout).not.toHaveBeenCalled();
     },
   );
 
-  it('passes only canonical product definitions to the neutral catalog synchronizer', async () => {
+  it("passes only canonical product definitions to the neutral catalog synchronizer", async () => {
     const { service, billing } = setup();
 
-    await service.syncCatalog('owner-1', 'bot-1');
+    await service.syncCatalog("owner-1", "bot-1");
 
     expect(billing.syncFixedCatalog).toHaveBeenCalledWith(
-      'owner-1',
-      'bot-1',
-      'FINANCE',
+      "owner-1",
+      "bot-1",
+      "FINANCE",
       [
         {
-          code: 'PRO',
-          name: 'Pro',
-          amountMinor: 14900,
-          currency: 'UAH',
-          interval: 'MONTH',
+          code: "PRO",
+          name: "PLUS",
+          amountMinor: 700,
+          currency: "UAH",
+          interval: "DAY",
+          intervalCount: 7,
         },
         {
-          code: 'ULTIMATE',
-          name: 'Ultimate',
-          amountMinor: 24900,
-          currency: 'UAH',
-          interval: 'MONTH',
+          code: "PRO",
+          name: "PLUS",
+          amountMinor: 17900,
+          currency: "UAH",
+          interval: "MONTH",
+          intervalCount: 1,
+        },
+        {
+          code: "PRO",
+          name: "PLUS",
+          amountMinor: 39900,
+          currency: "UAH",
+          interval: "MONTH",
+          intervalCount: 3,
+        },
+        {
+          code: "PRO",
+          name: "PLUS",
+          amountMinor: 109900,
+          currency: "UAH",
+          interval: "YEAR",
+          intervalCount: 1,
         },
       ],
     );

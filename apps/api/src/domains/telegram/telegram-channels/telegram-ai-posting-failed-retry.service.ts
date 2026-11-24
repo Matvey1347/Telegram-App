@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { isTelegramAiPostingEmptyTextFailure, telegramAiPostingRunSlots } from '@telegram-system/shared';
+import { canRetryTelegramAiPostingText, telegramAiPostingRunSlots } from '@telegram-system/shared';
 import { decodeAiPostingRunPublications } from './telegram-ai-posting-run-data';
 import type { TelegramAiPostingRetrySlot } from './telegram-ai-posting-generation-store';
 import { WorkspaceService } from '../../../common/workspace.service';
@@ -47,7 +47,7 @@ export class TelegramAiPostingFailedRetryService {
     const reasons = Array.isArray(failure.reasons)
       ? failure.reasons.filter((reason): reason is string => typeof reason === 'string')
       : undefined;
-    if (topic && (failure.retryText === true || isTelegramAiPostingEmptyTextFailure({ code: String(failure.code), reasons }))) {
+    if (topic && (canRetryTelegramAiPostingText({ code: String(failure.code), reasons, retryText: failure.retryText === true }))) {
       const publicationIndex = telegramAiPostingRunSlots({
         requestedCount: run.requestedCount,
         publications: decodeAiPostingRunPublications(run.publications).publications as Parameters<typeof telegramAiPostingRunSlots>[0]['publications'],
@@ -55,12 +55,20 @@ export class TelegramAiPostingFailedRetryService {
       }).findIndex((slot) => slot.failureIndex === failureIndex);
       if (publicationIndex < 0 || publicationIndex >= run.requestedCount)
         throw new NotFoundException('AI_POSTING_FAILURE_NOT_RETRYABLE');
+      const assignment = failure.editorialAssignment;
+      const editorialAssignment = assignment && typeof assignment === 'object' && !Array.isArray(assignment) && Object.keys(assignment).length ? {
+        sphereId: typeof assignment.sphereId === 'string' ? assignment.sphereId : undefined,
+        rubricId: typeof assignment.rubricId === 'string' ? assignment.rubricId : undefined,
+        lengthId: typeof assignment.lengthId === 'string' ? assignment.lengthId : undefined,
+      } : undefined;
       const slot: TelegramAiPostingRetrySlot = {
         ...run,
         id: runId,
         failures,
         operations: Array.isArray(run.operations) ? run.operations as unknown as TelegramAiPostingRetrySlot['operations'] : [],
         failureIndex,
+        editorialAssignment,
+        legacyVote: !editorialAssignment && reasons?.some((reason) => /two separate voting options/iu.test(reason)),
         publicationIndex,
         imageMode: failure.imageMode === 'found' || failure.imageMode === 'ai' ? failure.imageMode : undefined,
       };

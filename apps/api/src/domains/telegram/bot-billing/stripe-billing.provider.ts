@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import Stripe from 'stripe';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
+import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
@@ -96,11 +97,13 @@ export class StripeBillingProvider {
     price: {
       id: string;
       currency: string;
-      interval: 'MONTH' | 'YEAR';
+      interval: 'DAY' | 'MONTH' | 'YEAR';
+      intervalCount: number;
       amountMinor: number;
       version: number;
       providerPriceIdentity: Prisma.JsonValue | null;
     };
+    oneTime?: boolean;
   }) {
     const { key, config } = await this.resolvedConfig(
       input.botIntegrationId,
@@ -123,50 +126,99 @@ export class StripeBillingProvider {
     )
       return current.priceId;
     try {
-      const product = await stripe.products.create(
-        {
-          name: input.plan.name,
-          description: input.plan.description || undefined,
-          metadata: {
-            botIntegrationId: input.botIntegrationId,
-            planId: input.plan.id,
+      const known = (
+        identities.STRIPE as
+          | Record<string, { productId: string; priceId: string }>
+          | undefined
+      )?.[`${input.mode}:${config.id}`];
+      const product = known
+        ? { id: known.productId }
+        : await stripe.products.create(
+            {
+              name: input.plan.name,
+              description: input.plan.description || undefined,
+              metadata: {
+                botIntegrationId: input.botIntegrationId,
+                planId: input.plan.id,
+              },
+            },
+            {
+              idempotencyKey: `product:${input.botIntegrationId}:${input.plan.id}:${input.mode}`,
+            },
+          );
+      const price = known
+        ? { id: known.priceId }
+        : await stripe.prices.create(
+            {
+              product: product.id,
+              currency: input.price.currency.toLowerCase(),
+              unit_amount: input.price.amountMinor,
+              ...(input.oneTime
+                ? {}
+                : {
+                    recurring: {
+                      interval:
+                        input.price.interval === 'DAY'
+                          ? ('day' as const)
+                          : input.price.interval === 'MONTH'
+                            ? ('month' as const)
+                            : ('year' as const),
+                      interval_count: input.price.intervalCount,
+                    },
+                  }),
+              metadata: {
+                botIntegrationId: input.botIntegrationId,
+                planId: input.plan.id,
+                planPriceId: input.price.id,
+                version: String(input.price.version),
+              },
+            },
+            { idempotencyKey: `price:${input.price.id}:${input.mode}` },
+          );
+      await this.prisma.$transaction(async (tx) => {
+        await acquirePostgresTransactionLock(
+          tx,
+          `stripe-price:${input.price.id}`,
+        );
+        const row = await tx.botPlanPrice.findUniqueOrThrow({
+          where: { id: input.price.id },
+          select: { providerPriceIdentity: true },
+        });
+        const latest = (row.providerPriceIdentity ?? {}) as Record<
+          string,
+          unknown
+        >;
+        const stripeIdentities = (latest.STRIPE ?? {}) as Record<
+          string,
+          unknown
+        >;
+        const previous = stripeIdentities[input.mode] as
+          | { configId?: string }
+          | undefined;
+        const previousMapping = previous?.configId
+          ? { [`${input.mode}:${previous.configId}`]: previous }
+          : {};
+        const next = {
+          ...latest,
+          STRIPE: {
+            ...stripeIdentities,
+            ...previousMapping,
+            [input.mode]: {
+              configId: config.id,
+              productId: product.id,
+              priceId: price.id,
+            },
+            [`${input.mode}:${config.id}`]: {
+              configId: config.id,
+              productId: product.id,
+              priceId: price.id,
+            },
           },
-        },
-        {
-          idempotencyKey: `product:${input.botIntegrationId}:${input.plan.id}:${input.mode}`,
-        },
-      );
-      const price = await stripe.prices.create(
-        {
-          product: product.id,
-          currency: input.price.currency.toLowerCase(),
-          unit_amount: input.price.amountMinor,
-          recurring: {
-            interval: input.price.interval === 'MONTH' ? 'month' : 'year',
-          },
-          metadata: {
-            botIntegrationId: input.botIntegrationId,
-            planId: input.plan.id,
-            planPriceId: input.price.id,
-            version: String(input.price.version),
-          },
-        },
-        { idempotencyKey: `price:${input.price.id}:${input.mode}` },
-      );
-      const next = {
-        ...identities,
-        STRIPE: {
-          ...((identities.STRIPE as Record<string, unknown>) || {}),
-          [input.mode]: {
-            configId: config.id,
-            productId: product.id,
-            priceId: price.id,
-          },
-        },
-      };
-      await this.prisma.botPlanPrice.update({
-        where: { id: input.price.id },
-        data: { providerPriceIdentity: next as Prisma.InputJsonValue },
+        };
+        await tx.botPlanPrice.update({
+          where: { id: input.price.id },
+          data: { providerPriceIdentity: next as Prisma.InputJsonValue },
+        });
       });
       return price.id;
     } catch {
@@ -179,6 +231,7 @@ export class StripeBillingProvider {
     workspaceId: string;
     telegramBotUserId: string;
     mode: BotBillingProviderMode;
+    verifyAccount?: boolean;
   }) {
     const existing = await this.prisma.botProviderCustomer.findUnique({
       where: {
@@ -190,12 +243,23 @@ export class StripeBillingProvider {
         },
       },
     });
-    if (existing) return existing.providerCustomerId;
+    if (existing && !input.verifyAccount) return existing.providerCustomerId;
     const { key, config } = await this.resolvedConfig(
       input.botIntegrationId,
       input.mode,
     );
     const stripe = new Stripe(key);
+    if (existing) {
+      try {
+        const customer = await stripe.customers.retrieve(
+          existing.providerCustomerId,
+        );
+        if (!customer.deleted) return customer.id;
+      } catch (error) {
+        if ((error as { code?: string }).code !== 'resource_missing')
+          throw error;
+      }
+    }
     const created = await stripe.customers.create(
       {
         metadata: {
@@ -204,7 +268,7 @@ export class StripeBillingProvider {
         },
       },
       {
-        idempotencyKey: `customer:${input.botIntegrationId}:${input.telegramBotUserId}:${input.mode}`,
+        idempotencyKey: `customer:${input.botIntegrationId}:${input.telegramBotUserId}:${input.mode}:${config.id}:${existing?.providerCustomerId ?? 'initial'}`,
       },
     );
     const row = await this.prisma.botProviderCustomer.upsert({
@@ -216,7 +280,7 @@ export class StripeBillingProvider {
           mode: input.mode,
         },
       },
-      update: {},
+      update: { providerCustomerId: created.id },
       create: {
         workspaceId: input.workspaceId,
         botIntegrationId: input.botIntegrationId,
@@ -234,6 +298,9 @@ export class StripeBillingProvider {
     mode: BotBillingProviderMode;
     customerId: string;
     priceId: string;
+    oneTimePriceId?: string;
+    trialPeriodDays?: number;
+    expiresAt?: Date;
     subscriptionId: string;
     successUrl: string;
     cancelUrl: string;
@@ -249,11 +316,31 @@ export class StripeBillingProvider {
       input.mode,
     );
     const stripe = new Stripe(key);
+    if (
+      input.expiresAt &&
+      (!config.webhookSecretEncrypted ||
+        !config.webhookSecretIv ||
+        !config.webhookSecretAuthTag)
+    )
+      throw new BadRequestException(
+        'Stripe webhook signing secret is not configured',
+      );
     const session = await stripe.checkout.sessions.create(
       {
         mode: 'subscription',
+        ...(input.expiresAt
+          ? {
+              expires_at: Math.floor(input.expiresAt.getTime() / 1000),
+              payment_method_types: ['card'],
+            }
+          : {}),
         customer: input.customerId,
-        line_items: [{ price: input.priceId, quantity: 1 }],
+        line_items: [
+          { price: input.priceId, quantity: 1 },
+          ...(input.oneTimePriceId
+            ? [{ price: input.oneTimePriceId, quantity: 1 }]
+            : []),
+        ],
         ...(input.discount
           ? { discounts: [{ promotion_code: input.discount.code }] }
           : {}),
@@ -265,6 +352,9 @@ export class StripeBillingProvider {
           subscriptionId: input.subscriptionId,
         },
         subscription_data: {
+          ...(input.trialPeriodDays
+            ? { trial_period_days: input.trialPeriodDays }
+            : {}),
           metadata: {
             botIntegrationId: input.botIntegrationId,
             subscriptionId: input.subscriptionId,

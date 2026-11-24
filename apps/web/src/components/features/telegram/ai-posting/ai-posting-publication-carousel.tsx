@@ -1,11 +1,12 @@
 "use client";
 
-import { isTelegramAiPostingEmptyTextFailure, telegramAiPostingRunSlots } from "@telegram-system/shared";
+import { canRetryTelegramAiPostingText, isTelegramAiPostingEmptyTextFailure, telegramAiPostingRunSlots } from "@telegram-system/shared";
 import { AiPostingWatermarkPreview, type AiPostingWatermarkPreviewSettings } from "./ai-posting-watermark-preview";
 import type {
   ResolvedEmoji,
   TelegramCustomEmojiPackSummary,
 } from "@telegram-system/shared";
+import { telegramPreviewPlainText } from "../telegram/telegram-post-preview-markup";
 import { api } from "@/lib/api";
 import { useState } from "react";
 import {
@@ -47,6 +48,7 @@ type ReviewAction =
 
 export function AiPostingPublicationCarousel({
   run,
+  historyNavigation,
   channelId,
   channelTitle,
   channelPhotoUrl,
@@ -72,6 +74,7 @@ export function AiPostingPublicationCarousel({
   onRememberImageRule,
 }: {
   run: TestRun;
+  historyNavigation?: { slotIndex: number; index: number; count: number; onChange: (index: number) => void };
   channelId?: string;
   channelTitle: string;
   channelPhotoUrl?: string | null;
@@ -101,11 +104,17 @@ export function AiPostingPublicationCarousel({
   }) => void;
   onRememberImageRule?: (value: string) => Promise<void>;
 }) {
-  const [activeIndex, setActiveIndex] = useState(0);
   const [imageRuleError, setImageRuleError] = useState("");
   const publications = run.publications ?? [];
   const slots = telegramAiPostingRunSlots(run);
-  const currentSlot = Math.min(activeIndex, Math.max(0, slots.length - 1));
+  const processing = run.status === "RUNNING" || run.status === "SYNCING";
+  const [activeIndex, setActiveIndex] = useState(() =>
+    processing ? Math.max(0, slots.findIndex(({ publicationIndex }) => publicationIndex !== undefined)) : 0,
+  );
+  const currentSlot = historyNavigation?.slotIndex ?? Math.min(activeIndex, Math.max(0, slots.length - 1));
+  const navigationIndex = historyNavigation?.index ?? currentSlot;
+  const navigationCount = historyNavigation?.count ?? slots.length;
+  const setNavigationIndex = historyNavigation?.onChange ?? setActiveIndex;
   const slot = slots[currentSlot];
   const index = slot?.publicationIndex ?? 0;
   const post = slot?.publicationIndex === undefined ? undefined : publications[index];
@@ -119,20 +128,20 @@ export function AiPostingPublicationCarousel({
     buttonRows: [],
   };
   const changedText = post ? hasUnsavedText(run, index, post) : false;
-  const disabled = pending || saved;
+  const disabled = processing || pending || saved;
 
   if (!slots.length) return null;
-  const navigation = slots.length > 1 && (
+  const navigation = navigationCount > 1 && (
     <div className="flex items-center justify-between gap-2">
-      <Button variant="secondary" aria-label="Предыдущая публикация" disabled={currentSlot === 0}
-        onClick={() => setActiveIndex(currentSlot - 1)}>
+      <Button variant="secondary" aria-label="Предыдущая публикация" disabled={navigationIndex === 0}
+        onClick={() => setNavigationIndex(navigationIndex - 1)}>
         <ChevronLeft size={16} />
       </Button>
       <span className="text-sm font-medium text-neutral-300" aria-live="polite">
-        Публикация {currentSlot + 1} из {slots.length}
+        Публикация {navigationIndex + 1} из {navigationCount}
       </span>
-      <Button variant="secondary" aria-label="Следующая публикация" disabled={currentSlot >= slots.length - 1}
-        onClick={() => setActiveIndex(currentSlot + 1)}>
+      <Button variant="secondary" aria-label="Следующая публикация" disabled={navigationIndex >= navigationCount - 1}
+        onClick={() => setNavigationIndex(navigationIndex + 1)}>
         <ChevronRight size={16} />
       </Button>
     </div>
@@ -141,7 +150,7 @@ export function AiPostingPublicationCarousel({
   if (!post) {
     const waiting = run.status === "RUNNING" && !failure;
     const emptyText = failure ? isTelegramAiPostingEmptyTextFailure(failure) : false;
-    const canRetryText = (emptyText || failure?.retryText) && Boolean(failure?.topic);
+    const canRetryText = Boolean(failure?.topic && canRetryTelegramAiPostingText(failure));
     const attemptCost = failure ? failedPublicationCost(run, currentSlot) : undefined;
     return (
       <section aria-label="Предпросмотр публикаций" className="space-y-3">
@@ -176,8 +185,7 @@ export function AiPostingPublicationCarousel({
     );
   }
 
-  const canContinueSearch = Boolean(post.mediaSearch || post.mediaMode === "found" ||
-    (post.mediaReadiness === "MISSING" && !post.mediaMode && post.imageSearchQuery));
+  const mediaReady = mediaReadiness(post) === "READY";
 
   const rememberAndRegenerateMedia = async () => {
     const correction = (imageFeedback[key] ?? "").trim();
@@ -199,63 +207,50 @@ export function AiPostingPublicationCarousel({
 
       <div className="grid min-w-0 gap-4 border-t border-neutral-800 pt-4">
         <div className="min-w-0">
-          <TelegramPostPreview
-            channelTitle={channelTitle}
-            channelPhotoUrl={channelPhotoUrl}
-            customEmojiPacks={customEmojiPacks}
-            text={edits[key] ?? post.text}
-            imageUrls={post.imageUrl ? [post.imageUrl] : []}
-            mediaPreview={post.imageUrl && watermarkPreview ? (
-              <AiPostingWatermarkPreview
-                imageUrl={post.imagePreviewUrl || post.imageUrl}
-                legacy={!post.imagePreviewUrl}
-                avatarUrl={channelPhotoUrl}
-                settings={watermarkPreview}
+          <div className="mx-auto w-full max-w-[346px] font-[system-ui] [&_.telegram-preview-text]:text-[13px] [&_.telegram-preview-text]:leading-4">
+            <TelegramPostPreview
+              channelTitle={channelTitle}
+              channelPhotoUrl={channelPhotoUrl}
+              customEmojiPacks={customEmojiPacks}
+              text={edits[key] ?? post.text}
+              longTextMode="CAPTION_THEN_TEXT"
+              imageUrls={post.imageUrl ? [post.imageUrl] : []}
+              mediaPreview={post.imageUrl && watermarkPreview ? (
+                <AiPostingWatermarkPreview
+                  imageUrl={post.imagePreviewUrl || post.imageUrl}
+                  legacy={!post.imagePreviewUrl}
+                  avatarUrl={channelPhotoUrl}
+                  settings={watermarkPreview}
               />
             ) : undefined}
             onTextChange={
-              saved ? undefined : (value) => onTextChange(key, value)
+              processing || saved ? undefined : (value) => onTextChange(key, value)
             }
-          />
+            />
+          </div>
           <p className="mt-2 text-xs text-neutral-400">Идея: {post.topic}</p>
         </div>
         <div className="space-y-3">
-          {post.editorialMetadata && (
-            <div className="flex flex-wrap gap-2 text-xs" aria-label="Редакционная структура публикации">
-              {post.editorialMetadata.sphere && <span className="rounded-full border border-blue-900/70 bg-blue-950/40 px-2 py-1 text-blue-200">{post.editorialMetadata.sphere.emoji} {post.editorialMetadata.sphere.name}</span>}
-              {post.editorialMetadata.rubric && <span className="rounded-full border border-violet-900/70 bg-violet-950/40 px-2 py-1 text-violet-200">{post.editorialMetadata.rubric.emoji} {post.editorialMetadata.rubric.name}</span>}
-              {post.editorialMetadata.length && <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2 py-1 text-neutral-200">{post.editorialMetadata.length.emoji} {post.editorialMetadata.length.name}</span>}
-            </div>
-          )}
-          <div className="flex flex-wrap gap-2 text-sm">
-            <span className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1 text-neutral-200">
-              <IconAvatar
-                icon={
-                  categoryIcons?.[post.category] ?? {
-                    type: "unicode",
-                    value: "💡",
-                  }
-                }
-                label={post.category}
-                size="xs"
-                bordered={false}
-              />
-              Рубрика: {post.category}
+          <div className="flex flex-wrap gap-2 text-xs" aria-label="Редакционная структура публикации">
+            {post.mediaPreference && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-blue-900/70 bg-blue-950/40 px-2 py-1 text-blue-200">
+                <IconAvatar icon={preferenceIcons?.[post.mediaPreference.id] ?? { type: "unicode", value: "🎨" }} size="xs" bordered={false} />
+                Предпочтение: {post.mediaPreference.name}
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 rounded-full border border-violet-900/70 bg-violet-950/40 px-2 py-1 text-violet-200">
+              <IconAvatar icon={categoryIcons?.[post.category] ?? { type: "unicode", value: post.editorialMetadata?.rubric?.emoji || "💡" }} size="xs" bordered={false} />
+              Рубрика: {post.editorialMetadata?.rubric?.name ?? post.category}
             </span>
-            <span className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1 text-neutral-200">
-              <IconAvatar
-                icon={
-                  (post.mediaPreference &&
-                    preferenceIcons?.[post.mediaPreference.id]) ?? {
-                    type: "unicode",
-                    value: "🎨",
-                  }
-                }
-                label={post.mediaPreference?.name ?? "Предпочтение медиа"}
-                size="xs"
-                bordered={false}
-              />
-              Предпочтение: {post.mediaPreference?.name ?? "не сохранено"}
+            {post.editorialMetadata?.length && (
+              <span className="rounded-full border border-neutral-700 bg-neutral-800 px-2 py-1 text-neutral-200">
+                Длина: {post.editorialMetadata.length.name}
+                {post.editorialMetadata.length.minCharacters !== undefined &&
+                  ` · ${post.editorialMetadata.length.minCharacters}–${post.editorialMetadata.length.maxCharacters ?? "∞"}`}
+              </span>
+            )}
+            <span className="px-2 py-1 text-neutral-400">
+              {telegramPreviewPlainText(edits[key] ?? post.text).trim().length} символов в публикации
             </span>
           </div>
           {post.imageUrl && (
@@ -282,12 +277,12 @@ export function AiPostingPublicationCarousel({
                     ? "AI-провайдер не подтвердил результат подготовки медиа. Текст сохранён."
                     : (post.mediaFailureCode && failureMessage[post.mediaFailureCode]) ||
                       "Текст сохранён. Не удалось подготовить медиа.")
-                : (canContinueSearch ? failureMessage.AI_POSTING_IMAGE_SEARCH_EXHAUSTED :
-                    "Текст готов, но медиа не найдено. Превью неполное; подготовка доступна по кнопке.")}
+                : failureMessage[post.mediaFailureCode ?? ""] ?? failureMessage.AI_POSTING_IMAGE_SEARCH_EXHAUSTED}
+              {" "}Для одобрения, сохранения черновика и отправки нужно изображение.
             </p>
           )}
 
-          {mediaReadiness(post) !== "READY" && !canContinueSearch && (
+          {!mediaReady && (
             <Button
               variant="primary"
               disabled={disabled || changedText}
@@ -304,7 +299,7 @@ export function AiPostingPublicationCarousel({
             <Button
               variant="primary"
               className="min-h-10 whitespace-normal"
-              disabled={disabled || changedText || post.status === "REJECTED"}
+              disabled={disabled || !mediaReady || changedText || post.status === "REJECTED"}
               onClick={() => onAction({ run, index, action: "approve" })}
             >
               <ThumbsUp size={15} /> Одобрить
@@ -328,12 +323,13 @@ export function AiPostingPublicationCarousel({
                   throw new Error("Не удалось подготовить изображение с текущим водяным знаком.");
                 }
               } : undefined}
-              disabled={pending}
+              disabled={processing || pending || !mediaReady}
             />
             <Button
               type="button"
               variant="secondary"
               className="min-h-10 whitespace-normal"
+              disabled={processing}
               aria-expanded={editsOpen}
               onClick={onToggleEdits}
             >
@@ -357,13 +353,13 @@ export function AiPostingPublicationCarousel({
             </Button>
             <Button
               variant="secondary"
-              disabled={disabled || changedText || post.status !== "APPROVED"}
+              disabled={disabled || !mediaReady || changedText || post.status !== "APPROVED"}
               onClick={() => onAction({ run, index, action: "save" })}
             >
               <Save size={15} /> Сохранить черновик
             </Button>
           </div>
-          {editsOpen && (
+          {editsOpen && !processing && (
             <div className="space-y-3">
               <div className="space-y-2 rounded-lg border border-neutral-800 p-3">
                 <AiPostingDictation

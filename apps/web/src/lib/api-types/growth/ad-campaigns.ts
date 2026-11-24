@@ -32,6 +32,7 @@ export type Promo = {
   status: "draft" | "active" | "archived";
   archivedAt?: string | null;
   telegramChannel?: TelegramChannel;
+  createdByUser?: { id: string; name?: string | null } | null;
 };
 export type AdvertisingChannel = {
   id: string;

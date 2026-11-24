@@ -11,6 +11,7 @@ import {
   buildTelegramPostsUrl,
 } from "@/lib/features/telegram/telegram-posts-url";
 import type { I18nNamespace } from "@/i18n/catalog";
+import { FEATURE_I18N_REGISTRY } from "@/i18n/registry";
 import { useQuery } from "@tanstack/react-query";
 import { telegramChannelKeys } from "@/lib/query-keys";
 import { telegramChannelsApi } from "@/lib/api";
@@ -49,6 +50,7 @@ export function TelegramPostsPageClient({
       "ad-sales/common",
       "telegram/posts/common",
       currentRoutePostView === "calendar" ? "telegram/posts/calendar" : "telegram/posts/editor",
+      ...(currentRoutePostView === "ai-posting" ? FEATURE_I18N_REGISTRY.posts.lazy.import : []),
     ],
     [currentRoutePostView],
   );

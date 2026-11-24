@@ -1,3 +1,4 @@
+import { MAX_TELEGRAM_AI_POSTING_BATCH_SIZE } from '@telegram-system/shared';
 import {
   Body,
   Controller,
@@ -46,7 +47,7 @@ class ImportTelegramAiPostingSettingsDto {
   @IsObject() configuration!: Record<string, unknown>;
 }
 class GenerateTelegramAiPostingDto {
-  @IsInt() @Min(1) @Max(5) count!: number;
+  @IsInt() @Min(1) @Max(MAX_TELEGRAM_AI_POSTING_BATCH_SIZE) count!: number;
 }
 class RegenerateFailedPublicationDto {
   @IsInt() @Min(0) failureIndex!: number;

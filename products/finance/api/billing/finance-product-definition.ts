@@ -2,35 +2,35 @@ import type {
   ConsumerFinanceCapability,
   ConsumerFinancePlanFeature,
   ConsumerFinanceTier,
-} from '@telegram-system/shared';
+} from "@telegram-system/shared";
 
-export const FINANCE_TIERS = ['FREE', 'PRO', 'ULTIMATE'] as const;
+export const FINANCE_TIERS = ["FREE", "PRO", "ULTIMATE"] as const;
 export type FinanceTier = (typeof FINANCE_TIERS)[number];
 
 const BASE_FEATURES = [
-  'ACCOUNTS',
-  'TRANSACTIONS',
-  'DEBTS',
-  'REGULAR_PAYMENTS',
-  'DETAILED_ANALYTICS',
-  'PERIOD_COMPARISON',
-  'DETERMINISTIC_TRENDS',
+  "ACCOUNTS",
+  "TRANSACTIONS",
+  "DEBTS",
+  "REGULAR_PAYMENTS",
+  "DETAILED_ANALYTICS",
+  "PERIOD_COMPARISON",
+  "DETERMINISTIC_TRENDS",
 ] as const satisfies readonly ConsumerFinancePlanFeature[];
 
 const PRO_CAPABILITIES = [
-  'AI_INPUT',
-  'VOICE_INPUT',
-  'INTELLIGENT_CATEGORIZATION',
-  'RECEIPT_SCAN',
-  'SMART_LIMITS',
+  "AI_INPUT",
+  "VOICE_INPUT",
+  "INTELLIGENT_CATEGORIZATION",
+  "RECEIPT_SCAN",
+  "SMART_LIMITS",
 ] as const satisfies readonly ConsumerFinanceCapability[];
 
 const ULTIMATE_CAPABILITIES = [
   ...PRO_CAPABILITIES,
-  'FINANCE_HISTORY_QA',
-  'AI_INSIGHTS',
-  'AI_FORECAST_INTERPRETATION',
-  'AI_RECOMMENDATIONS',
+  "FINANCE_HISTORY_QA",
+  "AI_INSIGHTS",
+  "AI_FORECAST_INTERPRETATION",
+  "AI_RECOMMENDATIONS",
 ] as const satisfies readonly ConsumerFinanceCapability[];
 
 export const FINANCE_CAPABILITIES = [
@@ -42,9 +42,16 @@ type FinanceProductDefinition = {
   name: string;
   price: {
     amountMinor: number;
-    currency: 'UAH';
-    interval: 'MONTH';
+    currency: "UAH";
+    interval: "DAY" | "MONTH" | "YEAR";
+    intervalCount: number;
   } | null;
+  prices?: readonly {
+    amountMinor: number;
+    currency: "UAH";
+    interval: "DAY" | "MONTH" | "YEAR";
+    intervalCount: number;
+  }[];
   capabilities: readonly ConsumerFinanceCapability[];
   features: readonly ConsumerFinancePlanFeature[];
   usageLimits: {
@@ -53,8 +60,8 @@ type FinanceProductDefinition = {
     AI_INSIGHTS: number | null;
   };
   usagePeriods: Record<
-    'AI_INPUT' | 'RECEIPT_SCAN' | 'AI_INSIGHTS',
-    'LIFETIME' | 'MONTH' | 'UNLIMITED'
+    "AI_INPUT" | "RECEIPT_SCAN" | "AI_INSIGHTS",
+    "LIFETIME" | "MONTH" | "UNLIMITED"
   >;
 };
 
@@ -63,42 +70,68 @@ export const FINANCE_PRODUCT_DEFINITIONS: Record<
   FinanceProductDefinition
 > = {
   FREE: {
-    tier: 'FREE',
-    name: 'Free',
+    tier: "FREE",
+    name: "Free",
     price: null,
     capabilities: [],
-    features: [...BASE_FEATURES, 'AI_INPUT', 'RECEIPT_SCAN'],
-    usageLimits: { AI_INPUT: 10, RECEIPT_SCAN: 3, AI_INSIGHTS: 0 },
+    features: [...BASE_FEATURES],
+    usageLimits: { AI_INPUT: 0, RECEIPT_SCAN: 0, AI_INSIGHTS: 0 },
     usagePeriods: {
-      AI_INPUT: 'LIFETIME',
-      RECEIPT_SCAN: 'LIFETIME',
-      AI_INSIGHTS: 'LIFETIME',
+      AI_INPUT: "LIFETIME",
+      RECEIPT_SCAN: "LIFETIME",
+      AI_INSIGHTS: "LIFETIME",
     },
   },
   PRO: {
-    tier: 'PRO',
-    name: 'Pro',
-    price: { amountMinor: 14900, currency: 'UAH', interval: 'MONTH' },
-    capabilities: PRO_CAPABILITIES,
-    features: [...BASE_FEATURES, ...PRO_CAPABILITIES],
-    usageLimits: { AI_INPUT: null, RECEIPT_SCAN: 30, AI_INSIGHTS: 0 },
-    usagePeriods: {
-      AI_INPUT: 'UNLIMITED',
-      RECEIPT_SCAN: 'MONTH',
-      AI_INSIGHTS: 'MONTH',
+    tier: "PRO",
+    name: "PLUS",
+    price: {
+      amountMinor: 17900,
+      currency: "UAH",
+      interval: "MONTH",
+      intervalCount: 1,
     },
-  },
-  ULTIMATE: {
-    tier: 'ULTIMATE',
-    name: 'Ultimate',
-    price: { amountMinor: 24900, currency: 'UAH', interval: 'MONTH' },
+    prices: [
+      { amountMinor: 700, currency: "UAH", interval: "DAY", intervalCount: 7 },
+      {
+        amountMinor: 17900,
+        currency: "UAH",
+        interval: "MONTH",
+        intervalCount: 1,
+      },
+      {
+        amountMinor: 39900,
+        currency: "UAH",
+        interval: "MONTH",
+        intervalCount: 3,
+      },
+      {
+        amountMinor: 109900,
+        currency: "UAH",
+        interval: "YEAR",
+        intervalCount: 1,
+      },
+    ],
     capabilities: ULTIMATE_CAPABILITIES,
     features: [...BASE_FEATURES, ...ULTIMATE_CAPABILITIES],
     usageLimits: { AI_INPUT: null, RECEIPT_SCAN: 200, AI_INSIGHTS: 100 },
     usagePeriods: {
-      AI_INPUT: 'UNLIMITED',
-      RECEIPT_SCAN: 'MONTH',
-      AI_INSIGHTS: 'MONTH',
+      AI_INPUT: "UNLIMITED",
+      RECEIPT_SCAN: "MONTH",
+      AI_INSIGHTS: "MONTH",
+    },
+  },
+  ULTIMATE: {
+    tier: "ULTIMATE",
+    name: "Ultimate",
+    price: null,
+    capabilities: ULTIMATE_CAPABILITIES,
+    features: [...BASE_FEATURES, ...ULTIMATE_CAPABILITIES],
+    usageLimits: { AI_INPUT: null, RECEIPT_SCAN: 200, AI_INSIGHTS: 100 },
+    usagePeriods: {
+      AI_INPUT: "UNLIMITED",
+      RECEIPT_SCAN: "MONTH",
+      AI_INSIGHTS: "MONTH",
     },
   },
 };

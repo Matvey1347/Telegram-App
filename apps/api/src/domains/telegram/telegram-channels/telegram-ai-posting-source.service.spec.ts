@@ -19,6 +19,26 @@ describe('TelegramAiPostingSourceService', () => {
     };
   };
 
+  it('keeps valid Pinterest pin images after filtering other image results', async () => {
+    const { prisma } = make();
+    const service = new TelegramAiPostingSourceService(prisma, { get: () => 'test-key' } as never);
+    const fetch = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ results: [
+      { url: 'https://www.pinterest.com/ideas/breakfast/', properties: { url: 'https://i.pinimg.com/736x/ideas.jpg' } },
+      { url: 'https://www.pinterest.com/pin/breakfast--123456/', properties: { url: 'https://i.pinimg.com/736x/breakfast.jpg' } },
+      { url: 'https://www.pinterest.com/pin/789/', properties: { url: 'https://another.example/preview.jpg' } },
+    ] })));
+    try {
+      await expect(service.searchOpenImages('overnight oats breakfast bowl', 1, 'pinterest')).resolves.toEqual([
+        { url: 'https://i.pinimg.com/736x/breakfast.jpg', sourceId: 'pinterest', sourceType: 'image-search' },
+      ]);
+      const query = (fetch.mock.calls[0][0] as URL).searchParams;
+      expect(query.get('q')).toBe('overnight oats breakfast bowl site:pinterest.com');
+      expect(query.get('search_lang')).toBe('en');
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+
   it('searches the open image index and accepts only public-domain HTTPS results', async () => {
     const { service } = make();
     const fetch = jest.spyOn(service as any, 'fetchPublic').mockResolvedValue(

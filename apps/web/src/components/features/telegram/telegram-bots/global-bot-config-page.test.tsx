@@ -7,9 +7,6 @@ const apiMocks = vi.hoisted(() => ({
   workspaceProviders: vi.fn(),
   saveWorkspaceProvider: vi.fn(),
   removeWorkspaceProvider: vi.fn(),
-  workspaceAi: vi.fn(),
-  saveWorkspaceAi: vi.fn(),
-  validateWorkspaceAi: vi.fn(),
 }));
 
 vi.mock("@/components/layout/app-shell", () => ({
@@ -18,15 +15,11 @@ vi.mock("@/components/layout/app-shell", () => ({
   ),
 }));
 vi.mock("@/lib/features/finance/bot-billing-api", () => ({
+  financeAiConfigApi: { get: async () => ({ source: "ENV", status: "CONNECTED" }) },
   botBillingApi: {
     workspaceProviders: apiMocks.workspaceProviders,
     saveWorkspaceProvider: apiMocks.saveWorkspaceProvider,
     removeWorkspaceProvider: apiMocks.removeWorkspaceProvider,
-  },
-  financeAiConfigApi: {
-    workspace: apiMocks.workspaceAi,
-    saveWorkspace: apiMocks.saveWorkspaceAi,
-    validateWorkspace: apiMocks.validateWorkspaceAi,
   },
 }));
 
@@ -61,14 +54,6 @@ describe("GlobalBotConfigPage", () => {
       provider("TELEGRAM_STARS", "TEST"),
       provider("TELEGRAM_STARS", "LIVE", "CONNECTED"),
     ]);
-    apiMocks.workspaceAi.mockResolvedValue({
-      provider: "OPENAI",
-      source: "WORKSPACE_DEFAULT",
-      status: "CONNECTED",
-      apiKeyConfigured: true,
-      lastCheckedAt: null,
-      lastValidationError: null,
-    });
     apiMocks.removeWorkspaceProvider.mockResolvedValue(
       provider("TELEGRAM_STARS", "LIVE"),
     );
@@ -88,7 +73,8 @@ describe("GlobalBotConfigPage", () => {
     expect(
       await screen.findByText("Global bot configuration"),
     ).toBeInTheDocument();
-    expect(await screen.findByText(/Connect the provider once/)).toBeInTheDocument();
+    expect(await screen.findByText("Stripe")).toBeInTheDocument();
+    expect(await screen.findByText("Use API key from ENV")).toBeInTheDocument();
     expect(screen.queryByText("NOT_CONFIGURED")).not.toBeInTheDocument();
     expect(screen.getByText("S")).toBeInTheDocument();
   });

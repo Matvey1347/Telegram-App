@@ -79,7 +79,7 @@ export class FinanceAssistantEntryService {
       !allImages &&
       !(await this.entitlements.hasCapability(identity, 'VOICE_INPUT'))
     )
-      throw new ForbiddenException('Voice input requires Pro or Ultimate');
+      throw new ForbiddenException('Voice input requires Finance PLUS');
     const operations = allImages
       ? await this.ai.extractReceipts({
           profileId: identity.profileId,

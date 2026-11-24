@@ -1,13 +1,14 @@
 import { api } from "@/lib/api";
 import type {
   BotBillingAnalyticsView,
+  FinanceAiConfigView,
+  BotBillingInterval,
   BotBillingOverviewView,
   BotBillingProvider,
   BotBillingProviderConfigView,
   BotBillingProviderMode,
   BotBillingSubscriberPage,
   BotBillingUserPage,
-  FinanceAiConfigView,
 } from "@telegram-system/shared";
 
 export type BotBillingPlanView = {
@@ -20,7 +21,9 @@ export type BotBillingPlanView = {
     id: string;
     amountMinor: number;
     currency: string;
-    interval: "MONTH" | "YEAR";
+    interval: BotBillingInterval;
+    intervalCount: number;
+    stripeSynced?: BotBillingProviderMode[];
     version: number;
     isPublic: boolean;
   }>;
@@ -150,20 +153,19 @@ export const botBillingApi = {
     (await api.post(`/telegram-bots/${botId}/finance-billing/coupons/${couponId}/sync`)).data,
 };
 
+
 export const financeAiConfigApi = {
-  workspace: async (): Promise<FinanceAiConfigView> => (await api.get("/telegram-bots/finance/ai-config")).data,
-  saveWorkspace: async (payload: { apiKey?: string }): Promise<FinanceAiConfigView> => (await api.patch("/telegram-bots/finance/ai-config", payload)).data,
-  validateWorkspace: async (): Promise<FinanceAiConfigView> => (await api.post("/telegram-bots/finance/ai-config/validate")).data,
-  get: async (botId: string): Promise<FinanceAiConfigView> =>
-    (await api.get(`/telegram-bots/${botId}/finance/ai-config`)).data,
-  save: async (
-    botId: string,
-    payload: { apiKey?: string },
-  ): Promise<FinanceAiConfigView> =>
-    (await api.patch(`/telegram-bots/${botId}/finance/ai-config`, payload))
-      .data,
-  validate: async (botId: string): Promise<FinanceAiConfigView> =>
-    (await api.post(`/telegram-bots/${botId}/finance/ai-config/validate`)).data,
-  useGlobal: async (botId: string): Promise<FinanceAiConfigView> =>
-    (await api.delete(`/telegram-bots/${botId}/finance/ai-config`)).data,
+  get: async (botId?: string): Promise<FinanceAiConfigView> =>
+    (await api.get(financeAiConfigPath(botId))).data,
+  save: async (apiKey: string, botId?: string): Promise<FinanceAiConfigView> => {
+    const path = financeAiConfigPath(botId);
+    await api.patch(path, { apiKey });
+    return (await api.post(`${path}/validate`)).data;
+  },
+  reset: async (botId?: string): Promise<FinanceAiConfigView> =>
+    (await api.delete(financeAiConfigPath(botId))).data,
 };
+
+function financeAiConfigPath(botId?: string) {
+  return botId ? `/telegram-bots/${botId}/finance/ai-config` : "/telegram-bots/finance/ai-config";
+}

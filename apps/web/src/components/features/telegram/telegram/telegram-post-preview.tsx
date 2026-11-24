@@ -46,6 +46,7 @@ type TelegramPostPreviewProps = {
   messageLengthMax?: number;
   buttonRows?: TelegramPostButtonRows;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
+  compact?: boolean;
 };
 export function TelegramPostPreview({
   channelTitle,
@@ -66,6 +67,7 @@ export function TelegramPostPreview({
   messageLengthMax = 4096,
   buttonRows = [],
   customEmojiPacks,
+  compact = false,
 }: TelegramPostPreviewProps) {
   const { ensureNamespaces, locale, t } = useI18n();
   useEffect(() => {
@@ -118,8 +120,12 @@ export function TelegramPostPreview({
 
   return (
     <aside className="min-w-0">
-      <div className="sticky top-4 overflow-hidden rounded-xl border border-[#263849] bg-[#0e1621] shadow-xl">
-        <div className="flex items-center gap-3 border-b border-[#263849] bg-[#17212b] px-4 py-3">
+      <div
+        className={`${compact ? "overflow-hidden rounded-xl border border-[#263849] bg-[#0e1621]" : "sticky top-4 overflow-hidden rounded-xl border border-[#263849] bg-[#0e1621] shadow-xl"}`}
+      >
+        <div
+          className={`flex items-center gap-3 border-b border-[#263849] bg-[#17212b] ${compact ? "px-3 py-2" : "px-4 py-3"}`}
+        >
           <TelegramEntityAvatar
             imageUrl={channelPhotoUrl}
             kind="channel"
@@ -136,7 +142,9 @@ export function TelegramPostPreview({
           </div>
         </div>
 
-        <div className="telegram-preview-wallpaper min-h-[460px] px-3 py-5">
+        <div
+          className={`telegram-preview-wallpaper px-3 ${compact ? "min-h-0 py-3" : "min-h-[460px] py-5"}`}
+        >
           {hasContent ? (
             <div className="max-w-full space-y-2">
               {hasMedia && !resolvedMediaItems.length ? (
@@ -182,7 +190,9 @@ export function TelegramPostPreview({
               ) : null}
             </div>
           ) : (
-            <div className="flex min-h-[400px] items-center justify-center px-8 text-center text-sm text-[#708499]">
+            <div
+              className={`flex items-center justify-center px-8 text-center text-sm text-[#708499] ${compact ? "min-h-24" : "min-h-[400px]"}`}
+            >
               {t("telegram.posts.editorComponents.preview.empty")}
             </div>
           )}
@@ -217,9 +227,10 @@ function TelegramMessageBubble({
   const { t } = useI18n();
   return (
     <div className="telegram-message-bubble overflow-hidden rounded-[18px] rounded-bl-[5px] bg-[#182533] shadow-md">
-      {mediaPreview ?? (mediaItems.length ? (
-        <TelegramPostMediaPreview mediaItems={mediaItems} />
-      ) : null)}
+      {mediaPreview ??
+        (mediaItems.length ? (
+          <TelegramPostMediaPreview mediaItems={mediaItems} />
+        ) : null)}
       {text.trim() ? (
         <div
           className={

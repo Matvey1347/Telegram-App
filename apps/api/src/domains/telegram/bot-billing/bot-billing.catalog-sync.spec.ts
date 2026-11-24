@@ -16,9 +16,10 @@ function setup(
         .mockResolvedValueOnce({ id: 'bot-1' }),
     },
     botBillingProviderConfig: {
-      findMany: jest.fn().mockResolvedValue(providerConfigs),
+      findMany: jest.fn().mockResolvedValue(providerConfigs.map(config => ({ ...config, connectionStatus: 'CONNECTED' }))),
     },
     botSubscriptionPlan: {
+      findUnique: jest.fn().mockResolvedValue(null),
       upsert: jest.fn().mockImplementation(async ({ create }) => ({
         id: `plan-${++planSequence}`,
         description: null,
@@ -71,6 +72,7 @@ const DEFINITIONS = [
     amountMinor: 14900,
     currency: 'UAH',
     interval: 'MONTH',
+    intervalCount: 1,
   },
   {
     code: 'ULTIMATE',
@@ -78,6 +80,7 @@ const DEFINITIONS = [
     amountMinor: 24900,
     currency: 'UAH',
     interval: 'MONTH',
+    intervalCount: 1,
   },
 ] as const;
 

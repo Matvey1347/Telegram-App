@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT } from "@telegram-system/shared";
+import { DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT, DEFAULT_TELEGRAM_AI_POSTING_IMAGE_URLS } from "@telegram-system/shared";
 
 import {
   Button,
@@ -10,6 +10,7 @@ import {
   IconButton,
   Input,
   ToggleRow,
+  Textarea,
 } from "@/components/ui/primitives";
 import * as Slider from "@radix-ui/react-slider";
 import { Blend, Images, WandSparkles } from "lucide-react";
@@ -21,6 +22,8 @@ export function AiPostingImagesSection({
   mode,
   hybridSearchPercent = DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT,
   onHybridSearchPercent,
+  imageSearchSources,
+  onImageSearchSources,
   preferences,
   avoidances,
   channelAvatarUrl,
@@ -40,6 +43,8 @@ export function AiPostingImagesSection({
   channelId?: string;
   mode: string;
   hybridSearchPercent?: number;
+  imageSearchSources?: string[];
+  onImageSearchSources?: (value: string[]) => void;
   onHybridSearchPercent?: (value: number) => void;
   preferences: AiPostingMediaPreference[];
   avoidances: string[];
@@ -87,9 +92,22 @@ export function AiPostingImagesSection({
         {mode === "ai"
           ? "Каждая новая публикация получает новое AI-медиа. Кнопка «Новое медиа» меняет только открытую публикацию; прежнее визуальное направление запоминается и исключается из будущих запросов."
           : mode === "hybrid"
-            ? "Доли распределяют публикации между поиском и AI-генерацией. Поиск автоматически пробует разные запросы и каталоги."
+            ? "Доли задают план подбора. При приоритете поиска AI может заменить неудачные поиски, но не займёт больше половины слотов. Если лимит исчерпан, текст сохраняется для повторного подбора."
             : "Сначала ищем во включённых источниках и открытых каталогах. Если подходящего изображения нет, AI создаёт его."}
       </p>
+      {mode !== "ai" && onImageSearchSources && (
+        <FormField label="Источники поиска">
+          <Textarea
+            aria-label="Источники поиска"
+            rows={3}
+            value={(imageSearchSources ?? DEFAULT_TELEGRAM_AI_POSTING_IMAGE_URLS).join("\n")}
+            onChange={(event) => onImageSearchSources(event.target.value.split("\n"))}
+            onBlur={(event) => onImageSearchSources(event.target.value.split("\n").map((url) => url.trim()).filter(Boolean))}
+            placeholder="https://www.pinterest.com/"
+          />
+          <p className="text-xs text-neutral-400">Одна ссылка на сайт в каждой строке. Поиск идёт в указанном порядке.</p>
+        </FormField>
+      )}
       {mode === "hybrid" && (
         <div className="rounded-lg border border-neutral-800 p-3">
           <MediaPercentSlider
@@ -118,7 +136,7 @@ export function AiPostingImagesSection({
         Перетащите водяной знак на фото в превью, чтобы изменить его положение.
       </p>
       {useChannelAvatarInMedia ? (
-        <div className="grid gap-3 rounded-lg border border-blue-900/70 bg-blue-950/20 p-3 sm:grid-cols-2">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3 rounded-lg border border-blue-900/70 bg-blue-950/20 p-3">
           <MediaPercentSlider label="Размер водяного знака" value={watermarkSize} min={5} max={30} step={1} onChange={onWatermarkSize} />
           <MediaPercentSlider label="Непрозрачность водяного знака" value={watermarkOpacity} min={10} max={100} step={5} onChange={onWatermarkOpacity} />
           {(["X", "Y"] as const).map((axis) => (

@@ -48,8 +48,9 @@ export function telegramAiPostingDraftContext(
   const rubric = assignment?.rubric;
   const lengths = assignment?.lengths ?? config.lengths;
   const editorial = [
+    assignment?.parentSphere ? `Parent sphere: ${compact(assignment.parentSphere.name, 80)}` : '',
     sphere
-      ? `Sphere: ${compact(sphere.name, 80)}. ${compact(sphere.description, 550)}`
+      ? `Sphere: ${compact(sphere.name, 110)}. ${compact(sphere.description, 550)}`
       : '',
     rubric
       ? `Rubric: ${compact(rubric.name, 80)}. ${compact(rubric.description, 350)} ${compact(rubric.goal, 350)}`

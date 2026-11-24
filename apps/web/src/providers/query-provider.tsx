@@ -91,6 +91,7 @@ const workspaceScopedQueryKeys = new Set<string>([
   "channel-promos",
   "channel-invite-links-select",
   "telegram-bots",
+  "telegram-support",
   "telegram-system-bot",
   "telegram-source-channels",
   "telegram-user-accounts",

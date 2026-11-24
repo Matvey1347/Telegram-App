@@ -87,6 +87,7 @@ const POSTING_DRAFT_SCHEMA = shape({
   imageStyleIndex: { type: 'integer' },
   imagePrompt: { type: 'string' },
   imageSearchQuery: { type: 'string' },
+  voteOptions: { type: 'array', items: { type: 'string' } },
 });
 const SCHEMAS: Record<
   AiCategory,

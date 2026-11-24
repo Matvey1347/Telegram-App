@@ -57,7 +57,7 @@ export function CrossPromotionPlanActions({
         </div>
       ) : null}
       <div className={mode === "create"
-        ? "grid grid-flow-col auto-cols-fr gap-2 [&>button]:whitespace-normal [&>button]:px-2"
+        ? "grid grid-flow-col auto-cols-fr gap-2 [&>button]:whitespace-normal [&>button]:px-2 sm:flex sm:justify-end sm:[&>button]:px-5"
         : "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"}>
         {mode === "edit" ? (
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
@@ -114,7 +114,7 @@ export function CrossPromotionPlanActions({
         {status === "DRAFT" ? (
           <Button
             type="button"
-            className={mode === "edit" ? "w-full sm:w-auto" : "w-full"}
+            className="w-full sm:w-auto"
             disabled={saving || savingDraft || requiresRepublish}
             onClick={onSubmit}
           >
@@ -123,7 +123,7 @@ export function CrossPromotionPlanActions({
         ) : (
           <Button
             type="button"
-            className={mode === "edit" ? "w-full sm:w-auto" : "w-full"}
+            className="w-full sm:w-auto"
             disabled={saving || savingDraft || requiresRepublish}
             onClick={onSubmit}
           >

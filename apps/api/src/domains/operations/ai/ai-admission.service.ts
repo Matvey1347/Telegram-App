@@ -1,3 +1,4 @@
+import { MAX_TELEGRAM_AI_POSTING_BATCH_SIZE } from '@telegram-system/shared';
 import {
   BadRequestException,
   ConflictException,
@@ -219,7 +220,7 @@ export class AiAdmissionService {
           (request.aiPosting.publicationIndex !== undefined &&
             (!Number.isInteger(request.aiPosting.publicationIndex) ||
               request.aiPosting.publicationIndex < 0 ||
-              request.aiPosting.publicationIndex > 4)) ||
+              request.aiPosting.publicationIndex >= MAX_TELEGRAM_AI_POSTING_BATCH_SIZE)) ||
           (request.aiPosting.attempt !== undefined &&
             (!Number.isInteger(request.aiPosting.attempt) ||
               request.aiPosting.attempt < 1 ||

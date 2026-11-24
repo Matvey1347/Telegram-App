@@ -62,9 +62,7 @@ export function BotCardShell({
   const appType = bot.applicationType;
   const currentApp = bot.applications.find((option) => option.type === appType);
   const configureHref =
-    appType === "FINANCE"
-      ? `/telegram-bots/${bot.id}/finance`
-      : null;
+    appType === "FINANCE" ? `/telegram-bots/${bot.id}/finance` : null;
 
   return (
     <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-3 shadow-sm">
@@ -72,9 +70,13 @@ export function BotCardShell({
         <div className="flex min-w-0 items-center gap-3">
           <BotRuntimeAvatar
             type={appType}
-            avatarUrl={appType === "FINANCE"
-              ? (environment === "LOCAL" ? "/brand/groshly-dev-icon.png" : "/brand/groshly-icon.png")
-              : runtime?.avatarUrl}
+            avatarUrl={
+              appType === "FINANCE"
+                ? environment === "LOCAL"
+                  ? "/brand/groshly-dev-icon.png"
+                  : "/brand/groshly-icon.png"
+                : runtime?.avatarUrl
+            }
           />
           <div className="min-w-0">
             <h3 className="truncate text-base font-semibold text-white">
@@ -97,7 +99,7 @@ export function BotCardShell({
               href={configureHref}
               label={
                 appType === "FINANCE"
-                  ? "Finance Dashboard"
+                  ? "Dashboard"
                   : `View ${currentApp?.label || applicationLabel(appType)}`
               }
               icon={
@@ -112,54 +114,56 @@ export function BotCardShell({
               }
             />
           ) : null}
-          <TelegramCardMenuAction
-            label={
-              checkingEnvironment === environment
-                ? "Refreshing"
-                : "Refresh"
-            }
-            icon={
-              checkingEnvironment === environment ? (
-                <LoaderCircle className="animate-spin" size={17} />
-              ) : (
-                <RefreshCw size={17} />
-              )
-            }
-            disabled={!runtime || checkingEnvironment === environment}
-            onClick={() => onCheck(environment)}
-          />
-          <TelegramCardMenuAction
-            label={runtime ? "Edit token" : "Add token"}
-            icon={<Pencil size={17} />}
-            onClick={() => onConfigureRuntime(environment)}
-          />
-          {hasSingleRuntime ? (
-            <TelegramCardMenuAction
-              label={`Add ${additionalEnvironment === "LOCAL" ? "local" : "production"} version`}
-              icon={<Server size={17} />}
-              onClick={() => onConfigureRuntime(additionalEnvironment)}
-            />
-          ) : null}
-          <TelegramCardMenuAction
-            label="Edit bot"
-            icon={<UserRoundPen size={17} />}
-            disabled={!runtime}
-            onClick={() => onEditProfile?.(environment)}
-          />
-          <TelegramCardMenuAction
-            label="Change app"
-            icon={
-              <ArrowLeftRight data-testid="change-bot-app-icon" size={17} />
-            }
-            onClick={onSwitch}
-          />
-          <div className="my-1 border-t border-neutral-800" />
-          <TelegramCardMenuAction
-            label="Delete bot"
-            icon={<Trash2 size={17} />}
-            danger
-            onClick={() => onRequestDelete(environment)}
-          />
+          {appType !== "FINANCE" && (
+            <>
+              <TelegramCardMenuAction
+                label={
+                  checkingEnvironment === environment ? "Refreshing" : "Refresh"
+                }
+                icon={
+                  checkingEnvironment === environment ? (
+                    <LoaderCircle className="animate-spin" size={17} />
+                  ) : (
+                    <RefreshCw size={17} />
+                  )
+                }
+                disabled={!runtime || checkingEnvironment === environment}
+                onClick={() => onCheck(environment)}
+              />
+              <TelegramCardMenuAction
+                label={runtime ? "Edit token" : "Add token"}
+                icon={<Pencil size={17} />}
+                onClick={() => onConfigureRuntime(environment)}
+              />
+              {hasSingleRuntime ? (
+                <TelegramCardMenuAction
+                  label={`Add ${additionalEnvironment === "LOCAL" ? "local" : "production"} version`}
+                  icon={<Server size={17} />}
+                  onClick={() => onConfigureRuntime(additionalEnvironment)}
+                />
+              ) : null}
+              <TelegramCardMenuAction
+                label="Edit bot"
+                icon={<UserRoundPen size={17} />}
+                disabled={!runtime}
+                onClick={() => onEditProfile?.(environment)}
+              />
+              <TelegramCardMenuAction
+                label="Change app"
+                icon={
+                  <ArrowLeftRight data-testid="change-bot-app-icon" size={17} />
+                }
+                onClick={onSwitch}
+              />
+              <div className="my-1 border-t border-neutral-800" />
+              <TelegramCardMenuAction
+                label="Delete bot"
+                icon={<Trash2 size={17} />}
+                danger
+                onClick={() => onRequestDelete(environment)}
+              />
+            </>
+          )}
         </TelegramCardActionsMenu>
       </div>
       <BotRuntimeEnvironmentTabs
@@ -259,7 +263,8 @@ function RuntimeDetails({
         <p className="mt-2 rounded-lg border border-neutral-700 bg-neutral-900/60 p-2 text-xs text-neutral-300">
           {hideEnvironmentLabel
             ? "This bot is"
-            : `${runtime.environment === "LOCAL" ? "Local" : "Production"} runtime is`} not running in this API process. Its saved webhook is not treated as
+            : `${runtime.environment === "LOCAL" ? "Local" : "Production"} runtime is`}{" "}
+          not running in this API process. Its saved webhook is not treated as
           live.
         </p>
       ) : null}
@@ -267,8 +272,9 @@ function RuntimeDetails({
       runtime.environment === "PRODUCTION" &&
       runtime.runtimeStatus !== "ACTIVE" ? (
         <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">
-          {hideEnvironmentLabel ? "Token" : "Production token"} is saved. Deploy the production API with its public
-          webhook URL to activate this runtime.
+          {hideEnvironmentLabel ? "Token" : "Production token"} is saved. Deploy
+          the production API with its public webhook URL to activate this
+          runtime.
         </p>
       ) : null}
       {runtime.isProcessOwner &&

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormSectionNumber } from "../form-section-number";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Bot, ChevronDown, Plus, Send, Trash2 } from "lucide-react";
 import type {
   CrossPromotionTargetInput,
@@ -123,8 +123,18 @@ export function CrossPromotionPartnerSide({
       iconFallback: channel.title,
     }));
 
+  const autoAddedTarget = useRef(false);
   useEffect(() => {
-    if (!expanded || targets.length || !ownChannels.length) return;
+    if (!expanded) {
+      autoAddedTarget.current = false;
+      return;
+    }
+    if (targets.length) {
+      autoAddedTarget.current = true;
+      return;
+    }
+    if (!ownChannels.length || autoAddedTarget.current) return;
+    autoAddedTarget.current = true;
     onAddTarget?.();
   }, [expanded, onAddTarget, ownChannels.length, targets.length]);
 

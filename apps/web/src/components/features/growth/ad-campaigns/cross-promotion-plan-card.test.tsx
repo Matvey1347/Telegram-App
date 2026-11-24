@@ -197,6 +197,21 @@ describe("CrossPromotionPlanCard", () => {
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 
+  it("splits the total from our placements across the three promoted channels", () => {
+    const targetResults = Array.from({ length: 3 }, (_, index) => ({
+      ...plan.targetResults[0],
+      telegramChannelId: `channel-${index}`,
+      inviteLinkId: `link-${index}`,
+      title: `Promoted channel ${index}`,
+    }));
+    render(<CrossPromotionPlanCard plan={{
+      ...plan, targetResults,
+      publisherResults: [{ ...plan.publisherResults[0], postViews: 7_801 }],
+    }} onEdit={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.getAllByRole("img", { name: "Allocated placement views: 2,600" })).toHaveLength(2);
+    expect(screen.getByRole("img", { name: "Allocated placement views: 2,601" })).toBeInTheDocument();
+  });
+
   it("opens the selected promo from the compact placement result", () => {
     const onOpenPromo = vi.fn();
     render(

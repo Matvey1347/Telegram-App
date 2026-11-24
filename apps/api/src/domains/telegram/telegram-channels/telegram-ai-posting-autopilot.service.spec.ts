@@ -26,11 +26,12 @@ describe('TelegramAiPostingAutopilotService', () => {
     };
     const generator: any = { generate: jest.fn() };
     const testRuns: any = {
-      reviewPublication: jest.fn().mockResolvedValue({
+      reviewPublication: jest.fn().mockImplementation(async (_user, _channel, _run, _index, version: number, action: string) => ({
+        version: version + (action === 'save' ? 2 : 1),
         publications: Array.from({ length: 5 }, (_, index) => ({
           savedPostId: `draft-${index}`,
         })),
-      }),
+      })),
     };
     const planner: any = { preview: jest.fn(), apply: jest.fn() };
     const moduleRef: any = {
@@ -116,7 +117,10 @@ describe('TelegramAiPostingAutopilotService', () => {
     generator.generate.mockResolvedValue({
       runId: 'run',
       version: 2,
-      generated: [{}, {}, {}, {}, {}],
+      generated: Array.from({ length: 5 }, (_, index) => ({
+        mediaReadiness: index === 1 ? 'FAILED' : 'READY',
+      })),
+      failures: [{ publicationIndex: 1, code: 'AI_POSTING_IMAGE_PROVIDER_FAILED' }],
     });
     planner.preview
       .mockResolvedValueOnce({ assignments: [] })
@@ -138,18 +142,18 @@ describe('TelegramAiPostingAutopilotService', () => {
       'run',
     );
     const reviewPublicationMock = testRuns.reviewPublication as jest.Mock;
-    expect(reviewPublicationMock).toHaveBeenCalledTimes(10);
+    expect(reviewPublicationMock).toHaveBeenCalledTimes(8);
     const reviewCalls = reviewPublicationMock.mock.calls as unknown as Array<
       [string, string, string, number, number, string]
     >;
     expect(reviewCalls.slice(0, 4)).toEqual([
       ['member', 'channel', 'run', 0, 2, 'approve'],
       ['member', 'channel', 'run', 0, 3, 'save'],
-      ['member', 'channel', 'run', 1, 5, 'approve'],
-      ['member', 'channel', 'run', 1, 6, 'save'],
+      ['member', 'channel', 'run', 2, 5, 'approve'],
+      ['member', 'channel', 'run', 2, 6, 'save'],
     ]);
     expect(planner.apply).toHaveBeenCalledTimes(1);
-    expect(result.generated).toBe(5);
+    expect(result.generated).toBe(4);
   });
 
   it('keeps REVIEW generation in the test-run queue without approving or saving it', async () => {

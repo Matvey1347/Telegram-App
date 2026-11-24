@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, CircleAlert, Pencil, RefreshCw } from "lucide-react";
+import { Pencil, RefreshCw } from "lucide-react";
 import type {
+  SupportBotView,
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
 } from "@telegram-system/shared";
@@ -18,39 +19,25 @@ import { ConfiguredSystemBotProfileModal } from "./configured-system-bot-profile
 import {
   TelegramCardActionsMenu,
   TelegramCardMenuAction,
-  TelegramCardMenuLink,
 } from "../telegram/telegram-card-actions-menu";
 
-export function ConfiguredBotCards() {
+import { SupportCardLink } from "./telegram-support-inbox";
+
+export function ConfiguredBotCards({
+  support,
+  onSupport,
+}: {
+  support?: SupportBotView;
+  onSupport?: () => void;
+}) {
   const qc = useQueryClient();
   const { pushToast } = useAppToast();
   const [editingEnvironment, setEditingEnvironment] = useState<
     "LOCAL" | "PRODUCTION" | null
   >(null);
-  const [editingFinanceEnvironment, setEditingFinanceEnvironment] = useState<
-    "LOCAL" | "PRODUCTION" | null
-  >(null);
   const overview = useQuery({
     queryKey: telegramAccountKeys.configuredBots(),
     queryFn: configuredBotsApi.overview,
-  });
-  const updateFinanceProfile = useMutation({
-    mutationFn: async (input: {
-      environment: "LOCAL" | "PRODUCTION";
-      name?: string;
-      description?: string;
-    }) => {
-      return configuredBotsApi.updateFinanceProfile(input.environment, {
-          name: input.name,
-          description: input.description,
-        });
-    },
-    onSuccess: (data) => {
-      qc.setQueryData(telegramAccountKeys.configuredBots(), data);
-      setEditingFinanceEnvironment(null);
-      pushToast("Finance bot profile updated.", "success");
-    },
-    onError: () => pushToast("Could not update the Finance bot.", "error"),
   });
   const updateProfile = useMutation({
     mutationFn: (input: {
@@ -82,7 +69,7 @@ export function ConfiguredBotCards() {
       </Card>
     );
   }
-  if (!overview.data?.systemBot && !overview.data?.financeBot) return null;
+  if (!overview.data?.systemBot?.runtimes.length) return null;
   const refresh = async () => {
     await configuredBotsApi.refreshSystemAvatars();
     await overview.refetch();
@@ -95,24 +82,7 @@ export function ConfiguredBotCards() {
             <h2 className="text-lg font-semibold text-white">
               Environment-managed bots
             </h2>
-            <p className="text-sm text-neutral-500">
-              Profile details are cached locally. Refresh pulls the latest data
-              from Telegram.
-            </p>
           </div>
-          <Button
-            variant="secondary"
-            onClick={() => void refresh()}
-            disabled={overview.isFetching}
-          >
-            <span className="inline-flex items-center gap-2">
-              <RefreshCw
-                size={15}
-                className={overview.isFetching ? "animate-spin" : undefined}
-              />
-              Refresh
-            </span>
-          </Button>
         </div>
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
@@ -122,14 +92,8 @@ export function ConfiguredBotCards() {
             avatarRefreshKey={overview.dataUpdatedAt}
             onRefresh={refresh}
             onEdit={setEditingEnvironment}
-          />
-        ) : null}
-        {overview.data.financeBot ? (
-          <FinanceBotCard
-            data={overview.data.financeBot}
-            avatarRefreshKey={overview.dataUpdatedAt}
-            onRefresh={refresh}
-            onEdit={setEditingFinanceEnvironment}
+            support={support}
+            onSupport={onSupport}
           />
         ) : null}
       </div>
@@ -150,32 +114,6 @@ export function ConfiguredBotCards() {
           }
         />
       ) : null}
-      {editingFinanceEnvironment ? (
-        <ConfiguredSystemBotProfileModal
-          key={editingFinanceEnvironment}
-          open
-          applicationType="FINANCE"
-          runtimes={(overview.data.financeBot?.bots ?? []).map((bot) => ({
-            environment: bot.environment,
-            username: bot.username,
-            name: bot.name,
-            description: bot.description,
-            avatarUrl: bot.avatarUrl,
-          }))}
-          environment={editingFinanceEnvironment}
-          saving={updateFinanceProfile.isPending}
-          onClose={() => setEditingFinanceEnvironment(null)}
-          onEnvironmentChange={(environment) =>
-            setEditingFinanceEnvironment(environment)
-          }
-          onSubmit={(input) =>
-            updateFinanceProfile.mutate({
-              environment: editingFinanceEnvironment,
-              ...input,
-            })
-          }
-        />
-      ) : null}
     </section>
   );
 }
@@ -185,12 +123,16 @@ function SystemBotCard({
   avatarRefreshKey,
   onRefresh,
   onEdit,
+  support,
+  onSupport,
 }: {
   data: NonNullable<
     Awaited<ReturnType<typeof configuredBotsApi.overview>>["systemBot"]
   >;
   avatarRefreshKey: number;
   onRefresh: () => Promise<void>;
+  support?: SupportBotView;
+  onSupport?: () => void;
   onEdit: (environment: "LOCAL" | "PRODUCTION") => void;
 }) {
   const [environment, setEnvironment] = useState<"LOCAL" | "PRODUCTION">(
@@ -225,84 +167,8 @@ function SystemBotCard({
       }
     >
       <Metric label="Registered" value={data.analytics.registeredUsers} />
-      <Metric label="Enabled" value={data.analytics.enabledUsers} />
       <Metric label="Active · 30 days" value={data.analytics.activeUsers} />
-    </BotAnalyticsCard>
-  );
-}
-
-function FinanceBotCard({
-  data,
-  avatarRefreshKey,
-  onRefresh,
-  onEdit,
-}: {
-  data: NonNullable<
-    Awaited<ReturnType<typeof configuredBotsApi.overview>>["financeBot"]
-  >;
-  avatarRefreshKey: number;
-  onRefresh: () => Promise<void>;
-  onEdit: (environment: "LOCAL" | "PRODUCTION") => void;
-}) {
-  const [environment, setEnvironment] = useState<"LOCAL" | "PRODUCTION">(
-    data.bots.find((bot) => bot.environment === "LOCAL")?.environment ??
-      data.bots[0]?.environment ??
-      "LOCAL",
-  );
-  const bot = data.bots.find((item) => item.environment === environment);
-  return (
-    <BotAnalyticsCard
-      title={bot?.name || bot?.username || "Finance Bot"}
-      appType="FINANCE"
-      runtimes={data.bots.map((item) => ({
-        environment: item.environment,
-        username: item.username,
-        name: item.name,
-        description: item.description,
-        avatarUrl: item.avatarUrl,
-        configured: true,
-        selected: false,
-      }))}
-      environment={environment}
-      onEnvironmentChange={setEnvironment}
-      avatarRefreshKey={avatarRefreshKey}
-      actions={
-        <TelegramCardActionsMenu label="Finance bot actions">
-          {bot?.managementBotId ? (
-            <TelegramCardMenuLink
-              href={`/telegram-bots/${bot.managementBotId}/finance`}
-              label="Open Finance admin"
-              icon={<BarChart3 size={17} />}
-            />
-          ) : null}
-          <TelegramCardMenuAction
-            label="Refresh analytics"
-            icon={<RefreshCw size={17} />}
-            onClick={() => void onRefresh()}
-          />
-          <TelegramCardMenuAction
-            label="Edit bot"
-            icon={<Pencil size={17} />}
-            onClick={() => onEdit(environment)}
-          />
-        </TelegramCardActionsMenu>
-      }
-    >
-      {data.status !== "AVAILABLE" ? (
-        <p className="col-span-full flex items-center gap-2 text-sm text-amber-200">
-          <CircleAlert size={16} /> Finance analytics service is{" "}
-          {data.status === "NOT_CONFIGURED" ? "not configured" : null}
-          {data.status === "MIGRATION_REQUIRED"
-            ? "waiting for the Finance data migration"
-            : null}
-          {data.status === "UNAVAILABLE" ? "currently unavailable" : null}.
-        </p>
-      ) : (
-        <>
-          <Metric label="Registered" value={bot?.registeredUsers ?? 0} />
-          <Metric label="Profiles" value={bot?.profiles ?? 0} />
-        </>
-      )}
+      {onSupport && <SupportCardLink bot={support} onOpen={onSupport} />}
     </BotAnalyticsCard>
   );
 }

@@ -501,9 +501,9 @@ export class TelegramAiPostingAutopilotService {
         );
         throw error;
       }
-      for (let i = 0; i < generationRun.generated.length; i++) {
-        if (settings.mode === 'REVIEW') continue;
-        const approvalVersion = generationRun.version + i * 3;
+      let approvalVersion = generationRun.version;
+      for (const [i, publication] of generationRun.generated.entries()) {
+        if (settings.mode === 'REVIEW' || publication.mediaReadiness !== 'READY') continue;
         await this.testRuns.reviewPublication(
           actor.userId,
           channelId,
@@ -519,7 +519,8 @@ export class TelegramAiPostingAutopilotService {
           i,
           approvalVersion + 1,
           'save',
-        )) as { publications?: Array<{ savedPostId?: string | null }> };
+        ));
+        approvalVersion = saved.version;
         const postId = saved.publications?.[i]?.savedPostId;
         if (postId) {
           generated++;
@@ -532,7 +533,7 @@ export class TelegramAiPostingAutopilotService {
             postId,
             i + 1,
           );
-          for (const operation of generationRun.generated[i].operations ?? []) {
+          for (const operation of publication.operations ?? []) {
             const stageName =
               operation.stage === 'image'
                 ? 'IMAGE_SELECTION_OR_GENERATION'

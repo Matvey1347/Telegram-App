@@ -1,57 +1,68 @@
-import { resolveFinanceBrowserApiBase } from "@finance-web/lib/http/api-base";
-import { publicFinanceWebEnvironment } from "@finance-web/config/public-env";
-import type {
-  FinanceStandaloneBillingCatalog,
-  FinanceStandaloneCheckoutResponse,
-  FinanceStandaloneOfferCode,
-} from "@telegram-system/shared";
+import { consumerFinancePlanningApi } from "@consumer-finance/web/lib/api/consumer-finance-planning-api";
+import type { FinanceStandaloneOfferCode } from "@telegram-system/shared";
 
 export type FinanceBillingOfferCode = FinanceStandaloneOfferCode;
-export type FinanceBillingState = FinanceStandaloneBillingCatalog;
 
-export class FinanceBillingHttpError extends Error {
-  constructor(readonly status: number) {
-    super(status === 401 || status === 403
-      ? "Please sign in to Finance to manage billing."
-      : "Billing is unavailable. Please try again.");
-  }
-}
-
-const root = (botId: string) => {
-  const base = resolveFinanceBrowserApiBase(publicFinanceWebEnvironment.apiUrl);
-  return `${base}/finance/${encodeURIComponent(botId)}/billing`;
-};
-
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  if (!response.ok) {
-    throw new FinanceBillingHttpError(response.status);
-  }
-  return response.json() as Promise<T>;
-}
-
+const offerCodes = ["INTRO", "MONTH", "QUARTER", "YEAR"] as const;
 export const financeBillingApi = {
-  establishTelegramSession: (botId: string, initData: string) => {
-    const base = resolveFinanceBrowserApiBase(publicFinanceWebEnvironment.apiUrl);
-    return request<{ authenticated: boolean }>(`${base}/finance/session/telegram-browser`, {
-      method: "POST",
-      body: JSON.stringify({ financeBotId: botId, initData }),
+  async get(botId: string) {
+    const catalog = await consumerFinancePlanningApi.billing(botId);
+    const stripe = catalog.providers.filter(
+      (provider) => provider.provider === "STRIPE",
+    );
+    const mode = stripe.some((provider) => provider.mode === "TEST")
+      ? "TEST"
+      : stripe[0]?.mode;
+    const plan = catalog.plans.find((item) => item.code === "PRO");
+    const monthly = plan?.prices.find(
+      (price) =>
+        price.currency === "UAH" &&
+        price.interval === "MONTH" &&
+        price.intervalCount === 1,
+    );
+    const offers = offerCodes.flatMap((code) => {
+      const price = plan?.prices.find(
+        (item) =>
+          item.currency === "UAH" &&
+          (code === "INTRO"
+            ? item.interval === "DAY"
+            : code === "YEAR"
+              ? item.interval === "YEAR"
+              : item.interval === "MONTH" &&
+                item.intervalCount === (code === "QUARTER" ? 3 : 1)),
+      );
+      return price
+        ? [
+            {
+              ...price,
+              code,
+              mode,
+              available: Boolean(
+                mode &&
+                plan?.canPurchase &&
+                price.version > 0 &&
+                price.available !== false,
+              ),
+              introNextAmountMinor:
+                code === "INTRO" ? monthly?.amountMinor : undefined,
+            },
+          ]
+        : [];
     });
+    return {
+      tier: catalog.current.tier === "FREE" ? "FREE" : "PLUS",
+      activeUntil: catalog.current.activeUntil,
+      cancelAtPeriodEnd: catalog.current.cancelAtPeriodEnd,
+      subscription: catalog.subscriptions.find((item) =>
+        ["ACTIVE", "PAST_DUE"].includes(item.status),
+      ),
+      offers,
+      history: catalog.paymentHistory,
+    };
   },
-  get: (botId: string) => request<FinanceBillingState>(root(botId)),
-  checkout: (botId: string, offerCode: FinanceBillingOfferCode) =>
-    request<FinanceStandaloneCheckoutResponse>(`${root(botId)}/checkout`, {
-      method: "POST",
-      body: JSON.stringify({ offerCode }),
-    }),
-  portal: (botId: string) =>
-    request<{ url: string }>(`${root(botId)}/portal`, { method: "POST" }),
-  cancel: (botId: string) =>
-    request<FinanceBillingState>(`${root(botId)}/cancel`, { method: "POST" }),
-  resume: (botId: string) =>
-    request<FinanceBillingState>(`${root(botId)}/resume`, { method: "POST" }),
+  checkout: (botId: string, priceId: string, mode?: "TEST" | "LIVE") =>
+    consumerFinancePlanningApi.checkout(botId, "STRIPE", priceId, mode),
+  portal: consumerFinancePlanningApi.paymentPortal,
+  cancel: consumerFinancePlanningApi.cancelAutoRenew,
+  resume: consumerFinancePlanningApi.resumeAutoRenew,
 };

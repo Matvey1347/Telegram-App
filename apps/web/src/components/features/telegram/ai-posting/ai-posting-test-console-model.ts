@@ -18,7 +18,7 @@ export type Publication = {
   editorialMetadata?: {
     sphere?: { id: string; name: string; emoji: string; tier?: string } | null;
     rubric?: { id: string; name: string; emoji: string } | null;
-    length?: { id: string; name: string; emoji: string } | null;
+    length?: { id: string; name: string; emoji: string; minCharacters?: number; maxCharacters?: number | null } | null;
   };
   mediaReadiness?: "READY" | "MISSING" | "FAILED";
   mediaFailureCode?: string;
@@ -102,8 +102,8 @@ export function publicationBatchProgress(progress: TelegramAiPostingRunProgress)
 }
 
 export function failureStageLabel(code: string) {
-  if (/^AI_POSTING_PLANNING_/.test(code)) return "план тем";
-  if (code === "AI_POSTING_DRAFT_INVALID" || /^AI_POSTING_TEXT_/.test(code)) return "генерация текста";
+  if (code === "AI_POSTING_PLAN_INVALID" || /^AI_POSTING_PLANNING_/.test(code)) return "план тем";
+  if (["AI_POSTING_DRAFT_INVALID", "AI_POSTING_CAPTION_INVALID"].includes(code) || /^AI_POSTING_TEXT_/.test(code)) return "генерация текста";
   if (/^AI_POSTING_REVIEW_/.test(code)) return "проверка текста";
   if (/^AI_POSTING_IMAGE_/.test(code)) return "подготовка медиа";
   if (code === "AI_POSTING_TOPIC_REPETITION") return "подбор тем";
@@ -111,7 +111,9 @@ export function failureStageLabel(code: string) {
 }
 
 export const failureMessage: Record<string, string> = {
+  AI_POSTING_PLAN_INVALID: "ИИ дважды вернул неполный или неверный план тем. Попробуйте повторить генерацию.",
   AI_POSTING_TEXT_EMPTY: "Текст пустой.",
+  AI_POSTING_IMAGE_SEARCH_SHARE_LIMIT: "Подходящее фото не найдено. Текст сохранён: лимит AI-изображений для этого запуска исчерпан.",
   AI_POSTING_IMAGE_SEARCH_EXHAUSTED: "Текст сохранён. Автоматический поиск не нашёл подходящего фото.",
   AI_POSTING_DRAFT_INVALID:
     "Модель вернула ответ не в формате публикации. Текст не был сохранён.",

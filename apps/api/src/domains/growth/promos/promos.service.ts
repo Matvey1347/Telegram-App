@@ -158,8 +158,7 @@ export class PromosService {
         query.telegramChannelIds,
       ),
       assignedMemberId: query.assignedMemberId || undefined,
-      archivedAt:
-        query.archived === 'true' ? { not: null } : null,
+      archivedAt: query.archived === 'true' ? { not: null } : null,
       ...(search
         ? {
             OR: [
@@ -191,8 +190,14 @@ export class PromosService {
           telegramChannelId: true,
           iconId: true,
           title: true,
+          text: true,
           previewText: true,
           previewImageUrl: true,
+          plainText: true,
+          formattedHtml: true,
+          imageUrls: true,
+          mediaItems: true,
+          buttonRows: true,
           status: true,
           archivedAt: true,
           assignedMemberId: true,
@@ -201,6 +206,8 @@ export class PromosService {
           telegramChannel: {
             select: { id: true, title: true, username: true, photoUrl: true },
           },
+          defaultInviteLink: { select: { url: true } },
+          createdByUser: { select: { id: true, name: true } },
           icon: true,
           assignedMember: WorkspaceService.assignedMemberInclude,
         },

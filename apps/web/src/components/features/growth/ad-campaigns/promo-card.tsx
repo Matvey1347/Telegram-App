@@ -1,125 +1,97 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Archive, ArchiveRestore, Pencil, Send, Trash2 } from "lucide-react";
-import type { Promo } from "@/lib/api";
 import { normalizeTelegramPostMediaItems } from "@telegram-system/shared";
+import type { Promo } from "@/lib/api";
 import {
   CardActionsMenu,
   CardMenuAction,
 } from "@/components/ui/card-actions-menu";
-import { renderTelegramPreviewInlineMarkup } from "@/components/features/telegram/telegram/telegram-post-preview-markup";
+import { TelegramPostPreview } from "@/components/features/telegram/telegram/telegram-post-preview";
 import { PromoQuickSendModal } from "./promo-quick-send-modal";
+import { renderPromoInviteLink } from "./promo-invite-template";
 
 export function PromoCard({
   promo,
-  icon,
-  channel,
-  member,
   onEdit,
   onDelete,
   onToggleArchive,
 }: {
   promo: Promo;
-  icon?: ReactNode;
-  channel?: ReactNode;
-  member?: ReactNode;
   onEdit: () => void;
   onDelete: () => void;
   onToggleArchive?: () => void;
 }) {
   const [quickSendOpen, setQuickSendOpen] = useState(false);
-  const openingText =
-    promo.previewText?.trim() || promo.plainText?.trim() || promo.text?.trim();
-  const mediaItems = normalizeTelegramPostMediaItems(
-    promo.mediaItems,
-    promo.imageUrls,
-  );
-  const previewMedia = mediaItems[0];
+  const imageUrls = promo.imageUrls?.length
+    ? promo.imageUrls
+    : promo.previewImageUrl
+      ? [promo.previewImageUrl]
+      : promo.imageData
+        ? [promo.imageData]
+        : [];
+  const post = {
+    text: promo.text || "",
+    plainText: promo.plainText,
+    formattedHtml: promo.formattedHtml,
+    imageUrls,
+    mediaItems: normalizeTelegramPostMediaItems(promo.mediaItems, imageUrls),
+    buttonRows: promo.buttonRows ?? [],
+  };
+  const previewPost = promo.defaultInviteLink?.url
+    ? renderPromoInviteLink(post, promo.defaultInviteLink.url)
+    : post;
+  const creator = promo.createdByUser?.name?.trim() || "Unknown creator";
 
   return (
-    <article className="group relative isolate min-h-48 overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/80 transition duration-200 hover:border-neutral-700">
-      <button
-        type="button"
-        className="absolute inset-0 z-0 rounded-2xl focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-neutral-600"
-        aria-label={`Edit promo ${promo.title}`}
-        onClick={onEdit}
+    <article className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/80 transition-colors hover:border-neutral-700">
+      <div className="flex min-h-12 items-center justify-between gap-3 border-b border-neutral-800 px-3 py-2">
+        <p
+          className="min-w-0 truncate text-xs text-neutral-400"
+          title={`Created by ${creator}`}
+        >
+          Created by{" "}
+          <span className="font-medium text-neutral-200">{creator}</span>
+        </p>
+        <div className="shrink-0">
+          <CardActionsMenu label={`Actions for ${promo.title}`}>
+            <CardMenuAction
+              label="Edit"
+              icon={<Pencil size={16} />}
+              onClick={onEdit}
+            />
+            <CardMenuAction
+              label="Send to bot"
+              icon={<Send size={16} />}
+              onClick={() => setQuickSendOpen(true)}
+            />
+            <CardMenuAction
+              label={promo.archivedAt ? "Restore from archive" : "Archive"}
+              icon={
+                promo.archivedAt ? (
+                  <ArchiveRestore size={16} />
+                ) : (
+                  <Archive size={16} />
+                )
+              }
+              onClick={() => onToggleArchive?.()}
+            />
+            <CardMenuAction
+              danger
+              label="Delete"
+              icon={<Trash2 size={16} />}
+              onClick={onDelete}
+            />
+          </CardActionsMenu>
+        </div>
+      </div>
+      <TelegramPostPreview
+        channelTitle={promo.telegramChannel?.title || "Telegram channel"}
+        channelPhotoUrl={promo.telegramChannel?.photoUrl}
+        {...previewPost}
+        compact
       />
-      <div className="pointer-events-none relative z-10 flex h-full flex-col p-4">
-        <div className="flex min-w-0 items-start gap-2 pr-9">
-          {icon}
-          <h3 className="truncate text-base font-semibold text-white">
-            {promo.title}
-          </h3>
-        </div>
-        {channel || member ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {channel}
-            {member}
-          </div>
-        ) : null}
-        {previewMedia?.kind === "VIDEO" || previewMedia?.kind === "ANIMATION" ? (
-          <div className="relative mt-3 overflow-hidden rounded-xl border border-white/10 bg-neutral-900">
-            <video
-              src={previewMedia.url}
-              className="block h-auto max-h-72 w-full object-contain"
-              controls
-              playsInline
-              preload="metadata"
-            />
-            <span className="pointer-events-none absolute left-2 top-2 rounded bg-black/70 px-2 py-1 text-xs font-medium text-white">
-              Video preview
-            </span>
-          </div>
-        ) : promo.previewImageUrl ? (
-          <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-neutral-900">
-            <img
-              src={promo.previewImageUrl}
-              alt=""
-              className="block h-auto w-full"
-            />
-          </div>
-        ) : null}
-        <div className="mt-4 border-t border-white/10 pt-3">
-          {openingText ? (
-            <div
-              className="line-clamp-3 whitespace-pre-line text-sm leading-5 text-neutral-300 [&_b]:font-semibold [&_b]:text-neutral-100"
-              dangerouslySetInnerHTML={{
-                __html: renderTelegramPreviewInlineMarkup(openingText),
-              }}
-            />
-          ) : (
-            <p className="text-sm leading-5 text-neutral-300">
-              No creative text yet.
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="absolute right-3 top-3 z-20">
-        <CardActionsMenu label={`Actions for ${promo.title}`}>
-          <CardMenuAction
-            label="Edit"
-            icon={<Pencil size={16} />}
-            onClick={onEdit}
-          />
-          <CardMenuAction
-            label="Send to bot"
-            icon={<Send size={16} />}
-            onClick={() => setQuickSendOpen(true)}
-          />
-          <CardMenuAction
-            label={promo.archivedAt ? "Restore from archive" : "Archive"}
-            icon={promo.archivedAt ? <ArchiveRestore size={16} /> : <Archive size={16} />}
-            onClick={() => onToggleArchive?.()}
-          />
-          <CardMenuAction
-            danger
-            label="Delete"
-            icon={<Trash2 size={16} />}
-            onClick={onDelete}
-          />
-        </CardActionsMenu>
-      </div>
       {quickSendOpen ? (
         <PromoQuickSendModal
           promo={promo}

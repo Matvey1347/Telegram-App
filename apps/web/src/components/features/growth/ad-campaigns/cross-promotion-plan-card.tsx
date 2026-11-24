@@ -56,6 +56,9 @@ export function CrossPromotionPlanCard({
       )
     : plan.scheduledAt;
   const publisherViews = sumKnown(plan.publisherResults.map((channel) => channel.postViews));
+  const targetViews = ownPromotion
+    ? plan.targetResults.map(() => publisherViews)
+    : splitPublisherViews(publisherViews, plan.targetResults);
 
   const channelList = publishingChannels.length ? (
     <TelegramChannelAvatarList channels={publishingChannels} ariaLabel={`My channels: ${publishingChannels.length}`} />
@@ -159,12 +162,12 @@ export function CrossPromotionPlanCard({
 
       {plan.targetResults.length ? (
         <div className="mx-3 mt-2 divide-y divide-neutral-800 overflow-hidden rounded-lg border border-neutral-800 bg-black/20">
-          {plan.targetResults.map((target) => (
+          {plan.targetResults.map((target, index) => (
             <div
               key={`target:${target.telegramChannelId}:${target.inviteLinkId}`}
               className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_auto_minmax(0,1.2fr)] items-center gap-1.5 px-2.5 py-1.5 text-xs sm:gap-3"
             >
-              <div className="flex min-w-0 items-center gap-1 rounded-md border border-neutral-700 bg-neutral-900 px-1.5 py-0.5" title={target.title}>
+              <div className="flex min-w-0 items-center gap-1 rounded-full border border-neutral-700 bg-neutral-900 px-2 py-0.5" title={target.title}>
                 <TelegramEntityAvatar imageUrl={target.photoUrl} kind="channel" alt="" size="xs" />
                 <span className="truncate font-medium text-neutral-100">{target.title}</span>
               </div>
@@ -175,9 +178,9 @@ export function CrossPromotionPlanCard({
                 tone="text-emerald-300"
               />
               <Stat
-                label="Actual views"
+                label={ownPromotion || plan.targetResults.length === 1 ? "Actual views" : "Allocated placement views"}
                 icon={Eye}
-                value={publisherViews == null ? "—" : publisherViews.toLocaleString()}
+                value={targetViews[index]?.toLocaleString() ?? "—"}
               />
               <PromoLink
                 promoId={target.promoId}
@@ -196,6 +199,26 @@ export function CrossPromotionPlanCard({
 function sumKnown(values: Array<number | null>) {
   const known = values.filter((value): value is number => value != null);
   return known.length ? known.reduce((total, value) => total + value, 0) : null;
+}
+
+function splitPublisherViews(total: number | null, targets: CrossPromotionPlan["targetResults"]) {
+  if (total == null || !targets.length) return targets.map(() => null);
+  const byChannel = new Map<string, CrossPromotionPlan["targetResults"]>();
+  for (const target of targets) {
+    const channelTargets = byChannel.get(target.telegramChannelId) ?? [];
+    channelTargets.push(target);
+    byChannel.set(target.telegramChannelId, channelTargets);
+  }
+  const channelShare = Math.floor(total / byChannel.size);
+  let extra = total % byChannel.size;
+  const byTarget = new Map<CrossPromotionPlan["targetResults"][number], number>();
+  for (const rows of byChannel.values()) {
+    const views = channelShare + (extra-- > 0 ? 1 : 0);
+    rows.forEach((row, index) => {
+      byTarget.set(row, Math.floor(views / rows.length) + (index < views % rows.length ? 1 : 0));
+    });
+  }
+  return targets.map((target) => byTarget.get(target) ?? null);
 }
 
 function PromoLink({
@@ -221,7 +244,7 @@ function PromoLink({
     </>
   );
   const className =
-    "flex min-w-0 items-center gap-1 truncate rounded-md border border-neutral-700 bg-neutral-900 px-1.5 py-0.5 text-left text-neutral-200";
+    "flex min-w-0 items-center gap-1 truncate rounded-full border border-neutral-700 bg-neutral-900 px-2 py-0.5 text-left text-neutral-200";
   return promoId && onOpenPromo ? (
     <button
       type="button"

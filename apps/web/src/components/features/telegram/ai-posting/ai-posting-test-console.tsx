@@ -1,6 +1,7 @@
 "use client";
 
-import { isTelegramAiPostingEmptyTextFailure } from "@telegram-system/shared";
+import { MAX_TELEGRAM_AI_POSTING_BATCH_SIZE } from "@telegram-system/shared";
+import { canRetryTelegramAiPostingText, telegramAiPostingRunSlots } from "@telegram-system/shared";
 
 import type { AiPostingWatermarkPreviewSettings } from "./ai-posting-watermark-preview";
 import { useEffect, useRef, useState } from "react";
@@ -9,6 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { api, streamProgressAction } from "@/lib/api";
+import { withFeedback } from "@/lib/http/api-client";
 import {
   aiPostingTestRunKeys,
   failureMessage,
@@ -71,7 +73,7 @@ export function AiPostingTestConsole({
   const [requestedCount, setRequestedCount] = useState(() => {
     if (typeof window === "undefined") return String(dailyPostCount);
     const saved = window.localStorage.getItem(`ai-posting-count:${channelId}`);
-    return saved && /^[1-5]$/.test(saved) ? saved : String(dailyPostCount);
+    return saved && /^\d+$/.test(saved) && Number(saved) >= 1 && Number(saved) <= MAX_TELEGRAM_AI_POSTING_BATCH_SIZE ? saved : String(dailyPostCount);
   });
   useEffect(() => {
     window.localStorage.setItem(
@@ -82,6 +84,7 @@ export function AiPostingTestConsole({
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [historyIndex, setHistoryIndex] = useState(0);
   const [clearHistoryOpen, setClearHistoryOpen] = useState(false);
   const [acceptedRun, setAcceptedRun] = useState<(TestRun & { channelId: string }) | null>(null);
   const runs = useQuery({
@@ -93,7 +96,9 @@ export function AiPostingTestConsole({
   const generate = useMutation({
     mutationFn: async (count: number) =>
       (await api.post<TelegramAiPostingRunAccepted>(
-        `/telegram-channels/${channelId}/ai-posting/generate/background`, { count },
+        `/telegram-channels/${channelId}/ai-posting/generate/background`,
+        { count },
+        withFeedback({ feedback: { mode: "managed" } }),
       )).data,
     onSuccess: async ({ runId }, count) => {
       if (runId) setAcceptedRun({
@@ -123,7 +128,7 @@ export function AiPostingTestConsole({
       failureIndex: number;
     }) => {
       const failure = run.failures[failureIndex];
-      const retryText = Boolean(failure?.topic && (failure.retryText || isTelegramAiPostingEmptyTextFailure(failure)));
+      const retryText = Boolean(failure?.topic && canRetryTelegramAiPostingText(failure));
       setGenerationProgress({
         count: 1,
         stages: retryText ? { "0:planning": "COMPLETED", "0:text": "RUNNING" } : { "0:planning": "RUNNING" },
@@ -239,7 +244,7 @@ export function AiPostingTestConsole({
   const startGeneration = () => {
     const count = Math.max(
       1,
-      Math.min(5, Number(requestedCount) || dailyPostCount),
+      Math.min(MAX_TELEGRAM_AI_POSTING_BATCH_SIZE, Math.trunc(Number(requestedCount)) || dailyPostCount),
     );
     generate.mutate(count);
   };
@@ -376,7 +381,7 @@ export function AiPostingTestConsole({
   const pendingRun = acceptedRun?.channelId === channelId ? acceptedRun : null;
   const historyHasAcceptedRun = runs.data?.some(({ id }) => id === pendingRun?.id);
   const runList = pendingRun && !historyHasAcceptedRun ? [pendingRun, ...(runs.data ?? [])] : (runs.data ?? []);
-  const previousRunCount = Math.max(0, runList.length - 1);
+  const totalPublications = runList.reduce((sum, run) => sum + telegramAiPostingRunSlots(run).length, 0);
   const activeRun = runList.find((run) => run.status === "RUNNING" && run.id === pendingRun?.id)
     ?? runList.find((run) => run.status === "RUNNING" && run.canStop)
     ?? runList.find((run) => run.status === "RUNNING");
@@ -385,8 +390,16 @@ export function AiPostingTestConsole({
     regenerateFailure.isPending ? undefined : activeRun,
   );
   const trackedRun = tracking?.run;
-  const displayedRuns = historyExpanded
-    ? runList
+  const historySlots = historyExpanded
+    ? runList.flatMap((entry) => {
+        const run = entry.id === trackedRun?.id ? trackedRun : entry;
+        return telegramAiPostingRunSlots(run).map((_, slotIndex) => ({ run, slotIndex }));
+      })
+    : [];
+  const currentHistoryIndex = Math.min(historyIndex, Math.max(0, historySlots.length - 1));
+  const historySlot = historySlots[currentHistoryIndex];
+  const displayedRuns = historySlot
+    ? [historySlot.run]
     : runList.filter((run, index) => index === 0 || run.id === trackedRun?.id || run.id === pendingRun?.id);
   return (
     <div className="space-y-4" aria-labelledby="ai-posting-test-title">
@@ -403,10 +416,10 @@ export function AiPostingTestConsole({
         onGenerate={startGeneration}
         historyAction={runList.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2">
-            {previousRunCount > 0 && (
+            {runList.length > 1 && (
               <Button variant="secondary" aria-expanded={historyExpanded}
-                onClick={() => setHistoryExpanded((expanded) => !expanded)}>
-                {historyExpanded ? "Скрыть" : `Показать · ${previousRunCount}`}
+                onClick={() => { setHistoryIndex(0); setHistoryExpanded((expanded) => !expanded); }}>
+                {historyExpanded ? "Скрыть предыдущие" : `Показать все · ${totalPublications}`}
               </Button>
             )}
             <Button
@@ -452,6 +465,12 @@ export function AiPostingTestConsole({
         <AiPostingTestRunCard
           key={run.id}
           run={run.id === trackedRun?.id ? trackedRun : run}
+          historyNavigation={historySlot && {
+            slotIndex: historySlot.slotIndex,
+            index: currentHistoryIndex,
+            count: historySlots.length,
+            onChange: setHistoryIndex,
+          }}
           onStop={run.canStop ? () => stopRun.mutate(run.id) : undefined}
           stopPending={stopRun.isPending}
           channelTitle={channelTitle}

@@ -1,8 +1,8 @@
-import type { TelegramAiPostingImageSearchRound } from '@telegram-system/shared';
+import { telegramAiPostingImageSourceUrls, type TelegramAiPostingImageSearchRound } from '@telegram-system/shared';
 
 type Query = Pick<
   TelegramAiPostingImageSearchRound['queries'][number],
-  'text' | 'page' | 'catalog'
+  'text' | 'page' | 'catalog' | 'domain'
 >;
 
 function searchPhrases(query: string) {
@@ -22,6 +22,7 @@ export function imageSearchRounds(
   brief: string | undefined,
   pageOffset: number,
   usePhotoDirectory = false,
+  sources?: unknown,
 ): Query[][] {
   const [first, ...variants] = searchPhrases(query);
   const primary = first ?? query.trim().slice(0, 180);
@@ -46,6 +47,9 @@ export function imageSearchRounds(
   };
   const wide = subjectAndObject(alternate);
   const object = compact(primary).at(-1) ?? primary;
+  const objectTerms = [...new Set(compact([primary, alternate, variants[1]].filter(Boolean).join(' ')))]
+    .filter((word) => word.length > 3 && !/^(woman|women|person|people|tired|young|holding|sitting)$/iu.test(word));
+  const subject = objectTerms[0] ?? object;
   const page = pageOffset + 1;
   const preferredExample = examples.find(
     (example) => example.toLowerCase() !== primary.toLowerCase(),
@@ -78,11 +82,32 @@ export function imageSearchRounds(
       { text: compact(alternate).at(-1) ?? alternate, page: page + 1, catalog: 'wordpress-photos' },
     ]);
   }
+  if (Array.isArray(sources)) {
+    const configured = telegramAiPostingImageSourceUrls(sources).map((url): Pick<Query, 'catalog' | 'domain'> => {
+      const domain = new URL(url).hostname.replace(/^www\./u, '');
+      if (domain === 'pinterest.com') return { catalog: 'pinterest' };
+      if (domain === 'commons.wikimedia.org' || domain === 'wikipedia.org' || domain.endsWith('.wikipedia.org')) return { catalog: 'wikimedia' };
+      return { catalog: 'website', domain };
+    });
+    const phrases = [primary, ...variants, preferredExample, subjectAndObject(primary), wide]
+      .filter((text): text is string => Boolean(text?.trim()))
+      .filter((text, index, all) =>
+        all.findIndex((item) => item.toLowerCase() === text.toLowerCase()) === index,
+      );
+    rounds.splice(0, rounds.length,
+      ...configured.map((source) => (source.catalog === 'pinterest' ? phrases.slice(0, 3) : [primary])
+        .map((text) => ({ ...source, text, page }))),
+      configured.slice(0, 3).map((source) => ({ ...source, text: phrases[1] ?? primary, page })),
+      configured.slice(0, 3).map((source) => ({ ...source, text: phrases[2] ?? subject, page })),
+      configured.slice(0, 3).map((source) => ({ ...source, text: primary, page: page + 1 })),
+    );
+
+  }
   const seen = new Set<string>();
   return rounds
     .map((round) =>
-      round.filter(({ text, page, catalog }) => {
-        const key = JSON.stringify([text?.toLowerCase(), page, catalog]);
+      round.filter(({ text, page, catalog, domain }) => {
+        const key = JSON.stringify([text?.toLowerCase(), page, catalog, domain]);
         if (!text || seen.has(key)) return false;
         seen.add(key);
         return true;

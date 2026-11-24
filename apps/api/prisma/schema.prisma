@@ -913,6 +913,7 @@ enum BotBillingConnectionStatus {
 }
 
 enum BotBillingInterval {
+  DAY
   MONTH
   YEAR
 }
@@ -1004,6 +1005,7 @@ model PasswordResetToken {
 }
 
 model Workspace {
+  telegramSupportTickets TelegramSupportTicket[]
   id                              String              @id @default(cuid())
   name                            String
   timezone                        String              @default("Europe/Warsaw")
@@ -5615,6 +5617,7 @@ model BotPlanPrice {
   version               Int
   currency              String             @db.VarChar(3)
   interval              BotBillingInterval
+  intervalCount         Int                @default(1)
   amountMinor           Int
   isPublic              Boolean            @default(true)
   isActive              Boolean            @default(true)
@@ -5626,8 +5629,8 @@ model BotPlanPrice {
   subscriptions     BotSubscription[]
   couponRedemptions BotCouponRedemption[]
 
-  @@unique([planId, currency, interval, version])
-  @@index([planId, currency, interval, isPublic, isActive])
+  @@unique([planId, currency, interval, intervalCount, version])
+  @@index([planId, currency, interval, intervalCount, isPublic, isActive])
 }
 
 model BotSubscription {
@@ -5641,6 +5644,10 @@ model BotSubscription {
   status                 BotSubscriptionStatus @default(INCOMPLETE)
   currency               String?               @db.VarChar(3)
   interval               BotBillingInterval?
+  intervalCount          Int?
+  introPaidAt            DateTime?
+  checkoutExpiresAt      DateTime?
+  confirmedPaidThrough  DateTime?
   amountMinor            Int?
   priceVersion           Int?
   providerCustomerId     String?
@@ -6984,4 +6991,46 @@ model ChannelAvatarEmojiPublisher {
   leaseToken String?
   leaseUntil DateTime?
   retryAt    DateTime?
+}
+
+enum TelegramSupportProduct {
+  NEXELOQ
+  GROSHLY
+}
+
+model TelegramSupportTicket {
+  id          String @id @default(cuid())
+  workspaceId String
+  product     TelegramSupportProduct
+  botId       String?
+  chatId      String
+  senderName  String
+  username    String?
+  preview     String
+  needsReply  Boolean @default(true)
+  closedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  messages    TelegramSupportMessage[]
+
+  @@index([workspaceId, closedAt, updatedAt, id], map: "TelegramSupportTicket_inbox_idx")
+  @@index([workspaceId, product, botId, chatId, closedAt], map: "TelegramSupportTicket_chat_idx")
+}
+
+model TelegramSupportMessage {
+  id          String @id @default(cuid())
+  ticketId    String
+  workspaceId String
+  product     TelegramSupportProduct
+  updateId    String?
+  replyId     String?
+  text        String
+  status      String
+  createdAt   DateTime @default(now())
+  ticket      TelegramSupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, product, updateId], map: "TelegramSupportMessage_update_key")
+  @@unique([ticketId, replyId], map: "TelegramSupportMessage_reply_key")
+  @@index([ticketId, createdAt, id], map: "TelegramSupportMessage_thread_idx")
 }

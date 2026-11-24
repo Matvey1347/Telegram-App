@@ -3,7 +3,7 @@ import type { TelegramAiPostingOperationContext } from '@telegram-system/shared'
 import { Prisma } from '@prisma/client';
 import type { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
 
-export const MAX_TELEGRAM_AI_POSTING_BATCH_SIZE = 5;
+import { MAX_TELEGRAM_AI_POSTING_BATCH_SIZE } from '@telegram-system/shared';
 
 export type TelegramAiPostingRunOperation = TelegramAiPostingOperationContext & {
   stage: string;
@@ -114,6 +114,11 @@ export function telegramAiPostingGenerationFailures(error: unknown) {
             ...(failure.imageMode === 'found' || failure.imageMode === 'ai'
               ? { imageMode: failure.imageMode }
               : {}),
+            ...(failure.editorialAssignment && typeof failure.editorialAssignment === 'object' &&
+              !Array.isArray(failure.editorialAssignment) ? {
+                editorialAssignment: Object.fromEntries(Object.entries(failure.editorialAssignment)
+                  .filter(([key, value]) => ['sphereId', 'rubricId', 'lengthId'].includes(key) && typeof value === 'string')),
+              } : {}),
             code:
               typeof failure.code === 'string'
                 ? failure.code.slice(0, 100)

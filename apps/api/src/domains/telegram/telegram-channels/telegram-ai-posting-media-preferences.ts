@@ -1,4 +1,4 @@
-import { TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from '@telegram-system/shared';
+import { TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES } from '@telegram-system/shared';
 
 import type { TelegramAiPostingReferences } from './telegram-ai-posting-image-reference';
 
@@ -14,12 +14,16 @@ export type TelegramAiPostingMediaPreference = {
   purpose: 'SEARCH' | 'GENERATION' | 'BOTH';
 };
 
+export type TelegramAiPostingMediaRunState = ReturnType<typeof createTelegramAiPostingMediaRunState>;
+
 export function createTelegramAiPostingMediaRunState() {
   return {
     referenceImageCache: new Map<
       string,
-      TelegramAiPostingReferences
+      Promise<TelegramAiPostingReferences>
     >(),
+    imageClaims: new Set<string>(),
+    history: undefined as Promise<Set<string>> | undefined,
   };
 }
 
@@ -27,7 +31,7 @@ export function telegramAiPostingMediaPreferences(
   config: Record<string, unknown>,
 ): TelegramAiPostingMediaPreference[] {
   if (Array.isArray(config.mediaPreferences)) {
-    return config.mediaPreferences.slice(0, 10).flatMap((value, index) => {
+    return config.mediaPreferences.slice(0, TELEGRAM_AI_POSTING_MAX_MEDIA_PREFERENCES).flatMap((value, index) => {
       if (!value || typeof value !== 'object' || Array.isArray(value))
         return [];
       const item = value as Record<string, unknown>;

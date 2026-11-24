@@ -1,6 +1,6 @@
 import { financeBrandIcon } from "@finance-web/lib/finance-brand-icon";
+import { FinanceRootApp } from "@finance-web/components/finance-root-app";
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 export async function generateMetadata({
   params,
@@ -18,10 +18,9 @@ export async function generateMetadata({
 
 /**
  * Telegram's existing Finance menu buttons include the logical bot ID in the
- * path. The standalone Finance web host resolves the active bot securely from
- * its API session, but retains this route so those buttons open the real app
- * rather than Next's 404 page.
+ * path. Render the application here to preserve Telegram launch parameters
+ * and the scope of shortcuts installed from this path.
  */
 export default function FinanceTelegramMiniAppPage() {
-  redirect("/app");
+  return <FinanceRootApp />;
 }

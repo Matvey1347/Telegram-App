@@ -815,6 +815,7 @@ body.money-input-active .app-shell .app-main.page-investmentDetail{padding-botto
 .finance-billing .billing-current strong { color: var(--deep); font-size: 22px; }
 .finance-billing .billing-current p { margin: 12px 0 0; }
 .finance-billing .billing-manage { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.finance-billing .billing-manage > span { display: inline-flex; align-items: center; gap: 7px; padding: 5px 9px; }
 .finance-billing .billing-disclosure { padding: 17px 20px; border: 1px solid #b8d68b; background: var(--lime2); color: var(--deep); font-weight: 650; }
 .finance-billing .billing-error { color: var(--red); font-weight: 700; }
 .finance-billing .billing-history { padding: 20px; }

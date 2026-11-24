@@ -77,7 +77,7 @@ export function AdsSectionTabs({ value, trailing }: { value: AdsSection; trailin
     <div className="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-2">
       <div
         data-testid="ads-section-tabs-scroll"
-        className="w-full min-w-0 max-w-full flex-1 basis-full overflow-x-auto overscroll-x-contain sm:basis-auto"
+        className="w-full min-w-0 max-w-full flex-1 basis-full overflow-x-auto overscroll-x-contain sm:w-auto sm:basis-auto"
       >
       <div
         role="tablist"

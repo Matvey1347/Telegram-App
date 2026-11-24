@@ -1,3 +1,4 @@
+import { CreditCard, UsersRound } from "lucide-react";
 import type {
   TelegramBotFinanceApplicationSummary,
   TelegramBotRuntimeEnvironment,
@@ -10,46 +11,29 @@ export function FinanceBotSummary({
     | TelegramBotFinanceApplicationSummary["finance"][TelegramBotRuntimeEnvironment]
     | undefined;
 }) {
-  const metrics = summary ?? {
-    registeredUsers: 0,
-    paidUsers: 0,
-    activeSubscriptions: 0,
-    failedPayments: 0,
-  };
   return (
     <div
-      className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4"
+      className="grid grid-cols-2 gap-2"
       aria-label="Finance business metrics"
     >
-      <Metric label="Registered" value={metrics.registeredUsers} />
-      <Metric label="Paid" value={metrics.paidUsers} />
-      <Metric label="Active" value={metrics.activeSubscriptions} />
-      <Metric
-        label="Failed"
-        value={metrics.failedPayments}
-        attention={metrics.failedPayments > 0}
-      />
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  attention = false,
-}: {
-  label: string;
-  value: number;
-  attention?: boolean;
-}) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p
-        className={`mt-0.5 text-base font-semibold ${attention ? "text-rose-300" : "text-neutral-100"}`}
-      >
-        {value}
-      </p>
+      <div className="rounded-lg border border-neutral-800 p-3">
+        <p className="flex items-center gap-2 text-sm text-neutral-400">
+          <UsersRound size={16} /> Registered
+        </p>
+        <p className="text-lg font-semibold">{summary?.registeredUsers ?? 0}</p>
+        <p className="text-xs text-neutral-400">
+          {summary?.activeUsers ?? 0} active in 30 days
+        </p>
+      </div>
+      <div className="rounded-lg border border-neutral-800 p-3">
+        <p className="flex items-center gap-2 text-sm text-neutral-400">
+          <CreditCard size={16} /> Paid
+        </p>
+        <p className="text-lg font-semibold">{summary?.paidUsers ?? 0}</p>
+        <p className="text-xs text-neutral-400">
+          {summary?.activePaidUsers ?? 0} active in 30 days
+        </p>
+      </div>
     </div>
   );
 }

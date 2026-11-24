@@ -25,7 +25,10 @@ function renderInline(source: string): string {
     tokens.push(html);
     return key;
   };
-  let value = source.replace(/<[^>]*>/g, '');
+  let value = source.replace(/<[^>]*>/g, '').replace(
+    /(?<![\p{L}\p{N}_])#\p{L}[\p{L}\p{N}_]*(?:['’ʼ][\p{L}\p{N}_]+)+/gu,
+    (tag) => tag.replace(/['’ʼ]/gu, ''),
+  );
   value = value.replace(
     /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,
     (_match, label: string, rawUrl: string) => {
@@ -101,6 +104,10 @@ function visibleText(markup: string) {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, '&');
+}
+
+export function telegramAiPostingVisibleText(markup: string) {
+  return visibleText(markup).trim();
 }
 
 function visibleSuffixStart(markup: string, suffix: string) {

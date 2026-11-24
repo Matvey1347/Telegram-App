@@ -6,8 +6,8 @@ import { GroshlyApp } from "@finance-web/groshly/main";
 import { readFinanceRateCache } from "@finance-web/groshly/rate-cache";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
 import { recordInvestmentMovement, type InvestmentMovement } from "@finance-web/components/groshly-investment-movement";
-import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
-import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
+import type { TelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
+import { ConsumerFinanceBootstrapError, ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
 import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 import { consumerFinanceInsightsApi } from "@consumer-finance/web/lib/api/consumer-finance-insights-api";
 import { consumerFinanceInvestmentsApi } from "@consumer-finance/web/lib/api/consumer-finance-investments-api";
@@ -378,9 +378,11 @@ export function groshlySnapshot({
   };
 }
 
-export function GroshlyFinanceApp({ botId }: { botId: string }) {
+export function GroshlyFinanceApp({ botId, bootstrap }: {
+  botId: string;
+  bootstrap: Extract<TelegramMiniAppBootstrap, { status: "ready" | "browser" }>;
+}) {
   const queryClient = useQueryClient();
-  const bootstrap = useTelegramMiniAppBootstrap();
   const identityScope = groshlyIdentityScope(
     bootstrap.status === "ready" ? bootstrap.initData : undefined,
   );
@@ -417,7 +419,6 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
         botId,
         bootstrap.status === "ready" ? bootstrap.initData : undefined,
       ),
-    enabled: bootstrap.status === "browser" || bootstrap.status === "ready",
     retry: false,
     // Draw a restored snapshot first, then verify it in the background on an
     // app open. That reconciles a transaction created in Telegram, the bot,
@@ -513,8 +514,6 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
   // Client initData is not an authentication boundary. Persisted finance data
   // may render only after this mount's startup request verifies the Telegram
   // signature/session on the server.
-  const canDrawCachedSnapshot =
-    snapshot !== null && financeData.isFetchedAfterMount;
   const refreshSnapshot = async () => {
     // Keep the previous snapshot visible during the request. Invalidating marks
     // it stale immediately, while refetch replaces it only with server truth.
@@ -1093,11 +1092,11 @@ export function GroshlyFinanceApp({ botId }: { botId: string }) {
     };
   };
 
-  if (
-    !financeData.isFetchedAfterMount ||
-    (bootstrap.status === "loading" && !canDrawCachedSnapshot)
-  ) {
+  if (!financeData.isFetchedAfterMount) {
     return <GroshlyLoadingScreen />;
+  }
+  if (financeData.isError || (bootstrap.status === "ready" && !financeData.data?.authenticated)) {
+    return <ConsumerFinanceBootstrapError onRetry={() => window.location.reload()} />;
   }
   if (!financeData.data?.authenticated) {
     if (typeof window !== "undefined" && window.location.pathname.startsWith("/app")) return <BrowserLoginRedirect />;

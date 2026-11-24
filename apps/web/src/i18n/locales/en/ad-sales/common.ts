@@ -48,6 +48,7 @@ const messages = {
   "ads.status_completed": "Completed",
   "ads.status_deleting": "Finishing",
   "ads.status_cancelled": "Cancelled",
+  "ads.no_active_promotions": "No active promotions.",
   "ads.hide_filters": "Hide filters",
   "ads.section_campaigns": "Ad campaigns",
   "ads.section_hypotheses": "Hypotheses",

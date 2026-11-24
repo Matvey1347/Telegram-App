@@ -133,6 +133,8 @@ describe('BotBillingAnalyticsService', () => {
           'runtime-1',
           {
             registeredUsers: 0,
+            activeUsers: 0,
+            activePaidUsers: 0,
             paidUsers: 0,
             activeSubscriptions: 0,
             failedPayments: 0,
@@ -168,6 +170,8 @@ describe('BotBillingAnalyticsService', () => {
 
     expect(summaries.get('runtime-1')).toEqual({
       registeredUsers: 3,
+      activeUsers: 3,
+      activePaidUsers: 0,
       paidUsers: 2,
       activeSubscriptions: 2,
       failedPayments: 1,
@@ -225,6 +229,8 @@ describe('BotBillingAnalyticsService', () => {
           'runtime-1',
           {
             registeredUsers: 1,
+            activeUsers: 1,
+            activePaidUsers: 0,
             activeSubscriptions: 1,
             paidUsers: 1,
             failedPayments: 0,
@@ -234,6 +240,8 @@ describe('BotBillingAnalyticsService', () => {
           'runtime-2',
           {
             registeredUsers: 4,
+            activeUsers: 4,
+            activePaidUsers: 0,
             activeSubscriptions: 2,
             paidUsers: 2,
             failedPayments: 1,

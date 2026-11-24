@@ -118,7 +118,10 @@ describe('CrossPromotionPlanReadService', () => {
     },
   );
 
-  it('does not show stale message views before a future placement starts', async () => {
+  it.each([
+    ['2099-01-01T10:00:00.000Z', null],
+    ['2026-09-28T10:00:00.000Z', 7_843],
+  ])('counts each published placement once, including albums (%s)', async (scheduledAt, expectedViews) => {
     const service = new CrossPromotionPlanReadService({
       telegramChannel: { findMany: jest.fn().mockResolvedValue([]) },
       promo: { findMany: jest.fn().mockResolvedValue([]) },
@@ -132,7 +135,13 @@ describe('CrossPromotionPlanReadService', () => {
           {
             id: 'post-1',
             telegramChannelId: 'channel-1',
-            telegramMessageIds: ['42'],
+            telegramMessageIds: ['42', '43'],
+            telegramRemoteStatus: 'PUBLISHED',
+          },
+          {
+            id: 'post-2',
+            telegramChannelId: 'channel-1',
+            telegramMessageIds: ['44'],
             telegramRemoteStatus: 'PUBLISHED',
           },
         ]),
@@ -145,6 +154,8 @@ describe('CrossPromotionPlanReadService', () => {
             viewsCount: 3943,
             reactionsCount: 0,
           },
+          { telegramChannelId: 'channel-1', telegramMessageId: '43', viewsCount: 3943, reactionsCount: 0 },
+          { telegramChannelId: 'channel-1', telegramMessageId: '44', viewsCount: 3900, reactionsCount: 0 },
         ]),
       },
     } as never);
@@ -168,24 +179,24 @@ describe('CrossPromotionPlanReadService', () => {
         publisherPlacements: [
           {
             telegramChannelId: 'channel-1',
-            scheduledAt: '2099-01-01T10:00:00.000Z',
+            scheduledAt,
           },
         ],
       },
-      scheduledAt: new Date('2099-01-01T10:00:00.000Z'),
+      scheduledAt: new Date(scheduledAt),
       trackingEndsAt: null,
       nextDueAt: null,
       baselineTargetCounters: [],
       baselinePublisherSubscribers: [],
       placementPostIds: [
         { telegramChannelId: 'channel-1', managedPostId: 'post-1' },
+        { telegramChannelId: 'channel-1', managedPostId: 'post-2' },
       ],
       createdAt: new Date('2026-09-28T10:00:00.000Z'),
       updatedAt: new Date('2026-09-28T10:00:00.000Z'),
     } as never);
 
-    expect(result.status).toBe('SCHEDULED');
-    expect(result.publisherResults[0].postViews).toBeNull();
+    expect(result.publisherResults[0].postViews).toBe(expectedViews);
   });
 
   it('uses workspace-scoped tracking-end counters for totals and placement deltas', async () => {
@@ -348,8 +359,26 @@ describe('CrossPromotionPlanReadService', () => {
         {
           telegramChannelId: 'publisher-1',
           telegramMessageId: '77',
+          text: 'Original placement text',
+          postDate: new Date('2026-09-14T09:00:00.000Z'),
           viewsCount: 321,
           reactionsCount: 9,
+        },
+        {
+          telegramChannelId: 'publisher-1',
+          telegramMessageId: '78',
+          text: 'Original placement text',
+          postDate: new Date('2026-09-15T09:00:00.000Z'),
+          viewsCount: 400,
+          reactionsCount: 5,
+        },
+        {
+          telegramChannelId: 'publisher-1',
+          telegramMessageId: '79',
+          text: 'Different campaign on the same channel',
+          postDate: new Date('2026-09-14T09:00:00.000Z'),
+          viewsCount: 900,
+          reactionsCount: 4,
         },
       ]),
     };
@@ -395,6 +424,10 @@ describe('CrossPromotionPlanReadService', () => {
             telegramChannelId: 'publisher-1',
             scheduledAt: '2026-09-14T09:00:00.000Z',
           },
+          {
+            telegramChannelId: 'publisher-1',
+            scheduledAt: '2026-09-15T09:00:00.000Z',
+          },
         ],
       },
       scheduledAt: new Date('2026-09-14T09:00:00.000Z'),
@@ -408,7 +441,7 @@ describe('CrossPromotionPlanReadService', () => {
     } as never);
 
     expect(result.publisherResults[0]).toEqual(
-      expect.objectContaining({ postViews: 321, postReactions: 9 }),
+      expect.objectContaining({ postViews: 721, postReactions: 14 }),
     );
     expect(telegramPost.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

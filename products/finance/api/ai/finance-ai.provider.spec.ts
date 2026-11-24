@@ -11,6 +11,7 @@ describe('FinanceAiProviderService', () => {
   function createService(options?: { fileSize?: number; text?: string }) {
     const prisma = {
       financeProfile: {
+        findFirst: jest.fn().mockResolvedValue({ telegramBotUserId: 'user-1' }),
         findUnique: jest.fn().mockResolvedValue({
           telegramBotUserId: 'user-1',
           botIntegration: { workspaceId: 'workspace-1' },
@@ -44,7 +45,10 @@ describe('FinanceAiProviderService', () => {
         contentType: 'audio/ogg',
       }),
     };
-    const entitlements = { reserve: jest.fn().mockResolvedValue({ id: 'reservation-1' }) };
+    const entitlements = {
+      reserve: jest.fn().mockResolvedValue({ id: 'reservation-1' }),
+      hasCapability: jest.fn().mockResolvedValue(true),
+    };
     const service = new FinanceAiProviderService(
       prisma as never,
       credentials as never,

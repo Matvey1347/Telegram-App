@@ -63,10 +63,10 @@ describe('TelegramAiPostingFailedRetryService', () => {
     );
   });
 
-  it('routes historic blank-text failures to the same saved slot', async () => {
+  it.each(['AI_POSTING_DRAFT_INVALID', 'AI_POSTING_CAPTION_INVALID'])('routes failed texts to the same saved slot (%s)', async (code) => {
     prisma.telegramAiPostingTestRun.findFirst.mockResolvedValue({
       version: 2, requestedCount: 4, status: 'PARTIAL', publications: [], operations: [],
-      failures: [{ code: 'AI_POSTING_DRAFT_INVALID', topic: 'A distinct topic',
+      failures: [{ code, topic: 'A distinct topic',
         publicationIndex: 2, reasons: ['Ответ должен содержать непустой текст публикации.'] }],
     });
     await service.regenerateFailedPublication('user-a', 'channel-a', 'run-a', 0, 2);

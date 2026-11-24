@@ -1,5 +1,6 @@
 "use client";
 
+import { MAX_TELEGRAM_AI_POSTING_BATCH_SIZE } from "@telegram-system/shared";
 import type { ReactNode } from "react";
 import { RotateCw } from "lucide-react";
 import { Button, Card, Input } from "@/components/ui/primitives";
@@ -36,7 +37,7 @@ export function AiPostingGenerationControls({
               aria-label="Число публикаций"
               type="number"
               min={1}
-              max={5}
+              max={MAX_TELEGRAM_AI_POSTING_BATCH_SIZE}
               value={requestedCount}
               disabled={pending || busy}
               onChange={(event) => onCountChange(event.target.value)}

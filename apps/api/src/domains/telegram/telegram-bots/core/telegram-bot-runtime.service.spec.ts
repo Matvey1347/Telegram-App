@@ -380,6 +380,44 @@ describe('TelegramBotRuntimeService environment isolation', () => {
     );
   });
 
+  it('replaces a revoked token for the same active bot without using the old credential', async () => {
+    const mode = TelegramBotRuntimeEnvironment.PRODUCTION;
+    environment.current.mockReturnValue(mode);
+    const production = { ...runtime('runtime-prod', mode), botId: '456' };
+    prisma.telegramBotIntegration.findUnique.mockResolvedValue(bot);
+    prisma.telegramBotRuntimeInstance.findUnique.mockResolvedValue(production);
+    prisma.telegramBotRuntimeInstance.upsert.mockResolvedValue(production);
+    api.getMe.mockResolvedValue({ id: 456, username: 'finance_bot' });
+
+    await service.configureRuntime({
+      botIntegrationId: bot.id,
+      environment: mode,
+      token: 'rotated-token',
+    });
+
+    expect(api.deleteWebhook).not.toHaveBeenCalled();
+    expect(prisma.telegramBotRuntimeInstance.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ botId: '456' }) }),
+    );
+    expect(registry.refresh).toHaveBeenCalledWith(production.id, mode);
+  });
+
+  it('validates a replacement token before detaching the active webhook', async () => {
+    const mode = TelegramBotRuntimeEnvironment.PRODUCTION;
+    environment.current.mockReturnValue(mode);
+    prisma.telegramBotIntegration.findUnique.mockResolvedValue(bot);
+    prisma.telegramBotRuntimeInstance.findUnique.mockResolvedValue(runtime('runtime-prod', mode));
+    api.getMe.mockRejectedValueOnce(new Error('Unauthorized'));
+
+    await expect(service.configureRuntime({
+      botIntegrationId: bot.id,
+      environment: mode,
+      token: 'invalid-token',
+    })).rejects.toThrow('Unauthorized');
+    expect(api.deleteWebhook).not.toHaveBeenCalled();
+    expect(prisma.telegramBotRuntimeInstance.upsert).not.toHaveBeenCalled();
+  });
+
   it('dispatches with the cached runtime token and execution runtime id', async () => {
     environment.current.mockReturnValue(TelegramBotRuntimeEnvironment.LOCAL);
     const local = runtime('local-1', TelegramBotRuntimeEnvironment.LOCAL);

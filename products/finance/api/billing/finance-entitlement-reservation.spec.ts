@@ -1,6 +1,22 @@
+import { ForbiddenException } from '@nestjs/common';
 import { FinanceEntitlementService } from '@consumer-finance/api/billing/finance-entitlement.service';
 
 describe('FinanceEntitlementService AI reservation dimensions', () => {
+  it('denies free AI before opening a usage reservation', async () => {
+    const prisma = {
+      botSubscription: { findMany: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn(),
+    };
+    const service = new FinanceEntitlementService(prisma as never);
+
+    await expect(service.reserve({
+      profileId: 'free-profile',
+      botIntegrationId: 'finance-bot',
+      telegramBotUserId: 'free-user',
+    }, 'AI_INPUT', 'test-model')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it('persists workspace and runtime dimensions for operator cost analytics', async () => {
     const usage = {
       count: jest.fn().mockResolvedValue(0),

@@ -3,12 +3,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FinanceRootApp } from "./finance-root-app";
 
 vi.mock("@finance-web/components/groshly-finance-app", () => ({
-  GroshlyFinanceApp: ({ botId }: { botId: string }) => <div>Finance application {botId}</div>,
+  GroshlyFinanceApp: ({ botId, bootstrap }: { botId: string; bootstrap: { initData?: string } }) => (
+    <div><span>Finance application {botId}</span>{bootstrap.initData && <span>Telegram launch ready</span>}</div>
+  ),
+}));
+vi.mock("@consumer-finance/web/components/app/consumer-finance-login", () => ({
+  ConsumerFinanceLogin: () => <button>Browser sign in</button>,
+  ConsumerFinanceBootstrapError: () => <p role="alert">Cannot read Telegram launch</p>,
 }));
 
 describe("FinanceRootApp", () => {
   afterEach(() => {
     window.localStorage.clear();
+    delete window.Telegram;
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -50,12 +57,20 @@ describe("FinanceRootApp", () => {
     expect(screen.queryByText(/Finance application/)).not.toBeInTheDocument();
   });
 
-  it("uses the bot id from a Telegram Mini App route without resolving another runtime", () => {
+  it("uses an explicit bot id without resolving another runtime", async () => {
     global.fetch = vi.fn(() => new Promise(() => {})) as typeof fetch;
 
     render(<FinanceRootApp botId="telegram-menu-bot" />);
 
-    expect(screen.getByText("Finance application telegram-menu-bot")).toBeInTheDocument();
+    expect(await screen.findByText("Finance application telegram-menu-bot")).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses Telegram launch data even when the Mini App opens the login route", async () => {
+    window.Telegram = { WebApp: { initData: "signed-telegram-launch" } };
+    render(<FinanceRootApp botId="telegram-menu-bot" entry="login" />);
+
+    expect(await screen.findByText("Telegram launch ready")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Browser sign in" })).toBeNull();
   });
 });

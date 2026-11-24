@@ -1,13 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Button,
-  Card,
-  FormField,
-  Input,
-  Select,
-} from "@/components/ui/primitives";
+import { Button, Card, Input, Select } from "@/components/ui/primitives";
 import { QueryContentState } from "@/components/ui/query-content-state";
 import {
   botBillingApi,
@@ -15,7 +9,7 @@ import {
   type BotBillingPlanView,
 } from "@/lib/features/finance/bot-billing-api";
 import { botBillingKeys } from "@/lib/query-keys";
-import { formatBillingMoney, toMinorUnits } from "./finance-billing-format";
+import { formatBillingMoney } from "./finance-billing-format";
 export function FinanceMonetizationSection({ botId }: { botId: string }) {
   const plans = useQuery({
     queryKey: botBillingKeys.plans(botId),
@@ -53,104 +47,78 @@ function Monetization({
   plans: BotBillingPlanView[];
   coupons: BotBillingCouponView[];
 }) {
-  const qc = useQueryClient();
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [description, setDescription] = useState("");
-  const [planId, setPlanId] = useState(plans[0]?.id ?? "");
-  const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState("UAH");
-  const [interval, setInterval] = useState<"MONTH" | "YEAR">("MONTH");
-  const refreshPlans = () =>
-    qc.invalidateQueries({ queryKey: botBillingKeys.plans(botId) });
-  const syncCatalog = useMutation({
-    mutationFn: () => botBillingApi.syncFinanceCatalog(botId),
-    onSuccess: refreshPlans,
-  });
-  const createPlan = useMutation({
-    mutationFn: () =>
-      botBillingApi.createPlan(botId, {
-        name,
-        code,
-        description: description || undefined,
-      }),
-    onSuccess: refreshPlans,
-  });
-  const createPrice = useMutation({
-    mutationFn: () => {
-      const amountMinor = toMinorUnits(amount);
-      if (!planId || amountMinor == null)
-        return Promise.reject(new Error("Enter a valid amount."));
-      return botBillingApi.addPrice(botId, planId, {
-        amountMinor,
-        currency,
-        interval,
-      });
-    },
-    onSuccess: refreshPlans,
-  });
+  const [tab, setTab] = useState<"plans" | "coupons">("plans");
+  const plus = plans.find((plan) => plan.code === "PRO");
   return (
     <div className="space-y-4">
-      <Card>
-        <h2 className="font-semibold">Finance plans</h2>
-        <p className="mt-1 text-sm text-neutral-400">Canonical catalog: Pro — 149 UAH/month; Ultimate — 249 UAH/month.</p>
+      <div className="flex gap-2" aria-label="Monetization">
         <Button
-          className="mt-3"
-          disabled={syncCatalog.isPending}
-          onClick={() => syncCatalog.mutate()}
+          variant={tab === "plans" ? undefined : "secondary"}
+          onClick={() => setTab("plans")}
         >
-          {syncCatalog.isPending ? "Syncing Stripe…" : "Sync plans with Stripe"}
+          Plans
         </Button>
-        {syncCatalog.isError ? <p className="mt-2 text-sm text-rose-300">Connect Stripe (secret key and webhook secret) before syncing plans.</p> : null}
-      </Card>
-      <div className="grid gap-4 xl:grid-cols-2">
-        {plans.map((plan) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            coupons={coupons.filter((coupon) => coupon.planId === plan.id)}
-            botId={botId}
-          />
-        ))}
+        <Button
+          variant={tab === "coupons" ? undefined : "secondary"}
+          onClick={() => setTab("coupons")}
+        >
+          Coupons
+        </Button>
       </div>
-      <CouponSection botId={botId} plans={plans} coupons={coupons} />
+      {tab === "plans" ? (
+        <Card>
+          <h2 className="font-semibold">Groshly PLUS</h2>
+          <p className="mt-1 text-sm text-neutral-400">
+            Plans sync automatically with connected Stripe accounts.
+          </p>
+          <div className="mt-4 space-y-2">
+            {plus?.prices
+              .filter((price) => price.isPublic && price.currency === "UAH")
+              .map((price) => (
+                <div
+                  key={price.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 p-3"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {price.interval === "DAY"
+                        ? "7 days, then monthly"
+                        : price.interval === "YEAR"
+                          ? "12 months"
+                          : price.intervalCount === 1
+                            ? "1 month"
+                            : "3 months"}
+                    </p>
+                    <p className="text-sm text-neutral-400">
+                      {formatBillingMoney(price.amountMinor, price.currency)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(["TEST", "LIVE"] as const).map((mode) => (
+                      <span
+                        key={mode}
+                        className="rounded-full border border-neutral-700 px-2 py-1 text-xs"
+                      >
+                        {mode} ·{" "}
+                        {price.stripeSynced?.includes(mode)
+                          ? "Synced"
+                          : "Not synced"}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            {!plus?.prices.some((price) => price.isPublic) && (
+              <p className="text-sm text-neutral-400">
+                Preparing the plan catalog. Refresh to check again.
+              </p>
+            )}
+          </div>
+        </Card>
+      ) : (
+        <CouponSection botId={botId} plans={plans} coupons={coupons} />
+      )}
     </div>
-  );
-}
-function PlanCard({
-  plan,
-  coupons,
-  botId,
-}: {
-  plan: BotBillingPlanView;
-  coupons: BotBillingCouponView[];
-  botId: string;
-}) {
-  return (
-    <Card>
-      <div className="flex justify-between gap-3">
-        <div>
-          <h3 className="font-semibold">{plan.name}</h3>
-          <p className="text-xs text-neutral-500">
-            {plan.code} · {plan.isActive ? "Active" : "Inactive"}
-          </p>
-        </div>
-      </div>
-      {plan.description ? (
-        <p className="mt-2 text-sm text-neutral-400">{plan.description}</p>
-      ) : null}
-      <div className="mt-3 space-y-1 text-sm">
-        {plan.prices.map((price) => (
-          <p key={price.id}>
-            {formatBillingMoney(price.amountMinor, price.currency)} /{" "}
-            {price.interval.toLowerCase()} · v{price.version}{" "}
-            {price.isPublic ? "public" : "grandfathered"}
-          </p>
-        ))}
-      </div>
-      <CouponList coupons={coupons} empty="No plan-specific coupons." />
-      <CreateCoupon botId={botId} plans={[plan]} fixedPlanId={plan.id} />
-    </Card>
   );
 }
 function CouponSection({
@@ -164,11 +132,8 @@ function CouponSection({
 }) {
   return (
     <Card>
-      <h2 className="font-semibold">All plans coupons</h2>
-      <CouponList
-        coupons={coupons.filter((coupon) => !coupon.planId)}
-        empty="No global coupons."
-      />
+      <h2 className="font-semibold">Coupons</h2>
+      <CouponList coupons={coupons} empty="No coupons yet." />
       <CreateCoupon botId={botId} plans={plans} />
     </Card>
   );

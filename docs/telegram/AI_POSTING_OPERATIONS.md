@@ -19,7 +19,7 @@ Configure these values in the normal local or deployment environment (never comm
 
 The OpenAI key is consumed only by the existing AI Gateway. It is used for both text and image requests; there is no separate image-provider key in this integration. Workspace and category enablement, provider/model selection, and workspace/category budget limits are configured in Operations > AI. AI Posting additionally accepts per-channel daily and monthly USD budgets; blank values leave the channel-specific cap unset while existing workspace/category caps continue to apply. An administrator can explicitly enable “AI Posting без денежных лимитов” in Operations > AI for a workspace. This removes workspace, category, and channel monetary admission caps for AI Posting only, for both manual and enabled automatic work; other AI categories retain their caps. Usage and reservations remain recorded, and provider, concurrency, authorization, and automatic enablement checks still apply. Disabling the option restores the saved limits. AI Posting consumption continues to count in workspace spending totals.
 
-Image behavior is selected per channel in AI Posting settings. **Found images** searches the enabled idea sources and does not call image generation if no usable image is found. **AI generation** generates through the existing `TELEGRAM_POSTING_IMAGE` Gateway category. **Hybrid** searches and validates candidates first, stores a usable result through B2, and falls back to AI generation only when no candidate passes checks. Broken external URLs are not saved to a post. B2 credentials are needed to persist generated/downloaded assets. The chosen media preference is stored with each new preview. For a preference with references, hybrid mode generates with its bounded reference sheet (up to eight images, each at most 2 MB) instead of choosing an unrelated stock image; media retries use the same preference. When the channel-avatar option is enabled, the stored avatar is applied as a watermark; a missing or unreadable avatar is reported rather than silently omitted. Historical previews without a saved preference are marked as unknown until media is regenerated.
+Image behavior is selected per channel in AI Posting settings. **Search first** searches enabled sources and open catalogs before requesting a generated image. **AI generation** generates through the existing `TELEGRAM_POSTING_IMAGE` Gateway category. **Hybrid** assigns search and AI slots according to the configured percentage. A search slot may fall back to AI generation. In a multi-post batch that prioritizes search, reserved AI slots and fallbacks together use at most half the batch. Text is retained when the quota is exhausted. Broken external URLs are not saved to a post. B2 credentials are needed to persist generated/downloaded assets. The chosen media preference is stored with each new preview. For a preference with references, hybrid mode generates with its bounded reference sheet (up to eight images, each at most 2 MB) instead of choosing an unrelated stock image; media retries use the same preference. When the channel-avatar option is enabled, the stored avatar is applied as a watermark; a missing or unreadable avatar is reported rather than silently omitted. Historical previews without a saved preference are marked as unknown until media is regenerated.
 
 ### PWA Push setup
 
@@ -63,11 +63,21 @@ Analytics use the detailed `AiOperation` ledger, filtered by workspace, channel,
 
 ### Media preferences and image sources
 
-Search and Hybrid modes try Openverse, with Wikimedia Commons as a fallback for empty or unavailable catalog results. Catalog results are restricted to public-domain or CC0 media. A selected preference supplies a general concept, a dedicated keyword and selection brief for search, a dedicated composition brief for generation, and up to eight references according to its Search, Generation or Both setting. In Hybrid mode, a Generation-only preference goes directly to generation. Available reference attachments are reused for a batch. If every configured attachment fails, the applicable media path reports a reference error.
+Search sources are stored per channel and included in settings import/export as
+`imageSearchSources`. The list contains HTTP(S) URLs. Wikimedia Commons has a native catalog adapter.
+Pinterest and other websites use Brave Image Search restricted to their domains and requires `BRAVE_SEARCH_API_KEY` on the API. Without that setting
+Pinterest is reported unavailable with an explicit configuration message in search details, and other enabled sources proceed. Selecting
+Pinterest does not establish an image reuse license.
 
-When references are available for search, up to three viable images enter one metered visual review. The review can select a matching image or reject the shortlist. If the search rounds find no match, hybrid search slots keep the text and show that automatic search found no suitable photo. The separate search-first mode can request one generated image. A preference marked Search supplies guidance and references to searching only. Its generation fallback uses the post topic without those references. For references with a generation brief, the visual review can select a single reference for the edit request and describe the framing, light and texture even when the shortlist is empty. The channel's existing URL and SHA-256 checks remain in use. New AI Posting images also store a visual fingerprint in run history to recognize resized or re-encoded copies.
+Search and Hybrid modes respect the configured source order. A Pinterest search begins with up to three distinct English phrases. With Pinterest first and Commons second, Commons is tried after the initial Pinterest shortlist fails. The automatic catalog uses Openverse and can fall back to Wikimedia Commons. Catalog results are restricted to public-domain or CC0 media. A selected preference supplies a general concept, a dedicated keyword and selection brief for search, a dedicated composition brief for generation, and up to eight references according to its Search, Generation or Both setting. In Hybrid mode, a Generation-only preference goes directly to generation. Available reference attachments are reused for a batch. If every configured attachment fails, the applicable media path reports a reference error.
 
-New runs use up to five automatic search rounds, with at most three parallel queries and six candidate downloads per round. Each round can review one shortlist. Generation runs only where the selected mode allows it. All AI requests use the existing budget and usage ledger. This path adds no polling, timers or background database writes.
+When references are available for search, up to three viable images enter one metered visual review. The review can select a matching image or reject the shortlist. Search-first mode can request a generated image after exhausting the search. Hybrid search slots keep the search-first order on retries and fall back to generation. A preference marked Search supplies guidance and references to searching only. A Search preference explicitly linked to an assigned sphere or subsphere requires a real image. When possible, Hybrid swaps that slot with another search slot to preserve its planned mix. For other search preferences with fallback enabled, generation uses the post topic without the search references. For references with a generation brief, the visual review can select a single reference for the edit request and describe the framing, light and texture even when the shortlist is empty. The channel's existing URL and SHA-256 checks remain in use. New AI Posting images also store a visual fingerprint in run history to recognize resized or re-encoded copies.
+
+Planning uses the configured assignments and recent usage. The generator reads up to eight recent runs in one channel-scoped query to favor underused subspheres and rubrics. Lengths rotate across batches, and an ultra-short quote can select its matching rubric and subsphere.
+
+After topic planning, one test run can contain up to ten publications. All publication pipelines can start text work after planning. Up to five media pipelines run concurrently, so a slow search does not delay text for other slots. Each completed preview is saved immediately and final results retain topic order. A two-choice draft returns the labels separately, and the server formats the reaction lines. Media links in model-authored copy are removed before caption validation. The progress bar counts settled publications, and the stage list tracks each publication independently. The batch shares reference downloads and image history, and reserves image identities and fallback slots to prevent reuse and quota overruns. AI gateway admission and provider timeouts remain in effect. The batch waits for a sibling that passed admission before retrying a capacity rejection. When progress is read, a background run with four minutes of inactivity is reported as interrupted. Starting a new run clears its active status. No recurring work is added for idle channels.
+
+Catalog search uses bounded rounds with at most three parallel queries and six candidate downloads per round. The first pass covers the configured sources in order. Alternate queries and a later result window use the first three sources. Each round can review one shortlist. Generation runs only where the selected mode allows it. All AI requests use the existing budget and usage ledger. Media search checkpoints are written when another search round begins. This path adds no polling or timers.
 
 ## Verification
 
@@ -142,9 +152,11 @@ An image assigned to search tries up to five rounds using WordPress Photo
 Directory, Openverse and Wikimedia Commons. Later rounds use shorter English
 phrases, different catalogs and later result pages. Only fresh, reusable results
 are downloaded, and each round sends at most three candidates to visual
-review. Empty rounds do not incur a model call. An exhausted hybrid search consumes no image
-generation slot. Budget rejections and uncertain settlements stop paid
-processing, and the text stays available if media processing fails.
+review. Empty rounds do not incur a model call. A search miss can trigger one
+image generation request under the existing AI budget. If media still fails,
+the preview keeps the text for editing and a media-only retry. Approval,
+draft saving, and System Bot export require a ready image. Autopilot skips
+failed media slots and continues with the ready publications.
 
 The test-run publication stores the last nine search-round summaries and
 actual usage operations in its existing JSON. The cost panel groups stage
@@ -153,12 +165,13 @@ token counts and confirmed cost where recorded. Planning shows both its
 full batch request and the allocated share in the individual publication.
 
 There is no additional polling, cross-workspace query or storage table.
-Per search publication the upper bound is six catalog lookups (at most
-ten HTTP catalog requests including fallbacks), eighteen bounded image
-downloads and three visual checks. Work starts only for an active
+Per search publication the upper bound is 12 catalog lookups (at most
+18 HTTP catalog requests including fallbacks), 30 bounded image downloads,
+five shortlist reviews, one optional reference review and one image
+generation request. Work starts only for an active
 publication. At one simultaneous search per 100 active channels these
-bounds scale to 1,000 catalog requests, 1,800 image downloads and 300
-visual checks. Early matches stop further rounds. Idle Neon activity and
+bounds scale to 1,800 catalog requests, 3,000 image downloads, 600
+visual reviews and 100 fallback image requests. Early matches stop further rounds. Idle Neon activity and
 Railway process count are unchanged.
 
 

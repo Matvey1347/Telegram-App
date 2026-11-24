@@ -28,6 +28,12 @@ export class CreateBillingPlanDto {
 export class CreateBillingPlanPriceDto {
   @IsString() @MinLength(3) currency!: string;
   @IsIn(['MONTH', 'YEAR']) interval!: 'MONTH' | 'YEAR';
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  intervalCount?: number;
   @Type(() => Number) @IsInt() @Min(1) amountMinor!: number;
 }
 
