@@ -1,6 +1,6 @@
 export const MAX_TELEGRAM_AI_POSTING_BATCH_SIZE = 10;
 
-export const DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT = 70;
+export const DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT = 80;
 
 export function isTelegramAiPostingEmptyTextFailure(failure: { code: string; reasons?: string[] }) {
   return failure.code === 'AI_POSTING_TEXT_EMPTY' ||
@@ -121,10 +121,10 @@ export function telegramAiPostingRunSlots(run: {
   return slots.map((slot) => slot ?? pending.shift() ?? {});
 }
 
-export type TelegramAiPostingMediaStep = 'SEARCH_REVIEW' | 'REFERENCE_REVIEW' | 'GENERATE';
+export type TelegramAiPostingMediaStep = 'WEB_SEARCH' | 'SEARCH_REVIEW' | 'REFERENCE_REVIEW' | 'GENERATION_REVIEW' | 'GENERATE';
 
 export const TELEGRAM_AI_POSTING_IMAGE_SOURCES = ['pinterest', 'auto', 'wikimedia', 'wordpress-photos'] as const;
-export type TelegramAiPostingImageCatalog = typeof TELEGRAM_AI_POSTING_IMAGE_SOURCES[number] | 'website';
+export type TelegramAiPostingImageCatalog = typeof TELEGRAM_AI_POSTING_IMAGE_SOURCES[number] | 'website' | 'openai';
 
 export const DEFAULT_TELEGRAM_AI_POSTING_IMAGE_URLS = [
   "https://www.pinterest.com/",
@@ -198,3 +198,72 @@ export type TelegramAiPostingRunProgressRead = {
 };
 
 export type TelegramAiPostingRunAccepted = { runId: string };
+
+export type TelegramAiPostingAutopilotRunSummary = {
+  generated: number;
+  scheduled: number;
+  costs?: Record<string, string>;
+  unknownCosts?: number;
+};
+
+export type TelegramAiPostingAutopilotActivity = {
+  id: string;
+  status: string;
+  startedAt: string;
+  completedAt: string | null;
+  errorCodes: string[];
+  summary: TelegramAiPostingAutopilotRunSummary | null;
+  stages: Array<{
+    id: string;
+    stage: string;
+    startedAt: string;
+    targetCount: number | null;
+  }>;
+};
+
+export type TelegramAiPostingAutopilotState = {
+  enabled: boolean;
+  nextRunAt: string | null;
+  lastStatus: string | null;
+  lastError: string | null;
+  activeStage: string | null;
+  automaticGenerationAvailable: boolean;
+  weeklySlotsMin: number;
+  weeklySlotsMax: number;
+  drafts: number;
+  draftsToGenerate: number;
+  targetReadyDrafts: number;
+  readyDrafts: number;
+  scheduledThrough: string | null;
+  activeRunId: string | null;
+  history: TelegramAiPostingAutopilotActivity[];
+  lastRun: TelegramAiPostingAutopilotRunSummary | null;
+};
+
+export type TelegramAiPostingAnalysisPerformanceExample = {
+  messageId: string;
+  score24h: number;
+  engagementPer1k24h: number | null;
+};
+
+export type TelegramAiPostingChannelAnalysis = {
+  schemaVersion: 2;
+  channelId: string;
+  configurationVersion: number;
+  configuration: Record<string, unknown>;
+  coverage: {
+    organicPosts: number;
+    excludedPosts: number;
+    scoredPosts: number;
+    sampledPosts: number;
+    visualExamples: number;
+    classifiedPosts: number;
+    firstPost: string;
+    lastPost: string;
+  };
+  findings: string;
+  performanceExamples: {
+    high: TelegramAiPostingAnalysisPerformanceExample[];
+    low: TelegramAiPostingAnalysisPerformanceExample[];
+  };
+};

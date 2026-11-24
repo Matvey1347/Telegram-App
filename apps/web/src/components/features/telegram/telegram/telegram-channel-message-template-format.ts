@@ -8,7 +8,7 @@ import type {
 export const DEFAULT_CHANNEL_MESSAGE_TEMPLATE = `{{#channels}}
 {{emoji}} [{{title}}]({{invite_link}}){{#tgstat}} - [TgStat]({{tgstat_url}}){{/tgstat}}
 {{#products}}
-{{product_name}} - **{{product_price}} {{product_currency}}**
+{{product_name}} - **{{product_price}}{{product_currency}}**
 {{/products}}
 
 {{/channels}}`;
@@ -79,7 +79,7 @@ export function buildTelegramChannelMessageTemplate(
   return `{{#channels}}
 ${heading}${description}
 {{#products}}
-{{product_name}} - **{{product_price}} {{product_currency}}**${productViews}
+{{product_name}} - **{{product_price}}{{product_currency}}**${productViews}
 {{/products}}${channelGap}{{/channels}}`;
 }
 
@@ -353,12 +353,6 @@ export function renderTelegramChannelMessageTemplate(
     /\{\{product_name\}\}\s+—\s+\*\*/g,
     "{{product_name}} - **",
   );
-  if (options?.priceCurrency) {
-    template = template.replace(
-      /\{\{product_price\}\}\s+\{\{product_currency\}\}/g,
-      "{{product_price}}{{product_currency}}",
-    );
-  }
   const priority = new Map(
     (options?.channelOrder || []).map((id, index) => [id, index]),
   );

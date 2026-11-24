@@ -24,10 +24,12 @@ vi.mock(
     TelegramPostPreview: ({
       text,
       channelPhotoUrl,
+      captionLengthMax,
       onTextChange,
     }: {
       text: string;
       channelPhotoUrl?: string | null;
+      captionLengthMax?: number;
       onTextChange?: (value: string) => void;
     }) =>
       onTextChange ? (
@@ -35,10 +37,11 @@ vi.mock(
           aria-label="Редактировать текст публикации"
           value={text}
           data-channel-photo={channelPhotoUrl}
+          data-caption-limit={captionLengthMax}
           onChange={(event) => onTextChange(event.target.value)}
         />
       ) : (
-        <div data-testid="telegram-preview">{text}</div>
+        <div data-testid="telegram-preview" data-caption-limit={captionLengthMax}>{text}</div>
       ),
   }),
 );
@@ -374,6 +377,13 @@ describe("AiPostingTestConsole", () => {
         review: "0.012",
       },
     });
+    Object.assign(run, {
+      requestedCount: 2,
+      planningCost: "0.024",
+      textCost: "0.066",
+      imageCost: "0.082",
+      reviewCost: "0.024",
+    });
     run.publications = [
       run.publications[0],
       { ...run.publications[0], topic: "Second topic", title: "Second title" },
@@ -383,11 +393,14 @@ describe("AiPostingTestConsole", () => {
       <AiPostingTestConsole
         channelId="channel-1"
         channelTitle="Channel"
+        captionLengthMax={4096}
         settingsReady
       />,
     );
     expect(await screen.findByText("Идея: A useful topic")).toBeInTheDocument();
-    expect(screen.getByText("Итого: $0.11")).toBeInTheDocument();
+    expect(screen.getByText("За эту публикацию: $0.11")).toBeInTheDocument();
+    expect(screen.getByText("Итого за запуск (публикаций: 2): $0.196")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Редактировать текст публикации" })).toHaveAttribute("data-caption-limit", "4096");
     expect(screen.getByText("Публикация 1 из 2")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Следующая публикация" }),

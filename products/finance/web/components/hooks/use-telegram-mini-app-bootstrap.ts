@@ -12,6 +12,7 @@ type TelegramWebApp = {
   ready?: () => void;
   expand?: () => void;
   disableVerticalSwipes?: () => void;
+  openTelegramLink?: (url: string) => void;
   openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
 };
 

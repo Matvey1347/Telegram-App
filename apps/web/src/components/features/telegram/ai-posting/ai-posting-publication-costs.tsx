@@ -18,8 +18,10 @@ const searchOutcome: Record<TelegramAiPostingImageSearchRound["outcome"], string
 function operationLabel(operation: Publication["operations"][number], number: number) {
   if (operation.textStep === "SHORTEN") return "Сокращение подписи";
   switch (operation.mediaStep) {
+    case "WEB_SEARCH": return "Поиск изображений в интернете";
     case "SEARCH_REVIEW": return "Оценка найденных изображений";
     case "REFERENCE_REVIEW": return "Анализ референсов";
+    case "GENERATION_REVIEW": return "Проверка сгенерированного изображения";
     case "GENERATE": return "Генерация изображения";
   }
   if (operation.category === "TELEGRAM_POSTING_IMAGE") return "Генерация изображения";
@@ -36,7 +38,7 @@ export function AiPostingPublicationCosts({ post }: { post: Publication }) {
       <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm">
         <span>Модели и расходы</span>
         <strong className="text-neutral-200">
-          Итого: {total === null ? "стоимость не рассчитана" : money(total)}
+          За эту публикацию: {total === null ? "стоимость не рассчитана" : money(total)}
         </strong>
       </summary>
       <div className="mt-3 space-y-3 text-xs text-neutral-300">
@@ -83,7 +85,7 @@ export function AiPostingPublicationCosts({ post }: { post: Publication }) {
                       {round.queries.map((query, queryIndex) => (
                         <p key={queryIndex} className="break-words text-neutral-400">
                           {query.domain ?? (query.catalog === "pinterest" ? "Pinterest" : query.catalog === "wordpress-photos" ? "WordPress Photo Directory"
-                            : query.catalog === "wikimedia" ? "Wikimedia Commons" : "Openverse / Wikimedia Commons")}
+                            : query.catalog === "wikimedia" ? "Wikimedia Commons" : query.catalog === "openai" ? "OpenAI · весь интернет" : "Openverse / Wikimedia Commons")}
                           {" · "}{query.text}{" · стр. "}{query.page}
                           {query.unavailable ? " · каталог недоступен" : ` · результатов: ${query.candidates}`}
                         </p>

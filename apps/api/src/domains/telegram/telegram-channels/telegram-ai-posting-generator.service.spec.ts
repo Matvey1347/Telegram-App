@@ -115,6 +115,30 @@ describe('TelegramAiPostingGeneratorService', () => {
     expect(assigned.filter(({ rubric }) => rubric?.id === 'evidence').every(({ sphere }) => sphere.id === 'prevention')).toBe(true);
   });
 
+  it('rotates an ultra-short morning note with the quote rubric', () => {
+    const config = {
+      spheres: [
+        { id: 'growth', tier: 'PRIMARY' },
+        { id: 'voices', parentId: 'growth' },
+        { id: 'mornings', parentId: 'growth' },
+      ],
+      rubrics: [
+        { id: 'quote', sphereId: 'voices', lengthIds: ['ultra'] },
+        { id: 'wish', sphereId: 'mornings', lengthIds: ['ultra', 'short'] },
+      ],
+      lengths: [
+        { id: 'ultra', minCharacters: 0, maxCharacters: 99 },
+        { id: 'short', minCharacters: 100, maxCharacters: 299 },
+      ],
+    };
+    const quote = telegramAiPostingEditorialSelection(config, 0, 0);
+    const morning = telegramAiPostingEditorialSelection(config, 2, 2, [quote]);
+    expect(quote.rubric.id).toBe('quote');
+    expect(morning.rubric.id).toBe('wish');
+    expect(morning.sphere.id).toBe('mornings');
+    expect(morning.lengths[0].id).toBe('ultra');
+  });
+
   it('replans repeated topics and searches for the subsphere’s assigned real image even in AI mode', async () => {
     prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
       configuration: {
@@ -157,10 +181,54 @@ describe('TelegramAiPostingGeneratorService', () => {
     expect(result.generated[0].editorialMetadata?.sphere?.id).toBe('biography');
     expect(result.generated[0].mediaPreference?.id).toBe('portraits');
     expect(images.resolve).toHaveBeenCalledWith(expect.objectContaining({
-      imageMode: 'found', fallbackToGeneration: false,
+      imageMode: 'found', fallbackToGeneration: true,
       searchQuery: expect.stringContaining('Jane Austen portrait'),
       searchDescription: 'Locate a real photograph of the named author',
     }));
+  });
+
+  it('repairs an overlong short vote without losing its reaction choices or media brief', async () => {
+    const topic = 'Як обрати темп роботи, який вам підходить?';
+    const choices = ['Спокійний ритм', 'Більше змін'];
+    const imageSearchQuery = 'morning desk notebook, hands opening planner';
+    prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
+      configuration: {
+        language: 'uk', imageMode: 'found',
+        rubrics: [{ id: 'vote', name: 'Дві реакції', lengthIds: ['short'] }],
+        lengths: [{ id: 'short', minCharacters: 100, maxCharacters: 299 }],
+      },
+      configurationVersion: 1,
+    });
+    sources.collect.mockResolvedValue({
+      editorialProfile: { language: 'uk' }, sourceContexts: [],
+      existingPosts: [], history: [], imageCandidates: [], sourceRefs: [],
+    });
+    planningContext.read.mockResolvedValue({ schedule: null, hypotheses: [] });
+    gateway.execute.mockImplementation(({ category, postingDraft }) => ({
+      operation: { category, model: 'test', status: 'SUCCEEDED', actualCost: '0.01', pricingStatus: 'PRICED' },
+      result: { reply: category === 'TELEGRAM_POSTING_PLAN'
+        ? JSON.stringify({ topics: [topic] })
+        : category === 'TELEGRAM_POSTING_REVIEW'
+          ? '{"approved":true,"reasons":[]}'
+          : postingDraft
+            ? JSON.stringify({ title: topic, text: 'Іноді плани на роботу змінюються. '.repeat(16), voteOptions: choices, imageSearchQuery })
+            : JSON.stringify({ text: 'Одним допомагає передбачуваний ритм, іншим потрібні нові завдання. Який варіант ви обираєте сьогодні?' }),
+      },
+    }));
+    images.resolve.mockResolvedValue({
+      image: { url: 'https://media.example/desk.jpg', sourceId: 'search' }, readiness: 'READY',
+    });
+
+    const result = await service.generate('user-1', 'channel-1', 1);
+
+    expect(result.generated[0]).toEqual(expect.objectContaining({
+      title: topic, imageSearchQuery, imageUrl: 'https://media.example/desk.jpg',
+    }));
+    expect(result.generated[0].text).toContain('👍 — Спокійний ритм');
+    expect(result.generated[0].text).toContain('💬 — Більше змін');
+    expect(result.generated[0].text.length).toBeGreaterThanOrEqual(100);
+    expect(result.generated[0].text.length).toBeLessThanOrEqual(299);
+    expect(gateway.execute.mock.calls.filter(([request]) => request.category === 'TELEGRAM_POSTING_TEXT')).toHaveLength(2);
   });
 
   it('processes ten slots in one run and normalizes emoji votes and media links', async () => {
@@ -168,7 +236,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     const topics = Array.from({ length: count }, (_, index) => `Editorial topic number ${index + 1}`);
     prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
       configuration: {
-        language: 'en', imageMode: 'ai', emojiPolicy: 'start',
+        language: 'en', imageMode: 'hybrid', hybridSearchPercent: 80, emojiPolicy: 'start',
         rubrics: [{ id: 'vote', name: 'Two reactions', lengthIds: [] }],
       },
       configurationVersion: 1,
@@ -215,6 +283,9 @@ describe('TelegramAiPostingGeneratorService', () => {
     }
     const result = await generation;
     expect(result.failures).toEqual([]);
+    expect(images.resolve.mock.calls.filter(([request]) => request.imageMode === 'found')).toHaveLength(8);
+    expect(images.resolve.mock.calls.filter(([request]) => request.imageMode === 'ai')).toHaveLength(2);
+    expect(new Set(result.generated.map(({ imageUrl }) => imageUrl)).size).toBe(10);
     expect(onProgress.mock.calls.filter(([event]) => event.stage === 'publication' && event.status === 'COMPLETED')
       .map(([event]) => event.publicationIndex).sort((a, b) => a - b)).toEqual(topics.map((_, index) => index));
     expect(result.generated.map(({ topic }) => topic)).toEqual(topics);
@@ -243,7 +314,7 @@ describe('TelegramAiPostingGeneratorService', () => {
       rejectSource = reject;
     }));
     const controller = new TelegramAiPostingController(
-      {} as never, service, testRuns, {} as never, {} as never, {} as never,
+      {} as never, service, testRuns, {} as never, {} as never, {} as never, {} as never,
     );
 
     await expect(controller.generateInBackground({ sub: 'user-1' } as never, 'channel-1', { count: 1 }))
@@ -267,7 +338,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     });
     prisma.telegramAiPostingTestRun.findFirst.mockResolvedValueOnce({ id: 'active-run', version: 1 });
     const controller = new TelegramAiPostingController(
-      {} as never, service, testRuns, {} as never, {} as never, {} as never,
+      {} as never, service, testRuns, {} as never, {} as never, {} as never, {} as never,
     );
 
     await expect(controller.generateInBackground({ sub: 'user-1' } as never, 'channel-1', { count: 1 }))
@@ -307,7 +378,7 @@ describe('TelegramAiPostingGeneratorService', () => {
       image: { url: 'https://media.example/ready.jpg', sourceId: 'source-1' }, readiness: 'READY',
     });
     const controller = new TelegramAiPostingController(
-      {} as never, service, testRuns, {} as never, {} as never, {} as never,
+      {} as never, service, testRuns, {} as never, {} as never, {} as never, {} as never,
     );
     const settled = new Promise<unknown>((resolve) => {
       prisma.telegramAiPostingTestRun.update.mockImplementationOnce(async (args) => {
@@ -1750,7 +1821,7 @@ describe('TelegramAiPostingGeneratorService', () => {
     );
   });
 
-  it('keeps search slots within the fallback limit while generating both a quote and a long illustrated post', async () => {
+  it('uses fallback for every exhausted search while generating both a quote and a long illustrated post', async () => {
     prisma.telegramAiPostingSettings.findFirst.mockResolvedValue({
       configuration: {
         language: 'en', imageMode: 'hybrid', hybridSearchPercent: 80,
@@ -1772,12 +1843,12 @@ describe('TelegramAiPostingGeneratorService', () => {
       existingPosts: [], history: [], imageCandidates: [], sourceRefs: [],
     });
     planningContext.read.mockResolvedValue({ schedule: null, hypotheses: [] });
-    images.resolve.mockImplementation(async ({ imageMode, fallbackToGeneration, claimGenerationFallback, aiPosting }) =>
+    images.resolve.mockImplementation(async ({ imageMode, fallbackToGeneration, aiPosting }) =>
       aiPosting.publicationIndex === 1
         ? { image: { url: 'https://media.example/photo.jpg', sourceId: 'wikimedia-commons' }, readiness: 'READY' }
-        : imageMode === 'ai' || (fallbackToGeneration && claimGenerationFallback())
+        : imageMode === 'ai' || fallbackToGeneration
         ? { image: { url: 'https://media.example/generated.jpg', sourceId: 'openai-image-generation' }, readiness: 'READY' }
-        : { image: null, readiness: 'MISSING', failureCode: 'AI_POSTING_IMAGE_SEARCH_SHARE_LIMIT' },
+        : { image: null, readiness: 'MISSING', failureCode: 'AI_POSTING_IMAGE_SEARCH_EXHAUSTED' },
     );
     const draftTexts = [
       'Rest is allowed even before everything is finished.',
@@ -1797,10 +1868,10 @@ describe('TelegramAiPostingGeneratorService', () => {
     const result = await service.generate('user-1', 'channel-1', 4);
 
     expect(result.generated.map((item) => [item.editorialMetadata?.length?.id, item.imageSourceId]))
-      .toEqual([['quote', 'openai-image-generation'], ['long', 'wikimedia-commons'], ['short', 'openai-image-generation'], ['medium', null]]);
+      .toEqual([['quote', 'openai-image-generation'], ['long', 'wikimedia-commons'], ['short', 'openai-image-generation'], ['medium', 'openai-image-generation']]);
     expect(result.generated[0].editorialMetadata?.rubric?.id).toBe('quotes');
     expect(result.generated[1].text.length).toBeGreaterThan(1200);
-    expect(result.failures.map(({ code }) => code)).toEqual(['AI_POSTING_IMAGE_SEARCH_SHARE_LIMIT']);
+    expect(result.failures).toEqual([]);
   });
 
   it.each([false, true])('repairs an empty text slot and accounts for planning retries (invalid initial plan: %s)', async (invalidPlan) => {

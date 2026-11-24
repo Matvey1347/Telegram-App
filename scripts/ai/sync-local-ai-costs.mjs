@@ -18,6 +18,18 @@ const {
 const { PrismaClient, Prisma } = require("@prisma/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
 
+export function readPendingAiReceiptBatch(database, afterId) {
+  // Acknowledging a batch removes its last receipt from this filter.
+  return database.aiOperation.findMany({
+    where: {
+      source: "LOCAL_UNSYNCED",
+      ...(afterId ? { id: { gt: afterId } } : {}),
+    },
+    orderBy: { id: "asc" },
+    take: 100,
+  });
+}
+
 export async function runAiSync(mode = "--dry-run") {
   if (!["--dry-run", "--execute", "--check"].includes(mode))
     throw new Error("Use --dry-run, --execute or --check");
@@ -106,12 +118,7 @@ export async function runAiSync(mode = "--dry-run") {
     let cost = new Prisma.Decimal(0);
     const workspaces = new Map();
     while (true) {
-      const rows = await local.aiOperation.findMany({
-        where: { source: "LOCAL_UNSYNCED" },
-        orderBy: { id: "asc" },
-        take: 100,
-        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      });
+      const rows = await readPendingAiReceiptBatch(local, cursor);
       if (!rows.length) break;
       for (const row of rows) {
         report.considered++;

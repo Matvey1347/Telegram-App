@@ -2,7 +2,8 @@ import type { Transaction, Transfer } from "@/lib/api";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { formatDate } from "@/lib/date-format";
 import { FinanceActionMenu } from "./finance-action-menu";
-import { AccountPreview, CurrencyAmount } from "./finance-format";
+import { AccountPreview } from "./finance-format";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { transactionAvatar } from "./transaction-avatar";
 
 export function FinanceTransactionRow({

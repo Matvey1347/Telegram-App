@@ -21,6 +21,7 @@ export type TelegramAiPostingTestRunOperation = TelegramAiPostingOperationContex
   outputTokens: number | null;
 };
 export type TestPublication = {
+  visualDirection?: string;
   publicationIndex?: number;
   topic: string;
   title: string;

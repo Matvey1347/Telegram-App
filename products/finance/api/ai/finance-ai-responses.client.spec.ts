@@ -116,6 +116,26 @@ describe('requestFinanceStructuredResponse', () => {
     });
   });
 
+  it('keeps the measured usage and marks an incomplete streamed reply', async () => {
+    global.fetch = jest.fn().mockResolvedValue(new Response(
+      'data: {"type":"response.output_text.delta","delta":"partial"}\n\n' +
+      'data: {"type":"response.incomplete","response":{"usage":{"input_tokens":120,"output_tokens":900},"incomplete_details":{"reason":"max_output_tokens"}}}\n\n',
+      { status: 200 },
+    )) as never;
+
+    await expect(requestFinanceStructuredResponse({
+      ...input,
+      reasoningEffort: 'low',
+      onOutputTextDelta: jest.fn(),
+    })).resolves.toEqual({
+      text: undefined,
+      usage: { input_tokens: 120, output_tokens: 900 },
+      incompleteReason: 'max_output_tokens',
+    });
+    const [, request] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(JSON.parse(request.body).reasoning).toEqual({ effort: 'low' });
+  });
+
   it('does not retry a rejected credential', async () => {
     const fetchMock = jest
       .fn()

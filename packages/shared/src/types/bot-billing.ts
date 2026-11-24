@@ -60,7 +60,7 @@ export type BotBillingOverviewView = {
     estimatedCostMicros: number;
     unpricedRequests: number;
     byModel: Array<{ model: string; requests: number; inputTokens: number; outputTokens: number; estimatedCostMicros: number | null }>;
-    byUser: Array<{ telegramBotUserId: string; telegramUserId: string; username: string | null; firstName: string | null; requests: number; estimatedCostMicros: number | null }>;
+    byUser: Array<{ telegramBotUserId: string; telegramUserId: string; username: string | null; firstName: string | null; planName?: string | null; requests: number; estimatedCostMicros: number | null }>;
   };
   recentActivity: Array<{
     id: string;
@@ -104,6 +104,7 @@ export type BotBillingUserPage = {
     languageCode: string | null;
     environment: "LOCAL" | "PRODUCTION";
     firstSeenAt: string;
+    aiUsage?: { requests: number; estimatedCostMicros: number | null; unpricedRequests: number };
     lastInteractionAt: string;
     profile: { id: string; locale: string; defaultCurrency: string; timezone: string; onboardingCompleted: boolean } | null;
     subscription: { id: string; status: BotSubscriptionStatus; source: BotSubscriptionSource; currentPeriodEnd: string | null; plan: { id: string; name: string; code: string } | null } | null;

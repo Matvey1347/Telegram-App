@@ -55,10 +55,19 @@
 }
 
 @media (min-width: 1024px) {
+  .sidebar,
   .content {
-    width: calc(100% - 16rem);
+    --desktop-sidebar-width: 19rem;
+  }
+
+  .sidebar {
+    width: var(--desktop-sidebar-width);
+  }
+
+  .content {
+    width: calc(100% - var(--desktop-sidebar-width));
     min-height: 100vh;
-    margin-left: 16rem;
+    margin-left: var(--desktop-sidebar-width);
     padding: 1.25rem;
   }
 }

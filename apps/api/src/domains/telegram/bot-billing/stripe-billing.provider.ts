@@ -11,6 +11,10 @@ import {
   Prisma,
 } from '@prisma/client';
 import Stripe from 'stripe';
+import {
+  createStripePlanChangeSession,
+  getStripeRenewalPreview,
+} from './stripe-subscription-management';
 import { TokenEncryptionService } from '../../../common/security/token-encryption.service';
 import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -451,6 +455,36 @@ export class StripeBillingProvider {
         subscription as unknown as { current_period_end?: number }
       ).current_period_end,
     };
+  }
+
+  async planChangePortal(input: {
+    botIntegrationId: string;
+    mode: BotBillingProviderMode;
+    customerId: string;
+    providerSubscriptionId: string;
+    priceId: string;
+    returnUrl: string;
+  }) {
+    const { key } = await this.resolvedConfig(
+      input.botIntegrationId,
+      input.mode,
+    );
+    return createStripePlanChangeSession(new Stripe(key), input);
+  }
+
+  async renewal(input: {
+    botIntegrationId: string;
+    mode: BotBillingProviderMode;
+    providerSubscriptionId: string;
+  }) {
+    const { key } = await this.resolvedConfig(
+      input.botIntegrationId,
+      input.mode,
+    );
+    return getStripeRenewalPreview(
+      new Stripe(key, { timeout: 4000, maxNetworkRetries: 0 }),
+      input.providerSubscriptionId,
+    );
   }
 
   async portal(input: {

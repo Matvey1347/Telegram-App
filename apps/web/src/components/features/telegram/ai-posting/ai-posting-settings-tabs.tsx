@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Film, MessageCircle, PenLine, Sparkles } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, Film, MessageCircle, PenLine, Sparkles } from "lucide-react";
 import { useI18n } from "@/providers/i18n-provider";
 
 export type AiPostingSettingsTab =
@@ -6,13 +6,15 @@ export type AiPostingSettingsTab =
   | "idea"
   | "writing"
   | "images"
+  | "autopilot"
   | "transfer";
 
 const options = [
-  { value: "chat", label: "Чат", icon: MessageCircle },
+  { value: "autopilot", icon: CalendarClock },
   { value: "idea", label: "Идея канала", icon: Sparkles },
   { value: "writing", label: "Как писать", icon: PenLine },
   { value: "images", label: "Медиа", icon: Film },
+  { value: "chat", label: "Чат", icon: MessageCircle },
   { value: "transfer", icon: ArrowLeftRight },
 ] as const;
 
@@ -49,7 +51,7 @@ export function AiPostingSettingsTabs({
           }`}
         >
           <Icon size={13} aria-hidden="true" />
-          <span>{"label" in option ? option.label : t("telegram.posts.aiPostingTransfer.tab")}</span>
+          <span>{"label" in option ? option.label : t(tab === "autopilot" ? "telegram.posts.aiPostingAutopilot.tab" : "telegram.posts.aiPostingTransfer.tab")}</span>
         </a>
       ))}
     </div>

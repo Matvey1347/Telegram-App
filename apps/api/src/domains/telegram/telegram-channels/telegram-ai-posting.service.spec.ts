@@ -14,6 +14,8 @@ describe('TelegramAiPostingService', () => {
       upsert: jest.fn(),
     },
     icon: { findMany: jest.fn().mockResolvedValue([]) },
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
     $transaction: jest.fn((callback: (tx: unknown) => unknown) =>
       callback(prisma),
     ),
@@ -123,6 +125,17 @@ describe('TelegramAiPostingService', () => {
       configuration: { historyMode: 'all', hashtags: 'disabled', imageMode: 'hybrid', hybridSearchPercent },
     })).rejects.toThrow('AI_POSTING_SEARCH_PERCENT_INVALID');
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale settings version before replacing configuration or taxonomy', async () => {
+    prisma.telegramChannel.findFirst.mockResolvedValue({ id: 'channel-a' });
+    prisma.$queryRaw.mockResolvedValueOnce([{ configurationVersion: 11 }]);
+    await expect(service.save('user-a', 'channel-a', {
+      expectedConfigurationVersion: 10,
+      configuration: { historyMode: 'all', hashtags: 'disabled', imageMode: 'hybrid' },
+    })).rejects.toThrow('AI_POSTING_SETTINGS_CHANGED');
+    expect(prisma.telegramAiPostingSettings.upsert).not.toHaveBeenCalled();
+    expect(contentModel.replace).not.toHaveBeenCalled();
   });
 
   it('rejects a since-history setting without a valid date', async () => {

@@ -8,19 +8,24 @@ import { GroshlyDeviceTransferLogin } from "@finance-web/components/groshly-devi
 import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
 import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
 
-type FinanceContext = { financeBotId: string };
+import type { ConsumerFinanceBrowserContext as FinanceContext } from "@telegram-system/shared";
 
 type FinanceContextState =
   | { status: "loading" }
-  | { status: "ready"; financeBotId: string }
+  | ({ status: "ready" } & FinanceContext)
   | { status: "error" };
 
 function readFinanceContext(value: unknown): FinanceContext | null {
   if (!value || typeof value !== "object") return null;
-  const financeBotId = (value as { financeBotId?: unknown }).financeBotId;
-  return typeof financeBotId === "string" && financeBotId.trim()
-    ? { financeBotId }
-    : null;
+  const { financeBotId, supportBotUsername } = value as Partial<FinanceContext>;
+  if (typeof financeBotId !== "string" || !financeBotId.trim()) return null;
+  return {
+    financeBotId,
+    ...(typeof supportBotUsername === "string" &&
+      /^[a-z][a-z0-9_]{3,31}$/i.test(supportBotUsername)
+      ? { supportBotUsername }
+      : {}),
+  };
 }
 
 export function FinanceRootApp({ botId, entry = "app", initialLocale = "uk", initialTheme = "light" }: { botId?: string; entry?: "app" | "login"; initialLocale?: "uk" | "en"; initialTheme?: "light" | "dark" } = {}) {
@@ -42,7 +47,7 @@ export function FinanceRootApp({ botId, entry = "app", initialLocale = "uk", ini
         const context = response.ok ? readFinanceContext(await response.json()) : null;
         if (!context) throw new Error("Finance context is unavailable");
         if (controller.signal.aborted) return;
-        setState({ status: "ready", financeBotId: context.financeBotId });
+        setState({ ...context, status: "ready" });
       } catch {
         if (!controller.signal.aborted) setState({ status: "error" });
       }
@@ -69,7 +74,7 @@ export function FinanceRootApp({ botId, entry = "app", initialLocale = "uk", ini
         renderDeviceTransfer={(locale) => <GroshlyDeviceTransferLogin botId={activeBotId} locale={locale} onAuthenticated={openApp} />}
       />;
     }
-    return <GroshlyFinanceApp key={activeBotId} botId={activeBotId} bootstrap={bootstrap} />;
+    return <GroshlyFinanceApp key={activeBotId} botId={activeBotId} bootstrap={bootstrap} supportBotUsername={state.status === "ready" ? state.supportBotUsername : undefined} />;
   }
 
   if (state.status === "loading" || bootstrap.status === "loading") {

@@ -1,19 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import {
   useInfiniteQuery,
-  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Check, Headphones, Send } from "lucide-react";
+import { Archive, Inbox, LayoutGrid } from "lucide-react";
 import type {
   SupportBotView,
   SupportProduct,
   SupportTicket,
 } from "@telegram-system/shared";
-import { Button, Card, Select } from "@/components/ui/primitives";
+import { Button } from "@/components/ui/primitives";
 import { WORKSPACE_CHANGE_EVENT } from "@/providers/notification-navigation-coordinator";
 import {
   supportKeys,
@@ -21,10 +20,32 @@ import {
   watchSupport,
 } from "@/lib/features/telegram/telegram-support-api";
 
+import { ChatShell } from "@/components/chat/chat-shell";
+import { IconAvatar } from "@/components/icons/icon-avatar";
+import { SupportParticipantAvatar } from "./support-participant-avatar";
+import { SupportThread } from "./telegram-support-thread";
+
 export const supportNames: Record<SupportProduct, string> = {
   NEXELOQ: "Nexeloq",
   GROSHLY: "Groshly",
 };
+
+const productIcons: Record<SupportProduct, string> = {
+  NEXELOQ: "/brand/nexeloq-pwa-192.png",
+  GROSHLY: "/brand/groshly-icon.png",
+};
+
+export function SupportProductBadge({ product, ticket }: { product: SupportProduct; ticket?: SupportTicket }) {
+  const icon = { type: "image" as const, id: product, url: productIcons[product], name: supportNames[product] };
+  return (
+    <span className="inline-flex w-fit items-center gap-2 rounded-full border border-neutral-700 bg-neutral-800/80 px-2.5 py-1 text-xs font-semibold text-neutral-100">
+      {ticket
+        ? <SupportParticipantAvatar ticket={ticket} kind="bot" label={supportNames[product]} size="xs" fallback={icon} />
+        : <IconAvatar icon={icon} decorative bordered={false} size="xs" />}
+      {supportNames[product]}
+    </span>
+  );
+}
 
 export function useTelegramSupport() {
   const client = useQueryClient();
@@ -73,42 +94,21 @@ export function useTelegramSupport() {
   return summary;
 }
 
-export function SupportCardLink({
-  bot,
-  onOpen,
-}: {
-  bot?: SupportBotView;
-  onOpen: () => void;
-}) {
+export function BotSupportPanel({ bot }: { bot?: SupportBotView }) {
+  if (!bot) return null;
   return (
-    <Button variant="secondary" onClick={onOpen}>
-      <span className="inline-flex items-center gap-2">
-        <Headphones size={16} />
-        Support
-        {bot && (
-          <span
-            className={
-              bot.needsReply
-                ? "font-semibold text-amber-300"
-                : "text-neutral-400"
-            }
-          >
-            {bot.open}
-          </span>
-        )}
-      </span>
-    </Button>
+    <p className="mt-3 text-xs text-neutral-400">
+      {bot.open} open · {bot.needsReply} awaiting reply
+    </p>
   );
 }
 
 export function TelegramSupportInbox({
   product,
   onProduct,
-  bots,
 }: {
   product?: SupportProduct;
   onProduct: (product?: SupportProduct) => void;
-  bots: SupportBotView[];
 }) {
   const [closed, setClosed] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
@@ -127,230 +127,104 @@ export function TelegramSupportInbox({
       <div className="flex flex-wrap gap-2">
         <Button
           variant={closed ? "secondary" : undefined}
+          aria-pressed={!closed}
           onClick={() => {
             setClosed(false);
             setSelectedId(undefined);
           }}
         >
-          Open
+          <Inbox aria-hidden="true" /> Open
         </Button>
         <Button
           variant={closed ? undefined : "secondary"}
+          aria-pressed={closed}
           onClick={() => {
             setClosed(true);
             setSelectedId(undefined);
           }}
         >
-          Closed
+          <Archive aria-hidden="true" /> Closed
         </Button>
-        <Select
-          aria-label="Application"
-          value={product ?? ""}
-          onChange={(event) => {
-            const value = event.target.value;
-            onProduct(
-              value === "GROSHLY" || value === "NEXELOQ" ? value : undefined,
-            );
-            setSelectedId(undefined);
-          }}
-        >
-          <option value="">All applications</option>
-          <option value="NEXELOQ">Nexeloq</option>
-          <option value="GROSHLY">Groshly</option>
-        </Select>
       </div>
-      {product && (
-        <Card className="text-sm text-neutral-300">
-          <p className="font-semibold">{supportNames[product]} support bot</p>
-          <p>
-            {bots.find((bot) => bot.product === product)?.configured
-              ? `@${bots.find((bot) => bot.product === product)?.username} · Configured in environment`
-              : product === "GROSHLY"
-                ? "Set FINANCE_BOT_SUPPORT_TOKEN and FINANCE_BOT_SUPPORT_USERNAME in the Finance environment."
-                : "Set TELEGRAM_SYSTEM_BOT_SUPPORT_TOKEN and TELEGRAM_SYSTEM_BOT_SUPPORT_USERNAME in the root environment."}
-          </p>
-        </Card>
-      )}
-      <div className="grid gap-4 lg:grid-cols-[minmax(275px,1fr)_minmax(0,2fr)]">
-        <Card className="space-y-2" aria-label="Support tickets">
-          {list.isPending && <p role="status">Loading tickets…</p>}
-          {list.isError && (
-            <div role="alert">
-              <p>Could not load support tickets.</p>
-              <Button onClick={() => void list.refetch()}>Retry</Button>
-            </div>
-          )}
-          {!list.isPending && !list.isError && tickets.length === 0 && (
-            <p className="text-sm text-neutral-400">
-              No {closed ? "closed" : "open"} tickets.
-            </p>
-          )}
-          {tickets.map((ticket) => (
-            <button
-              key={ticket.id}
-              type="button"
-              className={`block w-full rounded-lg border p-3 text-left ${selectedId === ticket.id ? "border-blue-500 bg-blue-950/40" : "border-neutral-800 hover:bg-neutral-800"}`}
-              aria-pressed={selectedId === ticket.id}
-              onClick={() => setSelectedId(ticket.id)}
-            >
-              <span className="flex items-center justify-between gap-2 text-xs text-neutral-400">
-                {supportNames[ticket.product]}{" "}
-                {ticket.needsReply && (
-                  <span className="text-amber-300">Needs reply</span>
-                )}
-              </span>
-              <span className="block truncate font-semibold">
-                {ticket.senderName}
-              </span>
-              <span className="block truncate text-sm text-neutral-400">
-                {ticket.preview}
-              </span>
-            </button>
-          ))}
-          {list.hasNextPage && (
-            <Button
-              variant="secondary"
-              disabled={list.isFetchingNextPage}
-              onClick={() => void list.fetchNextPage()}
-            >
-              More tickets
-            </Button>
-          )}
-        </Card>
-        {selected ? (
-          <SupportThread key={selected.id} ticket={selected} />
-        ) : (
-          <Card className="text-sm text-neutral-400">
-            Select a ticket to view the conversation.
-          </Card>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SupportThread({ ticket }: { ticket: SupportTicket }) {
-  const client = useQueryClient();
-  const [text, setText] = useState("");
-  const request = useRef<{ id: string; text: string } | null>(null);
-  const thread = useInfiniteQuery({
-    queryKey: supportKeys.thread(ticket.id),
-    initialPageParam: undefined as string | undefined,
-    queryFn: ({ pageParam }) => telegramSupportApi.thread(ticket.id, pageParam),
-    getNextPageParam: (page) => page.nextCursor ?? undefined,
-  });
-  const invalidate = () =>
-    client.invalidateQueries({ queryKey: supportKeys.root });
-  const reply = useMutation({
-    mutationFn: (input: { id: string; text: string }) =>
-      telegramSupportApi.reply(ticket.id, input.id, input.text),
-    onSuccess: async () => {
-      setText("");
-      request.current = null;
-      await invalidate();
-    },
-  });
-  const close = useMutation({
-    mutationFn: () => telegramSupportApi.close(ticket.id),
-    onSuccess: invalidate,
-  });
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const message = text.trim();
-    if (!message || reply.isPending || close.isPending) return;
-    const operation =
-      request.current?.text === message
-        ? request.current
-        : { id: crypto.randomUUID(), text: message };
-    request.current = operation;
-    reply.mutate(operation);
-  }
-  const messages = (
-    thread.data?.pages.flatMap((page) => page.items) ?? []
-  ).toReversed();
-  return (
-    <Card className="space-y-4" aria-label="Support conversation">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <strong>{ticket.senderName}</strong>
-          <p className="text-sm text-neutral-400">
-            {supportNames[ticket.product]}
-            {ticket.username ? ` · @${ticket.username}` : ""}
-          </p>
-        </div>
-        {!ticket.closedAt && (
-          <Button
-            variant="secondary"
-            disabled={close.isPending || reply.isPending}
-            onClick={() => close.mutate()}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Application">
+        {([undefined, "NEXELOQ", "GROSHLY"] as const).map((option) => (
+          <button
+            key={option ?? "all"}
+            type="button"
+            aria-pressed={product === option}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-2 text-sm font-semibold text-neutral-200 hover:bg-neutral-800 aria-pressed:border-amber-500/70 aria-pressed:bg-amber-400/10"
+            onClick={() => {
+              onProduct(option);
+              setSelectedId(undefined);
+            }}
           >
-            <Check size={16} /> Close ticket
-          </Button>
-        )}
-      </header>
-      {close.isError && (
-        <p role="alert" className="text-red-300">
-          Could not close this ticket.
-        </p>
-      )}
-      {thread.hasNextPage && (
-        <Button
-          variant="secondary"
-          disabled={thread.isFetchingNextPage}
-          onClick={() => void thread.fetchNextPage()}
-        >
-          Older messages
-        </Button>
-      )}
-      {thread.isError && <p role="alert">Could not load the conversation.</p>}
-      {thread.isPending && <p role="status">Loading messages…</p>}
-      <div
-        className="flex max-h-[55vh] flex-col gap-2 overflow-y-auto"
-        role="log"
-      >
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`max-w-[90%] rounded-xl p-3 ${message.status === "INBOUND" ? "self-start bg-neutral-800" : "self-end bg-blue-950/80"}`}
-          >
-            <p className="whitespace-pre-wrap break-words text-sm">
-              {message.text}
-            </p>
-            <p className="mt-1 text-xs text-neutral-400">
-              {new Date(message.createdAt).toLocaleString()}
-              {message.status === "UNKNOWN"
-                ? " · Delivery unconfirmed"
-                : message.status === "SENDING"
-                  ? " · Sending"
-                  : ""}
-            </p>
-          </div>
+            {option ? <SupportProductBadge product={option} /> : <><LayoutGrid size={16} aria-hidden /> All applications</>}
+          </button>
         ))}
       </div>
-      {!ticket.closedAt && (
-        <form onSubmit={submit} className="space-y-2">
-          <textarea
-            aria-label="Reply"
-            placeholder="Reply via Telegram"
-            maxLength={4096}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            disabled={reply.isPending}
-            className="min-h-24 w-full rounded-lg border border-neutral-700 bg-neutral-950 p-3"
-          />
-          <Button
-            type="submit"
-            disabled={!text.trim() || reply.isPending || close.isPending}
-          >
-            <Send size={16} /> Send reply
-          </Button>
-          {reply.isError && (
-            <p role="alert" className="text-red-300">
-              Could not confirm the reply. Retry to check the same send.
-            </p>
+      <div className="h-[max(30rem,calc(100dvh-17rem))] min-w-0">
+        <ChatShell
+          selected={Boolean(selected)}
+          list={
+            <div className="app-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto p-3" aria-label="Support tickets">
+              {list.isPending && <p role="status">Loading tickets…</p>}
+              {list.isError && (
+                <div role="alert">
+                  <p>Could not load support tickets.</p>
+                  <Button onClick={() => void list.refetch()}>Retry</Button>
+                </div>
+              )}
+              {!list.isPending && !list.isError && tickets.length === 0 && (
+                <p className="text-sm text-neutral-400">
+                  No {closed ? "closed" : "open"} tickets.
+                </p>
+              )}
+              {tickets.map((ticket) => (
+                <button
+                  key={ticket.id}
+                  type="button"
+                  className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 rounded-lg border px-2.5 py-2 text-left ${selectedId === ticket.id ? "border-blue-500 bg-blue-950/40" : "border-neutral-800 hover:bg-neutral-800"}`}
+                  aria-pressed={selectedId === ticket.id}
+                  onClick={() => setSelectedId(ticket.id)}
+                >
+                  <span className="flex min-w-0 flex-col gap-1">
+                    <SupportProductBadge product={ticket.product} />
+                    <span className="flex min-w-0 items-center gap-1.5 text-sm">
+                      <SupportParticipantAvatar ticket={ticket} kind="sender" label={ticket.senderName} size="xs" lazy />
+                      <span className="max-w-[55%] shrink-0 truncate font-semibold">{ticket.senderName}</span>
+                      {ticket.preview && <span className="min-w-0 truncate text-neutral-400" title={ticket.preview}>· {ticket.preview}</span>}
+                    </span>
+                  </span>
+                  {ticket.needsReply && <span className="whitespace-nowrap text-xs text-amber-300">Needs reply</span>}
+                </button>
+              ))}
+              {list.hasNextPage && (
+                <Button
+                  variant="secondary"
+                  disabled={list.isFetchingNextPage}
+                  onClick={() => void list.fetchNextPage()}
+                >
+                  More tickets
+                </Button>
+              )}
+            </div>
+          }
+          thread={selected ? (
+            <SupportThread
+              key={`${selected.workspaceId}:${selected.id}`}
+              ticket={selected}
+              productBadge={<SupportProductBadge product={selected.product} ticket={selected} />}
+              onBack={() => setSelectedId(undefined)}
+              onReopen={(id) => {
+                setClosed(false);
+                setSelectedId(id);
+              }}
+            />
+          ) : (
+            <p className="m-auto p-4 text-sm text-neutral-400">Select a ticket to view the conversation.</p>
           )}
-        </form>
-      )}
-    </Card>
+        />
+      </div>
+    </div>
   );
 }

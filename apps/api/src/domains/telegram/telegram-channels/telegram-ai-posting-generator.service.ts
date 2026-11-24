@@ -43,6 +43,8 @@ import {
   assertTelegramAiPostingRunActive, claimTelegramAiPostingRetrySlot, createTelegramAiPostingGenerationRun, readTelegramAiPostingGenerationSettings,
   settleTelegramAiPostingRetrySlot, type TelegramAiPostingRetrySlot,
 } from './telegram-ai-posting-generation-store';
+import { readAiPostingEditorialHistory } from './telegram-ai-posting-editorial-history';
+import { telegramAiPostingVisualDirection, telegramAiPostingVisualMotif } from './telegram-ai-posting-visual-direction';
 import { telegramAiPostingHybridMediaMode } from './telegram-ai-posting-hybrid-media';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 const normalize = (value: string) =>
@@ -347,7 +349,11 @@ export class TelegramAiPostingGeneratorService {
         ];
       });
     });
+    const inventory = autopilotRunId
+      ? await readAiPostingEditorialHistory(this.prisma, workspaceId, channelId, config.historyMode, config.historyFrom)
+      : null;
     const known = [
+      ...(inventory?.titles ?? []),
       ...sourceContext.existingPosts.map((post) => post.title),
       ...previousDrafts.flatMap((post) => [post.topic, post.title]),
     ]
@@ -379,7 +385,16 @@ export class TelegramAiPostingGeneratorService {
       pendingCheckpoint = write.catch(() => {});
       return write;
     };
-    const execute = telegramAiPostingBatchExecutor(this.gateway.execute.bind(this.gateway), assertActive);
+    const execute = telegramAiPostingBatchExecutor(async (request) => {
+      if (autopilotRunId) {
+        const active = await this.prisma.telegramAiPostingSettings.findFirst({
+          where: { workspaceId, telegramChannelId: channelId, autopilotEnabled: true, autopilotLeaseExpiresAt: { gt: new Date() } },
+          select: { id: true },
+        });
+        if (!active) throw new TelegramAiPostingRunStopped();
+      }
+      return this.gateway.execute(request);
+    }, assertActive);
     const invocationContext = {
       userId, workspaceId, channelId, testRunId, autopilotRunId, mode,
       monthlyBudget: settings.aiMonthlyBudget?.toString() ?? null,
@@ -390,16 +405,21 @@ export class TelegramAiPostingGeneratorService {
       const recent = previousDrafts.flatMap(({ editorialMetadata }) =>
         editorialMetadata && typeof editorialMetadata === 'object' ? [editorialMetadata] : [],
       );
+      recent.push(...(inventory?.usage ?? []));
       const editorialSelections = Array.from({ length: count }, (_, offset) => {
         if (retrySlot?.editorialAssignment || retrySlot?.legacyVote)
           return restoreTelegramAiPostingEditorialSelection(generationConfig, retrySlot.editorialAssignment ?? {}, retrySlot.legacyVote);
         const index = editorialOffset + (retrySlot?.publicationIndex ?? offset);
-        const selection = telegramAiPostingEditorialSelection(generationConfig, index, index, recent);
+        const selection = telegramAiPostingEditorialSelection(generationConfig, index, index, recent, inventory?.rubricBoost);
         recent.push(selection);
         return selection;
       });
       const preferences = telegramAiPostingMediaPreferences(generationConfig);
       const byPreference = new Map(preferences.map((preference) => [preference.id, preference]));
+      const visualDirections = editorialSelections.map((_, index) =>
+        retrySlot?.editorialAssignment?.visualDirection ??
+        (generationConfig.visualVariety === true ? telegramAiPostingVisualDirection(editorialOffset + (retrySlot?.publicationIndex ?? index)) : undefined),
+      );
       const assignedPreferences = editorialSelections.map(({ sphere, parentSphere }) =>
         byPreference.get(sphere?.mediaPreferenceId ?? parentSphere?.mediaPreferenceId),
       );
@@ -407,7 +427,7 @@ export class TelegramAiPostingGeneratorService {
       if (!topicOverride && calendar) {
         const planning = telegramAiPostingPlanningContextText(calendar);
         const prompt = telegramAiPostingPlanPrompt(
-          generationConfig, sourceContext, planning, count, previousDrafts, editorialSelections, assignedPreferences,
+          generationConfig, sourceContext, planning, count, [...previousDrafts, ...(inventory?.titles ?? []).map((title) => ({ title, topic: title, text: '' }))], editorialSelections, assignedPreferences, visualDirections,
         );
         for (const attempt of [1, 2]) {
           try {
@@ -463,7 +483,7 @@ export class TelegramAiPostingGeneratorService {
             editorialOffset + (retrySlot?.publicationIndex ?? offset), generationConfig.hybridSearchPercent,
           )
         : undefined);
-      const requiresFound = (index: number) => assignedPreferences[index]?.purpose === 'SEARCH';
+      const requiresFound = (index: number) => !visualDirections[index] && assignedPreferences[index]?.purpose === 'SEARCH';
       for (const [index, imageMode] of mediaModes.entries()) {
         if (!requiresFound(index)) continue;
         if (hybrid && imageMode === 'ai') {
@@ -472,25 +492,13 @@ export class TelegramAiPostingGeneratorService {
         }
         mediaModes[index] = 'found';
       }
-      const plannedAi = mediaModes.filter((mode) => mode === 'ai').length;
-      // Reserve the assigned AI slots. Failed searches can use the remaining
-      // quota, but may not turn a search-majority batch into an AI-majority batch.
-      let fallbackSlots = Math.max(0, Math.floor(count / 2) - plannedAi);
       const activeMedia = new Set<Promise<void>>();
       const generateSlot = async (topic: string, offset: number) => {
         const publicationIndex = retrySlot?.publicationIndex ?? offset;
         const imageMode = mediaModes[offset];
-        const allowFallback = !requiresFound(offset) && (!hybrid || (
-          generationConfig.hybridSearchPercent !== 100 &&
-          (count === 1 || retrySlot != null || fallbackSlots > 0)
-        ));
-        const claimGenerationFallback = hybrid && count > 1 && !retrySlot
-          ? () => {
-              if (fallbackSlots <= 0) return false;
-              fallbackSlots--;
-              return true;
-            }
-          : undefined;
+        const visualDirection = visualDirections[offset];
+        const visualMotif = retrySlot?.editorialAssignment?.visualMotif ??
+          (visualDirection ? telegramAiPostingVisualMotif(visualDirection, editorialOffset + publicationIndex) : undefined);
         const operations = slotOperations[offset];
         const invocation = createTelegramAiPostingInvocation({ ...invocationContext, operations, publicationIndex });
         const editorialSelection = editorialSelections[offset];
@@ -516,7 +524,9 @@ export class TelegramAiPostingGeneratorService {
               channelTitle: channel?.title,
               topic,
               imageMode,
-              fallbackToGeneration: allowFallback,
+              visualDirection,
+              visualMotif,
+              fallbackToGeneration: true,
               config: {
                 ...generationConfig, editorialSelection,
                 recentImageSearches: previousDrafts.map(({ imageSearchQuery }) => imageSearchQuery).filter(Boolean).slice(0, 5),
@@ -530,7 +540,6 @@ export class TelegramAiPostingGeneratorService {
               watermarkOpacityPercent: Number(generationConfig.channelAvatarWatermarkOpacity) || 100,
               context: publicationContext,
               mediaRunState,
-              claimGenerationFallback,
               execute,
               planningCost: allocatedPlanningCost,
               planningOperations,
@@ -556,10 +565,9 @@ export class TelegramAiPostingGeneratorService {
             },
             { images: this.images, costs: telegramAiPostingRunCosts },
           );
-          if (hybrid && !requiresFound(offset) && !allowFallback && generated.mediaFailureCode === 'AI_POSTING_IMAGE_SEARCH_EXHAUSTED')
-            generated.mediaFailureCode = 'AI_POSTING_IMAGE_SEARCH_SHARE_LIMIT';
-          const mediaStatus = generated.mediaReadiness === 'READY' ? 'COMPLETED' : generated.mediaReadiness;
-          const mediaReady = mediaStatus === 'COMPLETED';
+          const mediaReady = Boolean(generated.imageUrl) && generated.mediaReadiness === 'READY';
+          const mediaStatus = mediaReady ? 'COMPLETED'
+            : generated.mediaReadiness === 'MISSING' ? 'MISSING' : 'FAILED';
           invocation.finish(mediaStatus, 1);
           results.push({ ...generated, publicationIndex });
           const publication = { ...generated, publicationIndex, status: 'PENDING', rejectionReason: null, savedPostId: null };
@@ -590,6 +598,7 @@ export class TelegramAiPostingGeneratorService {
             code: telegramAiPostingGenerationErrorCode(error),
             ...(imageMode ? { imageMode } : {}),
             editorialAssignment: {
+              ...(visualDirection ? { visualDirection, visualMotif } : {}),
               ...(editorialSelection.sphere?.id ? { sphereId: editorialSelection.sphere.id } : {}),
               ...(editorialSelection.rubric?.id ? { rubricId: editorialSelection.rubric.id } : {}),
               ...(editorialSelection.lengths.length === 1 ? { lengthId: editorialSelection.lengths[0].id } : {}),

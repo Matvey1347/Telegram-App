@@ -28,6 +28,28 @@ describe('FinanceAiAnalyticsService', () => {
     };
   }
 
+  it('attributes an unreserved assistant request to its bot runtime and user', async () => {
+    const { service, prisma } = setup();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        output_text: JSON.stringify({ kind: 'ANSWER', message: 'Hello', operations: [] }),
+        usage: { input_tokens: 80, output_tokens: 20 },
+      }),
+    }) as never;
+    await service.routeAssistantMessage({
+      profileId: 'profile', botIntegrationId: 'bot', locale: 'en',
+      text: 'Hello', history: [], facts: {},
+      usageContext: { workspaceId: 'workspace', telegramBotUserId: 'user', runtimeInstanceId: 'runtime' },
+    });
+    expect(prisma.aiUsageEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        workspaceId: 'workspace', botIntegrationId: 'bot', telegramBotUserId: 'user',
+        runtimeInstanceId: 'runtime', status: 'SUCCEEDED', inputTokens: 80,
+      }),
+    });
+  });
+
   it('generates bounded analysis and completes the reserved usage event', async () => {
     const { service, prisma } = setup();
     const fetchMock = jest.fn().mockResolvedValue({

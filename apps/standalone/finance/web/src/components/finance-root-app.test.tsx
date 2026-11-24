@@ -3,8 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FinanceRootApp } from "./finance-root-app";
 
 vi.mock("@finance-web/components/groshly-finance-app", () => ({
-  GroshlyFinanceApp: ({ botId, bootstrap }: { botId: string; bootstrap: { initData?: string } }) => (
-    <div><span>Finance application {botId}</span>{bootstrap.initData && <span>Telegram launch ready</span>}</div>
+  GroshlyFinanceApp: ({ botId, bootstrap, supportBotUsername }: { botId: string; bootstrap: { initData?: string }; supportBotUsername?: string }) => (
+    <div><span>Finance application {botId}</span>{supportBotUsername && <span>{supportBotUsername}</span>}{bootstrap.initData && <span>Telegram launch ready</span>}</div>
   ),
 }));
 vi.mock("@consumer-finance/web/components/app/consumer-finance-login", () => ({
@@ -33,13 +33,14 @@ describe("FinanceRootApp", () => {
     window.localStorage.setItem("finance-active-bot-id", "stale-bot");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ financeBotId: "finance-primary" }),
+      json: async () => ({ financeBotId: "finance-primary", supportBotUsername: "groshly_help_bot" }),
     }));
 
     render(<FinanceRootApp />);
 
     expect(screen.queryByText(/Finance application/)).not.toBeInTheDocument();
     expect(await screen.findByText("Finance application finance-primary")).toBeInTheDocument();
+    expect(screen.getByText("groshly_help_bot")).toBeVisible();
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/finance/context",
       expect.objectContaining({ credentials: "include" }),

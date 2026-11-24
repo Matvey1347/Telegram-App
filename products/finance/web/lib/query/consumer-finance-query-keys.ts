@@ -1,4 +1,8 @@
 export const consumerFinanceKeys = {
+  assistantChats: (botId: string, profileId: string) => ["consumer-finance", botId, profileId, "assistant-chats"] as const,
+  assistantChatList: (botId: string, profileId: string, archived: boolean) => [...consumerFinanceKeys.assistantChats(botId, profileId), archived] as const,
+  assistantChat: (botId: string, profileId: string, chatId: string) => ["consumer-finance", botId, profileId, "assistant-chat", chatId] as const,
+  assistantTurns: (botId: string, profileId: string, chatId: string) => ["consumer-finance", botId, profileId, "assistant-turns", chatId] as const,
   root: (botId: string) => ["consumer-finance", botId] as const,
   session: (botId: string) => ["consumer-finance", botId, "session"] as const,
   dashboardRoot: (botId: string) =>

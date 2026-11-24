@@ -14,7 +14,8 @@ import { DesktopTransactionTable } from "@consumer-finance/web/components/ledger
 import { FinanceMobileTransactionRow } from "@consumer-finance/web/components/ledger/finance-mobile-transaction-row";
 import { FinanceTransactionEditor } from "@consumer-finance/web/components/ledger/finance-transaction-editor";
 
-export function AssistantBubble({ children }: { children: React.ReactNode }) {
+export function AssistantBubble({ children, groshly }: { children: React.ReactNode; groshly?: boolean }) {
+  if (groshly) return <div className="groshly-assistant-response bubble">{children}</div>;
   return (
     <div className="mr-8 flex items-end gap-2">
       <Image src="/finance/assistant/jarvis-v1.webp" alt="" width={28} height={28} className="h-7 w-7 shrink-0 rounded-full border border-cyan-500/20 bg-cyan-950/40 object-cover" />

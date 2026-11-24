@@ -40,7 +40,16 @@ export class FinanceEntitlementService {
     telegramBotUserId: string;
     profileId?: string;
   }) {
-    const access = await this.access(input);
+    const { activeSubscriptions, ...entitlements } = await this.resolveUsage(input, false);
+    return entitlements;
+  }
+
+  resolveForBilling(input: Parameters<FinanceEntitlementService['resolve']>[0]) {
+    return this.resolveUsage(input, true);
+  }
+
+  private async resolveUsage(input: Parameters<FinanceEntitlementService['resolve']>[0], includeBilling: boolean) {
+    const access = await this.access(input, includeBilling);
     const profileId =
       input.profileId ||
       (
@@ -80,7 +89,7 @@ export class FinanceEntitlementService {
   private async access(input: {
     botIntegrationId: string;
     telegramBotUserId: string;
-  }) {
+  }, includeBilling = false) {
     const now = new Date();
     const subscriptions = await this.prisma.botSubscription.findMany({
       where: {
@@ -119,11 +128,19 @@ export class FinanceEntitlementService {
         ],
       },
       select: {
+        ...(includeBilling && {
+          id: true,
+          source: true,
+          status: true,
+          interval: true,
+          intervalCount: true,
+          providerSubscription: { select: { mode: true, providerSubscriptionId: true, providerStatus: true } },
+        }),
         currentPeriodEnd: true,
         confirmedPaidThrough: true,
         cancelAtPeriodEnd: true,
         plan: { select: { code: true } },
-        grants: { where: { revokedAt: null }, select: { expiresAt: true } },
+        grants: { where: { revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }, select: { expiresAt: true } },
       },
     });
     let tier = subscriptions.reduce<FinanceTier>((current, subscription) => {
@@ -157,8 +174,11 @@ export class FinanceEntitlementService {
       .filter((d): d is Date => d instanceof Date);
     return {
       tier,
+      activeSubscriptions: includeBilling ? subscriptions.filter((s) => ['PRO', 'ULTIMATE'].includes(s.plan?.code.toUpperCase() ?? '')) : [],
       capabilities: [...FINANCE_PRODUCT_DEFINITIONS[tier].capabilities],
-      activeUntil: dates.length
+      activeUntil: subscriptions.some((s) => s.plan?.code.toUpperCase() === tier && s.grants.some((grant) => grant.expiresAt === null))
+        ? null
+        : dates.length
         ? new Date(Math.max(...dates.map(Number))).toISOString()
         : legacy?.activeUntil || null,
       cancelAtPeriodEnd: subscriptions.some((s) => s.cancelAtPeriodEnd),

@@ -1,5 +1,9 @@
 import type {
   ConsumerFinanceAiInsight,
+  ConsumerFinanceAssistantChat,
+  ConsumerFinanceAssistantChatMode,
+  ConsumerFinanceAssistantPage,
+  ConsumerFinanceAssistantTurn,
   ConsumerFinanceAssistantConfirmation,
   ConsumerFinanceAssistantMessageInput,
   ConsumerFinanceAssistantMessageResult,
@@ -21,7 +25,37 @@ export class FinanceAssistantRequestError extends Error {
   }
 }
 
+const chatsPath = (botId: string) => `${consumerFinanceRoot(botId)}/ultimate/chats`;
+const chatPath = (botId: string, chatId: string) => `${chatsPath(botId)}/${encodeURIComponent(chatId)}`;
+
 export const consumerFinanceAssistantApi = {
+  chats: async (botId: string, cursor?: string, signal?: AbortSignal, archived = false) =>
+    (await consumerFinanceHttp.get<ConsumerFinanceAssistantPage<ConsumerFinanceAssistantChat>>(
+      chatsPath(botId), consumerRequest({ params: { cursor, archived: archived || undefined }, signal }),
+    )).data,
+  chat: async (botId: string, chatId: string, signal?: AbortSignal) =>
+    (await consumerFinanceHttp.get<ConsumerFinanceAssistantChat>(
+      chatPath(botId, chatId), consumerRequest({ signal }),
+    )).data,
+  createChat: async (botId: string, body: { title: string; mode: ConsumerFinanceAssistantChatMode; chatId?: string }, signal?: AbortSignal) =>
+    (await consumerFinanceHttp.post<ConsumerFinanceAssistantChat>(
+      chatsPath(botId), body, consumerRequest({ signal }),
+    )).data,
+  renameChat: async (botId: string, chatId: string, title: string) =>
+    (await consumerFinanceHttp.patch<ConsumerFinanceAssistantChat>(
+      chatPath(botId, chatId), { title }, consumerRequest(),
+    )).data,
+  moveChat: async (botId: string, chatId: string, archived: boolean) =>
+    (await consumerFinanceHttp.patch<ConsumerFinanceAssistantChat>(
+      `${chatPath(botId, chatId)}/archive`, { archived }, consumerRequest(),
+    )).data,
+  deleteChat: async (botId: string, chatId: string) => {
+    await consumerFinanceHttp.delete(chatPath(botId, chatId), consumerRequest());
+  },
+  turns: async (botId: string, chatId: string, cursor?: string, signal?: AbortSignal) =>
+    (await consumerFinanceHttp.get<ConsumerFinanceAssistantPage<ConsumerFinanceAssistantTurn>>(
+      `${chatPath(botId, chatId)}/turns`, consumerRequest({ params: { cursor }, signal }),
+    )).data,
   message: async (
     botId: string,
     input: ConsumerFinanceAssistantMessageInput,
@@ -93,14 +127,18 @@ export const consumerFinanceAssistantApi = {
   proposeFile: async (botId: string, file: File) => {
     return consumerFinanceAssistantApi.proposeFiles(botId, [file]);
   },
-  proposeFiles: async (botId: string, files: File[]) => {
+  proposeFiles: async (botId: string, files: File[], turn?: { chatId: string; turnId: string }, signal?: AbortSignal) => {
     const form = new FormData();
     files.forEach((file) => form.append("files", file, file.name));
+    if (turn) {
+      form.append("chatId", turn.chatId);
+      form.append("turnId", turn.turnId);
+    }
     return (
       await consumerFinanceHttp.post<ConsumerFinanceAssistantProposal>(
         `${consumerFinanceRoot(botId)}/ultimate/entry/media`,
         form,
-        consumerRequest(),
+        consumerRequest({ signal }),
       )
     ).data;
   },

@@ -69,6 +69,14 @@ a recurring database query that merely asks whether work appeared is not.
 Job output is one aggregate summary (considered, skipped, processed, changed,
 failures, duration), not an INFO record per item.
 
+### AI Posting Autopilot activity
+
+The channel's Autopilot status response reads up to ten recent runs, with up to
+eight recorded stages per run, from the existing workspace and channel index.
+The same read serves page entry, return to the tab and the refresh action.
+The journal reuses stored run and stage records. Opening it for one channel
+does the same amount of work whether the workspace has two channels or 100.
+
 ## Database, logging and retention
 
 **Unchanged state means no write.** This applies to metrics, sync results,

@@ -33,6 +33,21 @@ chooses TEST in development and LIVE in production. Verify the return to
 `/app/subscription` and refresh the payment status after Stripe sends its
 webhook. In Telegram, the subscription screen shows status and history.
 
+Verify /app/subscription with a Free profile, a paid profile, an expiring
+gift, and a lifetime gift. The purchase selector is only for eligible new
+purchases. A gift history entry uses the original grant event date and does
+not affect monetary totals. A renewing Stripe subscription shows the upcoming
+invoice preview and current billing period. In the browser, **Change plan**
+lists alternative recurring prices and opens a Stripe confirmation for the
+selected price. Verify the preview, confirm in TEST, then check the new billing
+period after returning. Introductory subscribers can change plan after the
+introductory period. Stripe confirms any immediate adjustment before applying
+the change.
+
+Only active recurring Stripe subscriptions in the current environment request a
+renewal preview. This is on demand, with no background polling or channel-based
+work. Gifts use the existing bounded history query and add no provider calls.
+
 Global Bot Configuration displays the OpenAI environment default. Finance
 resolves validated credentials in this order: bot override, workspace
 override, environment. Use the bot Integrations toggle to edit overrides.

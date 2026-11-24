@@ -121,7 +121,7 @@ describe('BotBillingService overview', () => {
     );
     expect(prisma.aiUsageEvent.aggregate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ runtimeInstanceId: { in: ['local-runtime'] } }),
+        where: expect.objectContaining({ OR: expect.arrayContaining([{ runtimeInstanceId: 'local-runtime' }]) }),
       }),
     );
   });
@@ -150,7 +150,7 @@ describe('BotBillingService user support', () => {
         languageCode: 'ru-RU',
         firstSeenAt: new Date('2026-08-01T00:00:00Z'),
         lastInteractionAt: new Date('2026-08-22T00:00:00Z'),
-        runtimeInstance: { environment: 'LOCAL' },
+        runtimeInstance: { id: 'local-runtime', environment: 'LOCAL' },
         financeProfiles: [
           {
             id: 'profile-1',
@@ -164,6 +164,12 @@ describe('BotBillingService user support', () => {
       },
     ]);
 
+    prisma.aiUsageEvent.groupBy.mockResolvedValueOnce([{
+      telegramBotUserId: 'telegram-user-1',
+      _count: { _all: 3, estimatedCostMicros: 2 },
+      _sum: { estimatedCostMicros: 95 },
+    }]);
+
     await expect(
       service.users('owner-1', 'bot-1', { environment: 'LOCAL', limit: 25 }),
     ).resolves.toMatchObject({
@@ -172,10 +178,18 @@ describe('BotBillingService user support', () => {
           environment: 'LOCAL',
           profile: { locale: 'ru', onboardingCompleted: false },
           subscription: null,
+          aiUsage: { requests: 3, estimatedCostMicros: 95, unpricedRequests: 1 },
         },
       ],
       nextCursor: null,
     });
+    expect(prisma.aiUsageEvent.groupBy).toHaveBeenCalledTimes(1);
+    expect(prisma.aiUsageEvent.groupBy).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        workspaceId: 'workspace-1', botIntegrationId: 'bot-1',
+        telegramBotUserId: { in: ['telegram-user-1'] },
+      }),
+    }));
     expect(prisma.telegramBotUser.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({

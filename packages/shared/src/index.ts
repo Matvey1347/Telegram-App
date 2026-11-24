@@ -32,6 +32,8 @@ export * from "./types/telegram-ad-sales";
 export * from "./types/telegram-ad-sales-analytics";
 export * from "./types/telegram-ad-sales-read-models";
 export * from "./types/finance-category-statistics";
+export * from "./types/finance-account-balances";
+export * from "./types/finance-investment-list";
 export * from "./types/telegram-ad-sales-create";
 export * from "./types/telegram-ad-sales-bulk";
 export * from "./types/telegram-workspace-sync";

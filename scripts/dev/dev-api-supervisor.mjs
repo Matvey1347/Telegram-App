@@ -3,6 +3,7 @@ import { stripVTControlCharacters } from "node:util";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { terminateDevChildren } from "./dev-process-termination.mjs";
+import { registerDevLauncher } from "./dev-launcher-ownership.mjs";
 
 const apiDirectory = fileURLToPath(new URL("../../apps/api/", import.meta.url));
 const nestBinary = fileURLToPath(
@@ -179,6 +180,9 @@ export function runApiSupervisor() {
   process.on("SIGINT", () => void stop());
   process.on("SIGTERM", () => void stop());
   process.on("SIGHUP", () => void stop());
+  if (process.env.TELEGRAM_DEV_MANAGED_LAUNCH !== "1") {
+    registerDevLauncher([apiPort], fileURLToPath(new URL("../../", import.meta.url)));
+  }
   startWatcher();
 }
 

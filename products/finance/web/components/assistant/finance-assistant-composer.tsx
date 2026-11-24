@@ -12,6 +12,10 @@ import {
 import { Textarea } from "@consumer-finance/web/components/ui";
 import { financeAssistantCopy } from "@consumer-finance/web/components/i18n/assistant";
 import type { FinanceAssistantMediaController } from "@consumer-finance/web/components/hooks/use-finance-assistant-media";
+import {
+  ASSISTANT_MESSAGE_MAX_LENGTH,
+  type GroshlyDictation,
+} from "@consumer-finance/web/components/hooks/use-groshly-dictation";
 
 export function FinanceAssistantComposer({
   t,
@@ -19,29 +23,49 @@ export function FinanceAssistantComposer({
   text,
   pending,
   voiceAllowed,
+  allowAttachments = true,
   fileInput,
   onTextChange,
   onSend,
   onUpgrade,
+  groshly,
+  dictation,
+  replyTo,
+  onClearReply,
 }: {
   t: ReturnType<typeof financeAssistantCopy>;
   media: FinanceAssistantMediaController;
   text: string;
   pending: boolean;
   voiceAllowed: boolean;
+  allowAttachments?: boolean;
   fileInput: RefObject<HTMLInputElement | null>;
   onTextChange: (value: string) => void;
   onSend: () => void;
   onUpgrade: () => void;
+  groshly?: boolean;
+  dictation?: GroshlyDictation;
+  replyTo?: string;
+  onClearReply?: () => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const dictating = !!dictation && dictation.phase !== "idle";
+  const voiceActive = dictating || media.recording;
+  const composerText = dictation?.preview ?? text;
 
   useEffect(() => {
-    resizeComposer(textareaRef.current);
-  }, [text]);
+    const textarea = textareaRef.current;
+    resizeComposer(textarea);
+    if (dictating && textarea) textarea.scrollTop = textarea.scrollHeight;
+  }, [composerText, dictating]);
+
+  useEffect(() => {
+    if (replyTo) textareaRef.current?.focus();
+  }, [replyTo]);
 
   return (
-    <div className="space-y-2 border-t border-neutral-800 bg-neutral-950 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]">
+    <div className={groshly ? "groshly-assistant-composer space-y-2" : "space-y-2 border-t border-neutral-800 bg-neutral-950 p-3 pb-[max(.75rem,env(safe-area-inset-bottom))]"}>
+      {replyTo && <div className="ai-reply-banner"><span>{replyTo}</span><button type="button" aria-label={t.clearReply} onClick={onClearReply}><X size={17} /></button></div>}
       {media.attachments.length ? (
         <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
           {media.attachments.map(({ file, previewUrl }, index) => (
@@ -81,6 +105,14 @@ export function FinanceAssistantComposer({
           ))}
         </div>
       ) : null}
+      {dictating && (
+        <p role="status" className="px-1 text-sm">
+          {dictation.phase === "finishing" ? t.dictationFinishing : t.dictationListening}
+        </p>
+      )}
+      {dictation?.error && (
+        <p role="alert" className="px-1 text-sm">{t[dictation.error]}</p>
+      )}
       {media.recording ? (
         <div
           role="status"
@@ -111,65 +143,72 @@ export function FinanceAssistantComposer({
           </p>
         )
       ) : null}
-      <div className="flex items-end gap-1 rounded-[28px] border border-white/10 bg-neutral-900 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <button
+      <div className={groshly ? "groshly-assistant-input flex items-end gap-1 p-2" : "flex items-end gap-1 rounded-[28px] border border-white/10 bg-neutral-900 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"}>
+        {allowAttachments && <button
           type="button"
           aria-label={t.attach}
-          disabled={pending || media.recording}
+          disabled={pending || voiceActive}
           onClick={() => fileInput.current?.click()}
           className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-neutral-300 outline-none hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
         >
           <Paperclip size={19} />
-        </button>
+        </button>}
         <Textarea
           ref={textareaRef}
           aria-label={t.placeholder}
-          maxLength={2000}
+          maxLength={ASSISTANT_MESSAGE_MAX_LENGTH}
           rows={1}
-          value={text}
+          value={composerText}
           placeholder={t.placeholder}
           disabled={media.recording}
-          onPaste={media.onPaste}
+          readOnly={dictating}
+          onPaste={allowAttachments && !dictating ? media.onPaste : undefined}
           onChange={(event) => {
+            if (dictating) return;
             resizeComposer(event.currentTarget);
             onTextChange(event.target.value);
           }}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
-              onSend();
+              if (!voiceActive) onSend();
             }
           }}
           className="max-h-[104px] min-h-11 min-w-0 flex-1 resize-none overflow-y-hidden whitespace-pre-wrap break-words !rounded-none !border-0 !bg-transparent px-2 py-3 leading-5 !outline-none !ring-0 focus:!ring-0 focus-visible:!ring-0"
         />
-        <button
+        {(allowAttachments || dictation) && <button
           type="button"
           aria-label={
-            media.recording
-              ? t.stopRecording
+            voiceActive
+              ? dictation ? t.dictationStop : t.stopRecording
               : voiceAllowed
-                ? t.record
+                ? dictation ? t.dictationStart : t.record
                 : t.voiceRequiresPro
           }
-          disabled={pending}
+          disabled={pending || dictation?.phase === "finishing" || (
+            !!dictation && !dictating &&
+            (media.attachments.length > 0 || text.length >= ASSISTANT_MESSAGE_MAX_LENGTH)
+          )}
           onClick={() => {
-            if (media.recording) media.stopRecording();
+            if (dictating) dictation.stop();
+            else if (media.recording) media.stopRecording();
+            else if (voiceAllowed && dictation) dictation.start(text);
             else if (voiceAllowed) void media.startRecording();
             else media.showError("voiceRequiresPro");
           }}
-          className={`grid h-11 w-11 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 ${media.recording ? "bg-rose-500 text-white" : "text-neutral-300 hover:bg-neutral-800"}`}
+          className={`grid h-11 w-11 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 ${voiceActive ? "!bg-rose-600 !text-white" : "text-neutral-300 hover:bg-neutral-800"}`}
         >
-          {media.recording ? (
+          {voiceActive ? (
             <Square size={16} fill="currentColor" />
           ) : (
             <Mic size={19} />
           )}
-        </button>
+        </button>}
         <button
           type="button"
           aria-label={t.send}
           disabled={
-            pending || media.recording || (!media.files.length && !text.trim())
+            pending || voiceActive || (!media.files.length && !text.trim())
           }
           onClick={onSend}
           className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-cyan-400 text-neutral-950 outline-none hover:bg-cyan-300 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-900 disabled:opacity-40"
@@ -181,16 +220,17 @@ export function FinanceAssistantComposer({
           className="sr-only"
           type="file"
           multiple
+          disabled={dictating}
           accept="image/jpeg,image/png,image/webp,audio/ogg,application/ogg,audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/webm"
           onChange={(event) => {
-            media.selectFiles(Array.from(event.target.files ?? []));
+            if (!dictating) media.selectFiles(Array.from(event.target.files ?? []));
             event.currentTarget.value = "";
           }}
         />
       </div>
-      <p className="px-1 text-center text-[11px] leading-4 text-neutral-500">
+      {!groshly && <p className="px-1 text-center text-[11px] leading-4 text-neutral-500">
         {t.safety}
-      </p>
+      </p>}
     </div>
   );
 }

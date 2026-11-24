@@ -3,8 +3,9 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Bot, Headphones, Plus } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button, PageHeader } from "@/components/ui/primitives";
 import { QueryContentState } from "@/components/ui/query-content-state";
@@ -46,20 +47,16 @@ function errorMessage(error: unknown, fallback: string) {
   return responseError?.response?.data?.message || fallback;
 }
 
-export function TelegramBotsPage() {
+export function TelegramBotsPage({ tab = "bots" }: { tab?: "bots" | "support" }) {
+  const router = useRouter();
   const qc = useQueryClient();
   const support = useTelegramSupport();
-  const [tab, setTab] = useState<"bots" | "support">("bots");
   const [product, setProduct] = useState<SupportProduct>();
   const supportBots = support.data ?? [];
   const needsReply = supportBots.reduce(
     (total, bot) => total + bot.needsReply,
     0,
   );
-  const openSupport = (next?: SupportProduct) => {
-    setProduct(next);
-    setTab("support");
-  };
   const { pushToast } = useAppToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] =
@@ -204,6 +201,34 @@ export function TelegramBotsPage() {
       pushToast(errorMessage(error, "Failed to update bot runtime."), "error"),
   });
 
+  const managedBots = bots.filter((bot) => bot.applicationType === "FINANCE");
+  const connectedBots = bots.filter((bot) => bot.applicationType !== "FINANCE");
+  const renderBot = (bot: TelegramBot) => (
+    <TelegramBotCard
+      key={bot.id}
+      bot={bot}
+      support={
+        bot.applicationType === "FINANCE"
+          ? supportBots.find((item) => item.product === "GROSHLY")
+          : undefined
+      }
+      checkingEnvironment={
+        checkMutation.isPending && checkMutation.variables?.id === bot.id
+          ? checkMutation.variables.environment
+          : null
+      }
+      onCheck={(environment) =>
+        checkMutation.mutate({ id: bot.id, environment })
+      }
+      onRequestDelete={(environment) => setDeleteChoice({ bot, environment })}
+      onSwitch={() => setSwitching(bot)}
+      onConfigureRuntime={(environment) =>
+        setRuntimeConfig({ bot, environment })
+      }
+      onEditProfile={(environment) => setProfileConfig({ bot, environment })}
+    />
+  );
+
   return (
     <AppShell>
       <PageHeader
@@ -226,17 +251,21 @@ export function TelegramBotsPage() {
       <div className="mb-4 flex gap-2" aria-label="Telegram Bots sections">
         <Button
           variant={tab === "bots" ? undefined : "secondary"}
-          onClick={() => setTab("bots")}
+          aria-pressed={tab === "bots"}
+          onClick={() => { if (tab !== "bots") router.push("/telegram-bots", { scroll: false }); }}
         >
+          <Bot aria-hidden="true" />
           Bots
         </Button>
         <Button
           variant={tab === "support" ? undefined : "secondary"}
-          onClick={() => openSupport()}
+          aria-pressed={tab === "support"}
+          onClick={() => { if (tab !== "support") router.push("/telegram-bots?tab=support", { scroll: false }); }}
         >
+          <Headphones aria-hidden="true" />
           Support{" "}
           {needsReply > 0 && (
-            <span className="ml-1 rounded-full bg-amber-400 px-2 text-neutral-950">
+            <span className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-700 px-1 text-xs font-semibold text-white">
               {needsReply}
             </span>
           )}
@@ -246,56 +275,28 @@ export function TelegramBotsPage() {
         <TelegramSupportInbox
           product={product}
           onProduct={setProduct}
-          bots={supportBots}
         />
       )}
       {tab === "bots" && (
         <ConfiguredBotCards
           support={supportBots.find((bot) => bot.product === "NEXELOQ")}
-          onSupport={() => openSupport("NEXELOQ")}
-        />
+        >
+          {managedBots.length ? managedBots.map(renderBot) : undefined}
+        </ConfiguredBotCards>
       )}
       {tab === "bots" &&
-      (bots.length || botsQuery.isLoading || botsQuery.isError) ? (
+      (connectedBots.length || botsQuery.isLoading || botsQuery.isError) ? (
         <div className="mt-6">
           <QueryContentState
             isLoading={botsQuery.isLoading}
             isError={botsQuery.isError}
-            isEmpty={!bots.length}
+            isEmpty={!connectedBots.length}
             loadingText="Loading bots"
             errorText="Failed to load Telegram bots."
             emptyText=""
           >
             <div className="grid gap-4 xl:grid-cols-2">
-              {bots.map((bot) => (
-                <TelegramBotCard
-                  key={bot.id}
-                  bot={bot}
-                  support={supportBots.find(
-                    (item) => item.product === "GROSHLY",
-                  )}
-                  onSupport={() => openSupport("GROSHLY")}
-                  checkingEnvironment={
-                    checkMutation.isPending &&
-                    checkMutation.variables?.id === bot.id
-                      ? checkMutation.variables.environment
-                      : null
-                  }
-                  onCheck={(environment) =>
-                    checkMutation.mutate({ id: bot.id, environment })
-                  }
-                  onRequestDelete={(environment) =>
-                    setDeleteChoice({ bot, environment })
-                  }
-                  onSwitch={() => setSwitching(bot)}
-                  onConfigureRuntime={(environment) =>
-                    setRuntimeConfig({ bot, environment })
-                  }
-                  onEditProfile={(environment) =>
-                    setProfileConfig({ bot, environment })
-                  }
-                />
-              ))}
+              {connectedBots.map(renderBot)}
             </div>
           </QueryContentState>
         </div>

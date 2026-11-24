@@ -1,22 +1,6 @@
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import type { Account } from "@/lib/api";
 
-export function CurrencyAmount({
-  amount,
-  currency,
-  className = "text-white",
-}: {
-  amount?: number | string | null;
-  currency?: string | null;
-  className?: string;
-}) {
-  const value = Number(amount ?? 0);
-  const label = Number.isFinite(value)
-    ? new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "USD" }).format(value)
-    : "—";
-  return <span className={className}>{label}</span>;
-}
-
 export function AccountPreview({ account, fallback }: { account?: Account | null; fallback?: string }) {
   const member = account?.assignedMember;
   return (

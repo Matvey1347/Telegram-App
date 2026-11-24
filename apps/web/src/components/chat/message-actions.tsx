@@ -35,7 +35,7 @@ export function MessageActions({ message, capabilities, actions, open, onOpenCha
           if (rect && history) setAbove(history.bottom - rect.bottom < 260 && rect.top - history.top > history.bottom - rect.bottom);
         }
         onOpenChange?.(next);
-      }} menuClassName={`absolute right-0 ${above ? "bottom-10" : "top-10"} z-20 max-h-[min(18rem,calc(100dvh-5rem))] w-44 max-w-[calc(100vw-3rem)] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-xl [&_button]:min-h-10`}>
+      }} triggerClassName="inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-300 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" menuClassName={`absolute ${own ? "right-0" : "left-0"} ${above ? "bottom-full" : "top-full"} z-20 max-h-[min(18rem,calc(100dvh-5rem))] w-44 max-w-[calc(100vw-3rem)] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-950 p-1.5 shadow-xl [&_button]:min-h-10`}>
         <ActionMenuItem icon={<Copy size={16} aria-hidden />} onClick={() => { void copy(); }}>Copy text</ActionMenuItem>
         {actionable && allowed.canReply && actions?.onReply ? <ActionMenuItem icon={<Reply size={16} aria-hidden />} onClick={() => actions.onReply?.(message)}>Reply</ActionMenuItem> : null}
         {actionable && own && allowed.canEdit && actions?.onEdit ? <ActionMenuItem icon={<Pencil size={16} aria-hidden />} onClick={() => actions.onEdit?.(message)}>Edit</ActionMenuItem> : null}

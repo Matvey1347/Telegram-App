@@ -1,3 +1,4 @@
+import { AI_POSTING_SEARCH_CALL_USD, AI_POSTING_SEARCH_MODEL, AI_POSTING_SEARCH_PROMPT_VERSION } from './ai-posting-image-search';
 import { MAX_TELEGRAM_AI_POSTING_BATCH_SIZE } from '@telegram-system/shared';
 import {
   BadRequestException,
@@ -31,6 +32,7 @@ export type AiExecutionRequest = {
   revisionDraft?: boolean;
   postingDraft?: boolean;
   postingReview?: boolean;
+  postingImageSearch?: { domain?: string };
   audio?: { mime: 'audio/wav'; data: Buffer };
   /** Restricts this experimental manual media batch to one approved source. */
   mediaPilotSourceId?: string;
@@ -64,6 +66,7 @@ export const operationFingerprint = (request: AiExecutionRequest) =>
         request.revisionDraft === true,
         ...(request.postingDraft ? [TELEGRAM_POSTING_DRAFT_SCHEMA_ID] : []),
         ...(request.postingReview ? [TELEGRAM_POSTING_REVIEW_SCHEMA_ID] : []),
+        ...(request.postingImageSearch ? [AI_POSTING_SEARCH_PROMPT_VERSION, request.postingImageSearch.domain ?? null] : []),
         request.businessObjectId ?? null,
         request.aiPosting
           ? {
@@ -134,6 +137,11 @@ export class AiAdmissionService {
   }
   async admit(request: AiExecutionRequest) {
     const now = new Date();
+    if (request.postingImageSearch && (
+      request.category !== 'TELEGRAM_POSTING_REVIEW' || !request.aiPosting || request.image || request.audio ||
+      request.postingReview || request.durableVersion || request.input.length > 2400 ||
+      (request.postingImageSearch.domain !== undefined && !/^(?:[a-z0-9-]+\.)+[a-z][a-z0-9-]*$/u.test(request.postingImageSearch.domain))
+    )) throw new BadRequestException('AI_POSTING_IMAGE_SEARCH_INVALID');
     if (
       request.chatPlan &&
       (request.category !== 'TELEGRAM_POSTING_PLAN' ||
@@ -299,7 +307,9 @@ export class AiAdmissionService {
       const configured = this.registry.resolve(request.category, persisted);
       if (!this.registry.supports(request.category, configured.modelId))
         throw new ConflictException('AI_MODEL_CATEGORY_UNSUPPORTED');
-      const config = request.audio
+      const config = request.postingImageSearch
+        ? { ...configured, modelId: AI_POSTING_SEARCH_MODEL, promptVersion: AI_POSTING_SEARCH_PROMPT_VERSION, maxOutputTokens: 512 }
+        : request.audio
         ? {
             ...configured,
             modelId: 'gpt-transcribe',
@@ -380,7 +390,8 @@ export class AiAdmissionService {
       if (!price) throw new ConflictException('AI_MODEL_UNPRICED');
       const reservedCost = request.audio
         ? new Prisma.Decimal('0.0045')
-        : reservationCost(price, config.maxInputTokens, config.maxOutputTokens);
+        : reservationCost(price, config.maxInputTokens, config.maxOutputTokens)
+            .plus(request.postingImageSearch ? AI_POSTING_SEARCH_CALL_USD : 0);
       if (request.image && request.category === 'LEAD_AD_CLASSIFICATION') {
         // The existing workspace advisory lock also fences settlement and concurrent admissions.
         // Uncertain and still-running operations retain their entire reservation.
@@ -481,7 +492,7 @@ export class AiAdmissionService {
                   ? config.dailyBudget
                   : config.monthlyBudget;
           if (
-            !unlimitedPosting &&
+            (!unlimitedPosting || (request.aiPosting?.autopilotRunId && scope.startsWith('TELEGRAM_CHANNEL:'))) &&
             limit !== null &&
             limit !== undefined &&
             bucket.spent
@@ -517,7 +528,7 @@ export class AiAdmissionService {
           aiPostingAttempt: request.aiPosting?.attempt,
           aiPostingMode: request.aiPosting?.postingMode,
           configurationSnapshot: config,
-          pricingSnapshot: price,
+          pricingSnapshot: request.postingImageSearch ? { ...price, webSearchCallUsd: AI_POSTING_SEARCH_CALL_USD } : price,
           pricingVersion: price.version,
           pricingEffectiveAt: new Date(price.effectiveAt),
           deadlineAt: new Date(now.getTime() + config.timeoutMs),

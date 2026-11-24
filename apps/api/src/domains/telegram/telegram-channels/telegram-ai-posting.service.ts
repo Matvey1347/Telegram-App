@@ -2,6 +2,7 @@ import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisor
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import {
   telegramAiPostingLanguageName,
 } from './telegram-ai-posting-language';
 import { resolveAiPostingPreferenceIcons } from './telegram-ai-posting-preference-icons';
+import { telegramAiPostingSphereWeights } from './telegram-ai-posting-analysis-configuration';
 import { TelegramAiPostingContentModelService } from './telegram-ai-posting-content-model.service';
 
 const defaults = {
@@ -107,7 +109,7 @@ export class TelegramAiPostingService {
       'hashtags', 'imageMode', 'hybridSearchPercent', 'imageSearchSources',
       'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia',
       'channelAvatarWatermarkSize', 'channelAvatarWatermarkOpacity',
-      'channelAvatarWatermarkX', 'channelAvatarWatermarkY',
+      'channelAvatarWatermarkX', 'channelAvatarWatermarkY', 'style', 'visualStyle', 'visualVariety', 'sphereWeights',
     ];
     const { defaultInviteLink, publicInviteLink, ...channelData } = channel;
     return {
@@ -202,7 +204,7 @@ export class TelegramAiPostingService {
         '',
         '## Сферы и подсферы',
         '• spheres — направления содержания канала. Корневая сфера задаёт широкую тему, подсфера уточняет её и имеет parentId родителя. Сфера: id, parentId (null для основной сферы), name, emoji, tier (PRIMARY или SECONDARY), description, sources (необязательные URL, обычно сайты/RSS для этой сферы), mediaPreferenceId (id предпочтения или null).',
-        '• Для генерации выбираются корневые сферы: доступные PRIMARY и SECONDARY чередуются примерно 50/50 независимо от количества сфер в каждой группе. Если одна группа пуста, система использует доступную группу. Внутри выбранной группы сферы по очереди распределяются между публикациями; подсферы задают детализацию направления. Это не 50/50 доля от числа сущностей.',
+        '• sphereWeights: объект, ключи — ID корневых сфер, значения — относительные целые веса 0–100. Ноль исключает сферу, когда у других сфер есть положительные веса. Без заданных весов действует чередование PRIMARY и SECONDARY.',
         '• Если sources пуст, для идеи публикации выполняется самостоятельное исследование. Если источники заданы, сначала проверь их; если материал слабый или неполный, дополни исследованием, не выдумывая факты.',
         '• mediaPreferenceId закрепляет подходящее медиа-предпочтение за сферой. null означает использовать любое подходящее предпочтение.',
         '',
@@ -218,6 +220,7 @@ export class TelegramAiPostingService {
         '## Полная схема configuration',
         JSON.stringify({
           language: 'ru | en | uk | de | es | ""', audience: 'string (до 4000)', topic: 'string (до 4000)',
+          style: 'string (до 1200)', visualStyle: 'string (до 850)', visualVariety: 'boolean', sphereWeights: '{[rootSphereId]: integer 0–100}',
           historyMode: 'all | since | none', historyFrom: 'YYYY-MM-DD | ""', variedLength: 'boolean', emojiPolicy: 'start | contextual', ending: 'string', hashtags: 'disabled | start | end | ending_inline',
           imageMode: 'found | ai | hybrid', hybridSearchPercent: 'integer 0–100', imageSearchSources: 'https://website.example/ []', useChannelAvatarInMedia: 'boolean', imageAvoidances: ['string'],
           mediaPreferences: [{ id: 'string', name: 'string', emoji: 'string', emojiIconId: 'string | optional saved icon ID', description: 'string', generationDescription: 'string', searchDescription: 'string', references: ['URL'], purpose: 'SEARCH | GENERATION | BOTH' }],
@@ -228,8 +231,9 @@ export class TelegramAiPostingService {
       ].join('\n'),
       schema: {
         channelIdea: { audience: 'string, до 4000 символов', topic: 'string, до 4000 символов', language: 'ru | en | uk | de | es | пустая строка для автоопределения' },
-        writing: { historyMode: 'all | since | none', historyFrom: 'YYYY-MM-DD при since', variedLength: 'boolean', emojiPolicy: 'start | contextual', ending: 'Telegram-разметка', hashtags: 'disabled | start | end | ending_inline' },
-        media: { imageMode: 'found | ai | hybrid', hybridSearchPercent: 'integer 0–100', imageSearchSources: 'https://website.example/ []', useChannelAvatarInMedia: 'boolean', imageAvoidances: 'string[]', mediaPreferences: '{id,name,emoji,emojiIconId?:string,description,generationDescription?:string,searchDescription?:string,references:string[],purpose:SEARCH|GENERATION|BOTH}[]' },
+        writing: { historyMode: 'all | since | none', historyFrom: 'YYYY-MM-DD при since', variedLength: 'boolean', style: 'редакционная инструкция по голосу и структуре', emojiPolicy: 'start | contextual', ending: 'Telegram-разметка', hashtags: 'disabled | start | end | ending_inline' },
+        media: { visualStyle: 'общая инструкция для изображений', imageMode: 'found | ai | hybrid', hybridSearchPercent: 'integer 0–100', imageSearchSources: 'https://website.example/ []', useChannelAvatarInMedia: 'boolean', imageAvoidances: 'string[]', mediaPreferences: '{id,name,emoji,emojiIconId?:string,description,generationDescription?:string,searchDescription?:string,references:string[],purpose:SEARCH|GENERATION|BOTH}[]' },
+        sphereWeights: '{[rootSphereId]: integer 0–100}',
         spheres: '{id,parentId,name,emoji,tier:PRIMARY|SECONDARY,description,sources:string[],mediaPreferenceId}[]',
         rubrics: '{id,sphereId,name,emoji,description,goal,lengthIds:string[]}[]',
         lengths: '{id,name,emoji,minCharacters,maxCharacters:number|null}[]',
@@ -238,6 +242,9 @@ export class TelegramAiPostingService {
         audience: 'Для кого этот канал: кому адресованы публикации и что важно этой аудитории.',
         topic: 'Что канал даёт аудитории: польза, знания или эмоции читателей.',
         language: 'Язык создаваемых публикаций; пустое значение включает автоопределение.',
+        style: 'Редакционный стиль: голос, композиция, ритм и характерные форматы.',
+        visualStyle: 'Общий визуальный стиль для поиска и генерации.',
+        sphereWeights: 'Относительные веса корневых сфер, от 0 до 100.',
         historyMode: 'Какая история публикаций используется при подготовке новых материалов.',
         historyFrom: 'Начальная дата истории при historyMode=since, формат YYYY-MM-DD.',
         variedLength: 'Разрешает автоматический выбор длины публикации.',
@@ -265,7 +272,7 @@ export class TelegramAiPostingService {
       'audience', 'topic', 'language', 'historyMode', 'historyFrom',
       'variedLength', 'emojiPolicy', 'ending', 'hashtags', 'imageMode', 'hybridSearchPercent', 'imageSearchSources',
       'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia',
-      'spheres', 'rubrics', 'lengths',
+      'spheres', 'rubrics', 'lengths', 'style', 'visualStyle', 'visualVariety', 'sphereWeights',
     ]);
     if (!Object.keys(imported).some((key) => supportedFields.has(key)))
       throw new BadRequestException('AI_POSTING_IMPORT_NO_SUPPORTED_FIELDS');
@@ -295,14 +302,13 @@ export class TelegramAiPostingService {
     }
     const saved = await this.save(userId, channelId, {
       configuration,
-      mode: current.mode === 'REVIEW' ? 'REVIEW' : 'TEST',
       draftExpirationDays: current.draftExpirationDays,
     });
     const sections = [
       { id: 'idea', label: 'Идея канала', keys: ['audience', 'topic', 'language'] },
-      { id: 'writing', label: 'Как писать', keys: ['historyMode', 'historyFrom', 'variedLength', 'emojiPolicy', 'ending', 'hashtags'] },
-      { id: 'media', label: 'Медиа', keys: ['imageMode', 'hybridSearchPercent', 'imageSearchSources', 'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia'] },
-      { id: 'spheres', label: 'Сферы', keys: ['spheres'] },
+      { id: 'writing', label: 'Как писать', keys: ['historyMode', 'historyFrom', 'variedLength', 'emojiPolicy', 'ending', 'hashtags', 'style'] },
+      { id: 'media', label: 'Медиа', keys: ['imageMode', 'hybridSearchPercent', 'imageSearchSources', 'mediaPreferences', 'imageAvoidances', 'useChannelAvatarInMedia', 'visualStyle', 'visualVariety'] },
+      { id: 'spheres', label: 'Сферы', keys: ['spheres', 'sphereWeights'] },
       { id: 'rubrics', label: 'Рубрики', keys: ['rubrics'] },
       { id: 'lengths', label: 'Длины', keys: ['lengths'] },
     ];
@@ -331,6 +337,7 @@ export class TelegramAiPostingService {
     input: {
       configuration: Record<string, unknown>;
       mode?: 'TEST' | 'REVIEW';
+      expectedConfigurationVersion?: number;
       draftExpirationDays?: number;
     },
   ) {
@@ -378,6 +385,10 @@ export class TelegramAiPostingService {
     }))) throw new BadRequestException('AI_POSTING_MEDIA_PREFERENCES_INVALID');
     const configurationToSave = {
       language: typeof configuration.language === 'string' ? configuration.language.slice(0, 32) : '',
+      style: typeof configuration.style === 'string' ? configuration.style.trim().slice(0, 1200) : '',
+      visualVariety: configuration.visualVariety === true,
+      visualStyle: typeof configuration.visualStyle === 'string' ? configuration.visualStyle.trim().slice(0, 850) : '',
+      sphereWeights: telegramAiPostingSphereWeights(configuration.sphereWeights, configuration.spheres),
       audience: typeof configuration.audience === 'string' ? configuration.audience.slice(0, 4000) : '',
       topic: typeof configuration.topic === 'string' ? configuration.topic.slice(0, 4000) : '',
       historyMode: configuration.historyMode,
@@ -424,10 +435,18 @@ export class TelegramAiPostingService {
     };
     const saved = await this.prisma.$transaction(async (tx) => {
       await acquirePostgresTransactionLock(tx, `ai-posting-structure:${workspaceId}:${channelId}`);
+      if (input.expectedConfigurationVersion !== undefined) {
+        const [current] = await tx.$queryRaw<Array<{ configurationVersion: number }>>`
+          select "configurationVersion" from "TelegramAiPostingSettings"
+          where "workspaceId" = ${workspaceId} and "telegramChannelId" = ${channelId}
+          for update`;
+        if ((current?.configurationVersion ?? 1) !== input.expectedConfigurationVersion)
+          throw new ConflictException('AI_POSTING_SETTINGS_CHANGED');
+      }
       const result = await tx.telegramAiPostingSettings.upsert({
         where: { telegramChannelId: channelId },
         create: { workspaceId, telegramChannelId: channelId, configuration: configurationToSave as Prisma.InputJsonObject, mode, draftExpirationDays },
-        update: { configuration: configurationToSave as Prisma.InputJsonObject, configurationVersion: { increment: 1 }, mode, draftExpirationDays },
+        update: { configuration: configurationToSave as Prisma.InputJsonObject, configurationVersion: { increment: 1 }, ...(input.mode === undefined ? {} : { mode }), ...(input.draftExpirationDays === undefined ? {} : { draftExpirationDays }) },
         select: { configuration: true, configurationVersion: true, mode: true, draftExpirationDays: true, updatedAt: true },
       });
       await this.contentModel.replace(tx, workspaceId, channelId, configurationToSave);

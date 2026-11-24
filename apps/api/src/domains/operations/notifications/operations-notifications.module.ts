@@ -1,3 +1,4 @@
+import { AiPostingAutopilotNotificationsService } from './ai-posting-autopilot-notifications.service';
 import { ChannelReminderDeliveryService } from './channel-reminder-delivery.service';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramSystemBotConfigService } from '../../telegram/telegram-system-bot/telegram-system-bot-config.service';
@@ -20,6 +21,7 @@ import { OperationsEmailAdapterService } from './operations-email-adapter.servic
 @Module({
   controllers: [OperationsNotificationsController],
   providers: [
+    AiPostingAutopilotNotificationsService,
     ChannelReminderDeliveryService,
     TelegramBotApiClient,
     TelegramSystemBotConfigService,

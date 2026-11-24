@@ -75,12 +75,13 @@ describe('TelegramAiPostingImageService', () => {
   });
 
   it('prioritizes the references over the post setting and channel fallback', () => {
-    const input = { topic: 'An awkward conversation', prompt: 'A photo in a kitchen', channelTitle: 'Жіноча сила🍃' };
+    const input = { topic: 'An awkward conversation', prompt: 'A photo in a kitchen', channelTitle: 'Жіноча сила🍃', language: 'Ukrainian (Українська)' };
     const prompt = buildTelegramAiPostingImagePrompt(input, true);
     expect(prompt).toContain('A photo in a kitchen');
     expect(prompt).toContain('reference sheet as the primary visual direction');
     expect(prompt).toContain('movement, light, color or monochrome treatment');
     expect(prompt).toContain('Do not add dialogue bubbles');
+    expect(prompt).toContain('use only Ukrainian (Українська)');
     expect(prompt).not.toContain('everyday documentary frame');
     expect(buildTelegramAiPostingImagePrompt(input, false)).toContain('everyday documentary frame');
   });
@@ -96,6 +97,26 @@ describe('TelegramAiPostingImageService', () => {
     expect(prompt).toContain(revised);
     expect(prompt).toContain('takes priority');
     expect(prompt).not.toContain('walks down an office corridor');
+  });
+
+  it('retries generated gloss once, preserves the visual form and meters both checks', async () => {
+    const review = (candidateIndex: number) => ({
+      operation: { ...operation(), category: 'TELEGRAM_POSTING_REVIEW' },
+      result: { reply: JSON.stringify({ candidateIndex, candidateObservation: 'Landscape', candidateForm: 'landscape' }) },
+    });
+    gateway.execute
+      .mockResolvedValueOnce(aiResponse(imageBytes.toString('base64')))
+      .mockResolvedValueOnce(review(0))
+      .mockResolvedValueOnce(aiResponse(imageBytes.toString('base64')))
+      .mockResolvedValueOnce(review(1));
+    const result = await service.resolve({ ...request('ai'), visualDirection: 'landscape' });
+    expect(result.readiness).toBe('READY');
+    expect(media.persistImageBytes).toHaveBeenCalledTimes(1);
+    expect(gateway.execute).toHaveBeenCalledTimes(4);
+    expect(gateway.execute.mock.calls[2][0].input).toContain('no foreground people');
+    expect(result.searchOperations?.map(({ mediaStep }) => mediaStep)).toEqual([
+      'GENERATE', 'GENERATION_REVIEW', 'GENERATION_REVIEW',
+    ]);
   });
 
   it('does not store an image whose bytes already appeared in this run', async () => {
@@ -121,15 +142,14 @@ describe('TelegramAiPostingImageService', () => {
     expect(media.persistImageBytes).toHaveBeenCalledTimes(1);
   });
 
-  it('returns the search quota error without requesting AI when the batch used its fallback', async () => {
+  it('generates after all search rounds fail when fallback is allowed', async () => {
     const result = await service.resolve({
       ...request('found'),
       fallbackToGeneration: true,
-      claimGenerationFallback: () => false,
     });
-    expect(result).toMatchObject({ readiness: 'MISSING', failureCode: 'AI_POSTING_IMAGE_SEARCH_SHARE_LIMIT' });
+    expect(result).toMatchObject({ readiness: 'READY', image: { sourceId: 'openai-image-generation' } });
     expect(result.mediaSearch?.rounds.length).toBeGreaterThan(1);
-    expect(gateway.execute).not.toHaveBeenCalled();
+    expect(gateway.execute).toHaveBeenCalledTimes(1);
   });
 
   it('searches across open image sources in hybrid mode and persists the result', async () => {
@@ -209,26 +229,42 @@ describe('TelegramAiPostingImageService', () => {
     expect(sources.downloadImage).not.toHaveBeenCalled();
   });
 
-  it('tries distinct Pinterest phrases first and continues to Commons when Brave is unconfigured', async () => {
-    sources.searchOpenImages.mockImplementation(async (_query, _page, catalog) => {
-      if (catalog === 'pinterest') throw new Error('IMAGE_SEARCH_NOT_CONFIGURED');
-      return [{ url: 'https://upload.wikimedia.org/image.jpg', sourceId: 'wikimedia-commons', sourceType: 'image-search' }];
+  it('tries OpenAI twice for Pinterest, then accepts a Commons image before broadening the search', async () => {
+    gateway.execute.mockResolvedValue({
+      operation: { ...operation(), category: 'TELEGRAM_POSTING_REVIEW', actualCost: '0.01' },
+      result: { images: [] },
     });
+    sources.searchOpenImages.mockResolvedValue([
+      { url: 'https://upload.wikimedia.org/image.jpg', sourceId: 'wikimedia-commons', sourceType: 'image-search' },
+    ]);
     const result = await service.resolve({
       ...request('found'),
       searchQuery: 'bedside reading lamp, evening book nightstand, warm bedroom light',
       imageSearchSources: ['https://www.pinterest.com/', 'https://commons.wikimedia.org/'],
     });
     expect(result.image?.sourceId).toBe('wikimedia-commons');
-    expect(result.mediaSearch?.rounds[0]).toMatchObject({
-      queries: [
-        { text: 'bedside reading lamp', catalog: 'pinterest', unavailable: true },
-        { text: 'evening book nightstand', catalog: 'pinterest', unavailable: true },
-        { text: 'warm bedroom light', catalog: 'pinterest', unavailable: true },
-      ],
-      observation: expect.stringContaining('Brave'),
+    expect(gateway.execute.mock.calls.map(([input]) => input.postingImageSearch)).toEqual([
+      { domain: 'pinterest.com' }, { domain: 'pinterest.com' },
+    ]);
+    expect(gateway.execute.mock.calls.map(([input]) => input.input)).toEqual([
+      expect.stringContaining('bedside reading lamp'), expect.stringContaining('evening book nightstand'),
+    ]);
+    expect(result.mediaSearch?.rounds.map(({ outcome }) => outcome)).toEqual(['NO_RESULTS', 'NO_RESULTS', 'SELECTED']);
+    expect(result.searchOperations?.map(({ mediaStep, actualCost }) => [mediaStep, actualCost]))
+      .toEqual([['WEB_SEARCH', '0.01'], ['WEB_SEARCH', '0.01']]);
+  });
+
+  it('stops searching as soon as an acceptable Pinterest image is downloaded', async () => {
+    const candidate = { url: 'https://i.pinimg.com/originals/photo.jpg', sourceId: 'pinterest', sourceType: 'image-search' };
+    gateway.execute.mockResolvedValue({ operation: operation(), result: { images: [candidate] } });
+    const result = await service.resolve({
+      ...request('found'),
+      searchQuery: 'bedside reading lamp, evening book nightstand',
+      imageSearchSources: ['https://www.pinterest.com/', 'https://commons.wikimedia.org/'],
     });
-    expect(result.mediaSearch?.rounds[1]?.outcome).toBe('SELECTED');
+    expect(result.image?.sourceId).toBe('pinterest');
+    expect(gateway.execute).toHaveBeenCalledTimes(1);
+    expect(sources.searchOpenImages).not.toHaveBeenCalled();
   });
 
   it('creates an image after exhausting external search on a publication', async () => {
@@ -243,10 +279,10 @@ describe('TelegramAiPostingImageService', () => {
     expect(result.image?.sourceId).toBe('openai-image-generation');
     expect(result.mediaSearch?.rounds[0]?.queries[0]).toMatchObject({ catalog: 'pinterest' });
     expect(sources.searchOpenImages).toHaveBeenCalledWith('woman writing notebook', 1, 'wikimedia');
-    expect(sources.searchOpenImages).toHaveBeenCalledWith('woman writing notebook', 1, 'website', 'photos.example');
+    expect(gateway.execute).toHaveBeenCalledWith(expect.objectContaining({ postingImageSearch: { domain: 'photos.example' } }));
+    expect(gateway.execute).toHaveBeenCalledWith(expect.objectContaining({ postingImageSearch: {} }));
     expect(sources.searchOpenImages.mock.calls.every(([, , catalog]) => catalog !== 'wordpress-photos')).toBe(true);
-    expect(gateway.execute).toHaveBeenCalledTimes(1);
-    expect(gateway.execute).toHaveBeenCalledWith(expect.objectContaining({ category: 'TELEGRAM_POSTING_IMAGE' }));
+    expect(gateway.execute).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'TELEGRAM_POSTING_IMAGE' }));
     expect(result.operation).toMatchObject({ mediaStep: 'GENERATE' });
   });
 

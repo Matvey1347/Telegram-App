@@ -337,9 +337,11 @@ export class BotBillingCheckout {
     botIntegrationId: string;
     telegramBotUserId: string;
     cancelAtPeriodEnd: boolean;
+    subscriptionId?: string;
   }) {
     const subscription = await this.prisma.botSubscription.findFirst({
       where: {
+        id: input.subscriptionId,
         botIntegrationId: input.botIntegrationId,
         telegramBotUserId: input.telegramBotUserId,
         source: BotSubscriptionSource.STRIPE,
@@ -349,7 +351,11 @@ export class BotBillingCheckout {
         providerSubscription: {
           is: {
             provider: BotBillingProvider.STRIPE,
-            ...(isProductionEnvironment() ? { mode: 'LIVE' } : {}),
+            ...(isProductionEnvironment()
+              ? { mode: 'LIVE' }
+              : input.subscriptionId
+                ? { mode: 'TEST' }
+                : {}),
           },
         },
       },
@@ -374,6 +380,76 @@ export class BotBillingCheckout {
           : subscription.currentPeriodEnd,
       },
     });
+  }
+
+  async changeStripePlan(input: {
+    botIntegrationId: string;
+    telegramBotUserId: string;
+    subscriptionId: string;
+    priceId: string;
+    returnUrl: string;
+  }) {
+    const subscription = await this.prisma.botSubscription.findFirst({
+      where: {
+        id: input.subscriptionId,
+        botIntegrationId: input.botIntegrationId,
+        telegramBotUserId: input.telegramBotUserId,
+        source: 'STRIPE',
+        status: 'ACTIVE',
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: { gt: new Date() },
+        OR: [
+          { checkoutExpiresAt: null },
+          { confirmedPaidThrough: { gt: new Date() } },
+        ],
+        providerSubscription: {
+          is: {
+            provider: 'STRIPE',
+            mode: isProductionEnvironment() ? 'LIVE' : 'TEST',
+          },
+        },
+      },
+      include: { providerSubscription: true },
+    });
+    const provider = subscription?.providerSubscription;
+    if (!provider || !subscription.providerCustomerId)
+      throw new NotFoundException('Active Stripe subscription not found');
+    const price = await this.prisma.botPlanPrice.findFirst({
+      where: {
+        id: input.priceId,
+        planId: subscription.planId ?? '',
+        isActive: true,
+        isPublic: true,
+        plan: { botIntegrationId: input.botIntegrationId, isActive: true },
+      },
+      select: { providerPriceIdentity: true },
+    });
+    if (!price) throw new NotFoundException('Subscription price not available');
+    const mode = provider.mode;
+    const configId = await this.stripe.configId(input.botIntegrationId, mode);
+    const priceId = this.providerPriceId(
+      price.providerPriceIdentity,
+      mode,
+      configId,
+    );
+    if (!priceId)
+      throw new BadRequestException(
+        'Subscription price is not available in Stripe',
+      );
+    return {
+      url: await this.stripe.planChangePortal({
+        botIntegrationId: input.botIntegrationId,
+        mode,
+        customerId: subscription.providerCustomerId,
+        providerSubscriptionId: provider.providerSubscriptionId,
+        priceId,
+        returnUrl: input.returnUrl,
+      }),
+    };
+  }
+
+  stripeRenewal(input: Parameters<StripeBillingProvider['renewal']>[0]) {
+    return this.stripe.renewal(input);
   }
 
   async stripePortal(input: {

@@ -211,7 +211,7 @@ describe("TelegramBotCard", () => {
     expect(menuItems[0]).toHaveAccessibleName("Dashboard");
     expect(
       screen.getByRole("menuitem", { name: "Dashboard" }),
-    ).toHaveAttribute("href", "/telegram-bots/bot-1/finance");
+    ).toHaveAttribute("href", "/telegram-bots/bot-1/finance?environment=PRODUCTION");
     expect(screen.queryByRole("menuitem", { name: "Change app" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Edit token" })).toBeNull();
     expect(screen.getByTestId("configure-bot-app-icon")).toBeInTheDocument();
@@ -293,6 +293,46 @@ describe("TelegramBotCard", () => {
     );
 
     expect(screen.getByText("@admissions_prod")).toBeInTheDocument();
+  });
+
+  it("switches from runtime details to the support tab without a shortcut to the inbox", async () => {
+    const user = userEvent.setup();
+    render(
+      <TelegramBotCard
+        bot={bot("FINANCE")}
+        support={{
+          product: "GROSHLY",
+          configured: true,
+          username: "groshly_help_bot",
+          open: 2,
+          needsReply: 1,
+        }}
+        checkingEnvironment={null}
+        onCheck={vi.fn()}
+        onRequestDelete={vi.fn()}
+        onSwitch={vi.fn()}
+        onConfigureRuntime={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("tab", { name: "Local" })).toBeDisabled();
+    const supportTab = screen.getByRole("tab", { name: "Support 2" });
+    await user.click(supportTab);
+    expect(supportTab).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("heading", { name: "Groshly Support" })).toBeVisible();
+    expect(screen.getByText("@groshly_help_bot")).toBeVisible();
+    expect(screen.queryByText("@admissions_prod")).toBeNull();
+    expect(screen.getByLabelText("Support bot avatar").querySelector("img"))
+      .toHaveAttribute("src", "/brand/groshly-support.png");
+    expect(screen.queryByRole("button", { name: "Actions for Admissions bot" })).toBeNull();
+    expect(screen.getByText("2 open · 1 awaiting reply")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Open support inbox" })).toBeNull();
+    await user.click(screen.getByRole("tab", { name: "Production" }));
+    expect(screen.queryByText("@groshly_help_bot")).toBeNull();
+    expect(screen.getByText("@admissions_prod")).toBeVisible();
+    expect(screen.getByLabelText("Finance business metrics")).toHaveTextContent(
+      "Registered12",
+    );
   });
 
   it("shows a pending refresh for the canonical production runtime", async () => {

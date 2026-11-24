@@ -31,6 +31,7 @@ import { NotificationCenter } from "@/components/features/operations/notificatio
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { AppPwaNavigation } from "@/components/layout/app-pwa-navigation";
 import pwaStyles from "@/components/layout/app-pwa-navigation.module.css";
+import { FinanceDisplayProvider } from "@/providers/finance-display-provider";
 import { useI18n } from "@/providers/i18n-provider";
 import { accountKeys, workspaceKeys } from "@/lib/query-keys";
 import { ChevronRight, LogOut, Menu, Plus, X } from "lucide-react";
@@ -287,6 +288,8 @@ export function AppShell({ children }: PropsWithChildren) {
   const activeWorkspace = (workspaces ?? []).find(
     (workspace) => workspace.id === activeWorkspaceId,
   );
+  const canViewFinance = activeWorkspace?.access?.permissionKeys.includes("finance.view") ??
+    ["owner", "admin"].includes(activeWorkspace?.role ?? "");
   const canViewSystemLogs =
     activeWorkspace?.access?.permissionKeys.includes(
       "operations.viewSystemLogs",
@@ -300,6 +303,13 @@ export function AppShell({ children }: PropsWithChildren) {
       ),
     );
   return (
+    <FinanceDisplayProvider
+      userId={currentAccount?.id}
+      workspaceId={activeWorkspaceId}
+      primaryCurrency={activeWorkspace?.primaryCurrency}
+      canChoose={canViewFinance}
+      loadRates={pathname === "/" || pathname === "/finance" || pathname === "/investments" || pathname === "/workspace-members" || pathname === "/settings"}
+    >
     <div className="min-h-dvh overflow-x-hidden bg-neutral-950 text-neutral-100">
       <header className={pwaStyles.header}>
         <button
@@ -329,7 +339,7 @@ export function AppShell({ children }: PropsWithChildren) {
       <aside
         id="app-sidebar"
         aria-label={t("navigation.sidebar")}
-        className={`${pwaStyles.sidebar} fixed left-0 top-0 z-40 flex h-[100dvh] w-[min(19rem,calc(100vw-1.25rem))] -translate-x-full flex-col border-r border-neutral-800 bg-neutral-950 p-4 shadow-2xl transition-transform duration-200 lg:z-30 lg:h-screen lg:w-64 lg:translate-x-0 lg:p-5 lg:shadow-none ${mobileMenuOpen ? "translate-x-0" : ""}`}
+        className={`${pwaStyles.sidebar} fixed left-0 top-0 z-40 flex h-[100dvh] w-[min(19rem,calc(100vw-1.25rem))] -translate-x-full flex-col border-r border-neutral-800 bg-neutral-950 p-4 shadow-2xl transition-transform duration-200 lg:z-30 lg:h-screen lg:translate-x-0 lg:p-5 lg:shadow-none ${mobileMenuOpen ? "translate-x-0" : ""}`}
         onClickCapture={(event) => {
           if ((event.target as HTMLElement).closest("a"))
             setMobileMenuOpen(false);
@@ -347,7 +357,6 @@ export function AppShell({ children }: PropsWithChildren) {
           <div className="flex items-center justify-between gap-2 pr-10 lg:pr-0">
             <SystemBrandLogo compact />
             <div className="flex shrink-0 items-center gap-1">
-              <LanguageSwitcher />
               <NotificationCenter
                 workspaceId={activeWorkspaceId}
                 enabled={canViewNotifications && publicWebEnvironment.liveMode !== "operator"}
@@ -361,6 +370,7 @@ export function AppShell({ children }: PropsWithChildren) {
               />
             </div>
           </div>
+          <div className={mobileMenuOpen ? "mt-2" : "mt-2 hidden lg:block"}><LanguageSwitcher /></div>
         </div>
 
         <GlobalSearchBox
@@ -518,5 +528,6 @@ export function AppShell({ children }: PropsWithChildren) {
         effectiveFeatureIds={activeWorkspace?.access?.featureIds}
       />
     </div>
+    </FinanceDisplayProvider>
   );
 }

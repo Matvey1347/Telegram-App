@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { canRetryTelegramAiPostingText, telegramAiPostingRunSlots } from '@telegram-system/shared';
+import { readTelegramAiPostingVisualDirection } from './telegram-ai-posting-visual-direction';
 import { decodeAiPostingRunPublications } from './telegram-ai-posting-run-data';
 import type { TelegramAiPostingRetrySlot } from './telegram-ai-posting-generation-store';
 import { WorkspaceService } from '../../../common/workspace.service';
@@ -57,6 +58,8 @@ export class TelegramAiPostingFailedRetryService {
         throw new NotFoundException('AI_POSTING_FAILURE_NOT_RETRYABLE');
       const assignment = failure.editorialAssignment;
       const editorialAssignment = assignment && typeof assignment === 'object' && !Array.isArray(assignment) && Object.keys(assignment).length ? {
+        visualDirection: readTelegramAiPostingVisualDirection(assignment.visualDirection),
+        visualMotif: typeof assignment.visualMotif === 'string' ? assignment.visualMotif.slice(0, 240) : undefined,
         sphereId: typeof assignment.sphereId === 'string' ? assignment.sphereId : undefined,
         rubricId: typeof assignment.rubricId === 'string' ? assignment.rubricId : undefined,
         lengthId: typeof assignment.lengthId === 'string' ? assignment.lengthId : undefined,

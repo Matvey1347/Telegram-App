@@ -1,6 +1,8 @@
 import type { AxiosInstance, AxiosRequestConfig } from "axios";
 import type {
+  FinanceAccountBalances,
   FinanceCategoryStatisticsResponse,
+  FinanceInvestmentListItem,
   PaginatedResponse,
 } from "@telegram-system/shared";
 import type {
@@ -89,6 +91,8 @@ export function createFinanceApi({
   quietMutationConfig: AxiosRequestConfig;
 }) {
   const accountsApi = {
+    balances: async (params: AccountQuery) =>
+      (await api.get<FinanceAccountBalances>("/accounts/balances", { params })).data,
     ...quietCrud<Account>("/accounts"),
     listPage: async (params?: PaginationParams & AccountQuery) =>
       getPaginated<Account>("/accounts", params),
@@ -177,19 +181,18 @@ export function createFinanceApi({
   const currenciesApi = {
     getSettings: async () =>
       (await api.get<CurrencySettings>("/currencies/settings")).data,
-    updateSettings: async (payload: {
-      primaryCurrency: Currency;
-      secondaryCurrency: Currency;
-      tertiaryCurrency?: Currency;
-      currencyDisplayMode?: CurrencyDisplayMode;
-    }) => (await api.patch<CurrencySettings>("/currencies/settings", payload)).data,
     listRates: async () => (await api.get<ExchangeRate[]>("/currencies/rates")).data,
     listLatestRates: async () =>
       (await api.get<ExchangeRate[]>("/currencies/rates/latest")).data,
   };
 
+  const investmentsApi = {
+    listPage: (params: PaginationParams) => getPaginated<FinanceInvestmentListItem>("/investments", params),
+  };
+
   return {
     accountsApi,
+    investmentsApi,
     transactionsApi,
     transactionCategoriesApi,
     transfersApi,

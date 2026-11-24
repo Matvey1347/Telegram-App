@@ -115,19 +115,19 @@ export const consumerFinancePlanningApi = {
         consumerRequest(),
       )
     ).data,
-  cancelAutoRenew: async (botId: string) =>
+  cancelAutoRenew: async (botId: string, subscriptionId?: string) =>
     (
       await consumerFinanceHttp.post<ConsumerFinanceRenewalUpdate>(
         `${consumerFinanceRoot(botId)}/billing/cancel-auto-renew`,
-        {},
+        { subscriptionId },
         consumerRequest(),
       )
     ).data,
-  resumeAutoRenew: async (botId: string) =>
+  resumeAutoRenew: async (botId: string, subscriptionId?: string) =>
     (
       await consumerFinanceHttp.post<ConsumerFinanceRenewalUpdate>(
         `${consumerFinanceRoot(botId)}/billing/resume-auto-renew`,
-        {},
+        { subscriptionId },
         consumerRequest(),
       )
     ).data,
@@ -136,6 +136,14 @@ export const consumerFinancePlanningApi = {
       await consumerFinanceHttp.post<{ url: string }>(
         `${consumerFinanceRoot(botId)}/billing/payment-portal`,
         {},
+        consumerRequest(),
+      )
+    ).data,
+  changePlan: async (botId: string, subscriptionId: string, priceId: string) =>
+    (
+      await consumerFinanceHttp.post<{ url: string }>(
+        `${consumerFinanceRoot(botId)}/billing/change-plan`,
+        { subscriptionId, priceId },
         consumerRequest(),
       )
     ).data,

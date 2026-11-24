@@ -31,6 +31,8 @@ export const CrmMessageComposer = forwardRef<
     workspaceId: string;
     conversationId: string;
     sending: boolean;
+    alwaysShowSend?: boolean;
+    context?: ReactNode;
     extraControls?: (hasText: boolean) => ReactNode;
     disabled?: boolean;
     onSend: (
@@ -45,6 +47,8 @@ export const CrmMessageComposer = forwardRef<
     workspaceId,
     conversationId,
     sending,
+    alwaysShowSend = false,
+    context,
     extraControls,
     disabled = false,
     onSend,
@@ -123,6 +127,7 @@ export const CrmMessageComposer = forwardRef<
   };
   return (
     <div className="shrink-0 border-t border-neutral-800 bg-neutral-900/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:px-3">
+      {context}
       {drafts.pendingDrafts.length ? (
         <div className="max-h-52 overflow-y-auto">
           <ModalDraftPicker
@@ -133,21 +138,10 @@ export const CrmMessageComposer = forwardRef<
           />
         </div>
       ) : (
-        <div
-          onKeyDown={(event) => {
-            if (
-              event.key === "Enter" &&
-              (event.ctrlKey || event.metaKey) &&
-              !event.nativeEvent.isComposing
-            ) {
-              event.preventDefault();
-              void submit();
-            }
-          }}
-        >
-          <CrmCompactEditor value={value.text} onChange={updateText} disabled={sending || disabled} onExpand={() => setEditorOpen(true)}
+        <div>
+          <CrmCompactEditor value={value.text} onChange={updateText} disabled={sending || disabled} onSubmit={() => void submit()} onExpand={() => setEditorOpen(true)}
             leading={extraControls?.(Boolean(value.text))}
-            trailing={value.text ? <button type="button" className="order-3 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500 text-white hover:bg-sky-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-40" aria-label="Send message" title="Send message" disabled={disabled || sending || dirtyAi || !value.text.trim() || value.text.length > 4096 || drafts.pendingDrafts.length > 0} onClick={() => void submit()}><Send size={18} aria-hidden /></button> : null} />
+            trailing={alwaysShowSend || value.text ? <button type="button" className="order-3 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-500 text-white hover:bg-sky-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300 disabled:opacity-40" aria-label="Send message" title="Send message" disabled={disabled || sending || dirtyAi || !value.text.trim() || value.text.length > 4096 || drafts.pendingDrafts.length > 0} onClick={() => void submit()}><Send size={18} aria-hidden /></button> : null} />
           <Modal open={editorOpen} onClose={() => setEditorOpen(false)} title="Edit message" size="xl">
             <TelegramTextEditor value={value.text} onChange={updateText} disabled={sending || disabled} rows={8} placeholder="Write a message…" characterCountLabel={(count) => `${count} / 4096`} enableCustomEmoji />
             <div className="mt-3 flex justify-end"><Button onClick={() => setEditorOpen(false)}>Done</Button></div>

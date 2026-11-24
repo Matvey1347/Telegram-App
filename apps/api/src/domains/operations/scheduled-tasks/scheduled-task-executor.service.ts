@@ -1,3 +1,4 @@
+import { TelegramAiPostingAutopilotService } from '../../telegram/telegram-channels/telegram-ai-posting-autopilot.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { TelegramCrmChatReceipts } from '../../telegram/telegram-crm/telegram-crm-chat-receipts.service';
 import { TelegramLeadRetentionService } from '../../telegram/telegram-crm/lead-discovery/lead-retention.service';
@@ -30,6 +31,11 @@ export class ScheduledTaskExecutorService {
   constructor(private readonly moduleRef: ModuleRef) {}
 
   readonly executors = {
+    'telegram.ai_posting.autopilot': async () => {
+      const autopilot = await this.moduleRef.resolve(TelegramAiPostingAutopilotService, undefined, { strict: false });
+      const result = await autopilot.processDueBatch(1);
+      return { summary: `Processed ${result.processed} AI Posting channels; ${result.failed} failed.`, details: result };
+    },
     'telegram.managed_posts.publish_due': async () => {
       const result = await (
         await this.telegramManagedPostReconciliationService()

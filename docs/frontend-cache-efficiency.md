@@ -43,6 +43,22 @@ returned transaction and affected account balance in those caches; they do not
 refetch startup, debts, recurring payments, and investments. Explicit refresh
 and complex financial operations may reconcile the wider snapshot.
 
+## Internal Finance display currency
+
+The sidebar preference is saved per browser user and workspace. It starts at
+the workspace accounting currency. Changing it recomputes read-only amounts
+from cached native balances and the shared latest rates. Read-only rows
+show the original amount first and its equivalent below when currencies
+differ. The Accounts total is shown in the selected currency. Account and
+transaction forms use their original currencies. The display preference
+does not send a settings mutation or refetch the ledger.
+
+The Accounts total reads all visible accounts for the selected tab, independent
+of card pagination. One compact account read and up to three grouped ledger
+reads return one balance per native currency. Account and ledger mutations
+invalidate the aggregate with the existing accounts query family. There are
+no recurring jobs, writes, or channel-dependent reads (including at 100 channels).
+
 ## Anti-patterns
 
 Do not add `onSuccess: () => invalidateQueries({ queryKey: domainRoot })` when

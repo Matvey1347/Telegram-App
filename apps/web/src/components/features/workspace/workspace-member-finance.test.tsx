@@ -158,6 +158,6 @@ describe("WorkspaceMemberFinance", () => {
     });
 
     expect(screen.queryByText("Commission payable")).toBeNull();
-    expect(screen.getByText(/Invested 400/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Invested 400/ })).toBeInTheDocument();
   });
 });

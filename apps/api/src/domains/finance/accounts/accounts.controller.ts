@@ -25,6 +25,11 @@ export class AccountsController {
     return this.accountsService.findAll(user.sub, query);
   }
 
+  @Get('balances')
+  balances(@CurrentUser() user: JwtUser, @Query() query: AccountQueryDto) {
+    return this.accountsService.balances(user.sub, query);
+  }
+
   @Post()
   create(@CurrentUser() user: JwtUser, @Body() dto: CreateAccountDto) {
     return this.accountsService.create(user.sub, dto);

@@ -1,3 +1,4 @@
+import { TelegramAiPostingAutopilotService } from '../../telegram/telegram-channels/telegram-ai-posting-autopilot.service';
 import { Injectable } from '@nestjs/common';
 import { TelegramChannelRemindersDueService } from '../../telegram/telegram-channels/telegram-channel-reminders-due.service';
 import { ModuleRef } from '@nestjs/core';
@@ -10,6 +11,10 @@ export class ScheduledTaskDomainDueResolverService {
   constructor(private readonly moduleRef: ModuleRef) {}
 
   async nextDueAt(taskKey: string): Promise<Date | null | undefined> {
+    if (taskKey === 'telegram.ai_posting.autopilot') {
+      const autopilot = await this.moduleRef.resolve(TelegramAiPostingAutopilotService, undefined, { strict: false });
+      return autopilot.nextDueAt();
+    }
     if (taskKey === 'telegram.channel_reminders.due') {
       const service = await this.moduleRef.resolve(
         TelegramChannelRemindersDueService,

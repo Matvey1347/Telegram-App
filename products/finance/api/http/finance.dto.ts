@@ -9,6 +9,7 @@ import {
   IsNumberString,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   MaxLength,
   Min,
@@ -131,12 +132,21 @@ export class FinanceAssistantHistoryItemDto {
   @IsIn(["user", "assistant"]) role!: "user" | "assistant";
   @IsString() @MinLength(1) @MaxLength(1200) text!: string;
 }
-export class FinanceAssistantMessageDto extends FinanceAssistantEntryDto {
+export class FinanceAssistantTurnDto {
+  @IsOptional() @IsUUID() chatId?: string;
+  @IsOptional() @IsUUID() turnId?: string;
+}
+export class FinanceAssistantMessageDto extends FinanceAssistantTurnDto {
+  @IsString() @MinLength(1) @MaxLength(2000) text!: string;
   @IsOptional()
   @ArrayMaxSize(8)
   @ValidateNested({ each: true })
   @Type(() => FinanceAssistantHistoryItemDto)
   history?: FinanceAssistantHistoryItemDto[];
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => FinanceAssistantHistoryItemDto)
+  replyTo?: FinanceAssistantHistoryItemDto;
 }
 export class UpdateFinanceSettingsDto {
   @IsString() @MinLength(3) @MaxLength(3) defaultCurrency!: string;

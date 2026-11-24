@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, Wallet } from "lucide-react";
+import { Bot, Headphones, Wallet } from "lucide-react";
 import type { TelegramBotApplicationType } from "@telegram-system/shared";
 import { api } from "@/lib/api";
 
@@ -24,7 +24,7 @@ export function BotRuntimeAvatar({
   avatarUrl,
   refreshKey,
 }: {
-  type: TelegramBotApplicationType;
+  type: TelegramBotApplicationType | "SUPPORT";
   avatarUrl?: string | null;
   refreshKey?: number;
 }) {
@@ -56,10 +56,13 @@ export function BotRuntimeAvatar({
   }, [avatarUrl, isBundledBrandAsset, sourceKey]);
 
   const isFinanceBot = type === "FINANCE";
-  const Icon = isFinanceBot ? Wallet : Bot;
+  const isSupportBot = type === "SUPPORT";
+  const label = isSupportBot ? "Support bot avatar" : isFinanceBot ? "Finance bot" : "Access bot";
+  const Icon = isSupportBot ? Headphones : isFinanceBot ? Wallet : Bot;
   return (
     <div
-      aria-label={`${isFinanceBot ? "Finance" : "Access"} bot`}
+      role="img"
+      aria-label={label}
       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-transparent"
     >
       {isBundledBrandAsset ? (

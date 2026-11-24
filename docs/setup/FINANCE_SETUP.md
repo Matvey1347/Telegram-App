@@ -33,8 +33,12 @@ and their listener ports before migration. They run
 API. This applies pending Nexeloq schema migrations and checks the resulting
 schema. The all-products launcher also generates the shared Prisma client
 before either API watcher compiles. The dedicated tunnel launcher retries failed database preparation.
-Stop an existing launcher in its own terminal before starting another on the
-same ports. A port conflict fails before migration.
+On macOS and Linux, `pnpm dev:all:tunnel` first stops registered launchers
+from this checkout that overlap its four application ports, including their
+watchers and tunnels. It then clears any remaining local listeners. A listener from another
+checkout or application stays running and the launcher reports its port and
+PID before migration. For ordinary dev commands, stop the previous launcher
+in its own terminal or run `pnpm dev:stop` before changing modes.
 
 Check Finance at `http://localhost:3001/health` and
 `http://localhost:3001/api/health`. The proxied

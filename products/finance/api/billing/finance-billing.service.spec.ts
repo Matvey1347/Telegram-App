@@ -81,6 +81,10 @@ describe("FinanceBillingService", () => {
         .fn()
         .mockResolvedValue({ invoiceLink: "https://t.me/invoice" }),
       syncFixedCatalog: jest.fn().mockResolvedValue([]),
+      stripeRenewal: jest.fn(),
+      changeStripePlan: jest
+        .fn()
+        .mockResolvedValue({ url: "https://stripe.test/confirm" }),
     };
     const entitlements = {
       resolve: jest.fn().mockResolvedValue({
@@ -91,14 +95,21 @@ describe("FinanceBillingService", () => {
         cancelAtPeriodEnd: false,
       }),
     };
+    const entitlementMocks = {
+      ...entitlements,
+      resolveForBilling: jest.fn(async () => ({
+        ...(await entitlements.resolve()),
+        activeSubscriptions: [],
+      })),
+    };
     return {
       prisma,
       billing,
-      entitlements,
+      entitlements: entitlementMocks,
       service: new FinanceBillingService(
         prisma as never,
         billing as never,
-        entitlements as never,
+        entitlementMocks as never,
       ),
     };
   }
@@ -179,8 +190,14 @@ describe("FinanceBillingService", () => {
     expect(prisma.botBillingEvent.findMany).toHaveBeenCalledWith({
       where: {
         botIntegrationId: "bot-1",
-        type: { in: ["PAYMENT_SUCCEEDED", "PAYMENT_FAILED"] },
         subscription: { telegramBotUserId: "user-1" },
+        OR: [
+          { type: { in: ["PAYMENT_SUCCEEDED", "PAYMENT_FAILED"] } },
+          {
+            type: "GRANT_CREATED",
+            subscription: { source: { in: ["GIFT", "MANUAL"] } },
+          },
+        ],
       },
       orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
       take: 20,
@@ -194,6 +211,148 @@ describe("FinanceBillingService", () => {
         subscription: { select: { plan: { select: { code: true } } } },
       },
     });
+  });
+
+  it("returns issued gifts and keeps a lifetime gift when a timed grant overlaps", async () => {
+    const { service, prisma, entitlements, billing } = setup();
+    const current = {
+      tier: "PRO",
+      capabilities: [],
+      usage: [],
+      activeUntil: null,
+      cancelAtPeriodEnd: false,
+    };
+    entitlements.resolveForBilling.mockResolvedValue({
+      ...current,
+      activeSubscriptions: [
+        { grants: [{ expiresAt: new Date("2032-03-08") }] },
+        { grants: [{ expiresAt: null }] },
+      ] as never,
+    });
+    prisma.botBillingEvent.findMany.mockResolvedValue([
+      {
+        id: "grant-created",
+        type: "GRANT_CREATED",
+        provider: null,
+        amountMinor: null,
+        currency: null,
+        occurredAt: new Date("2026-11-24"),
+        subscription: { plan: { code: "PRO" } },
+      },
+    ]);
+    const result = await service.catalog({
+      botIntegrationId: "bot-id",
+      telegramBotUserId: "recipient-id",
+      profileId: "profile-id",
+    });
+    expect(result.current).toEqual(current);
+    expect(result.activeAccess).toEqual({
+      gift: { expiresAt: null },
+      stripe: null,
+    });
+    expect(result.paymentHistory).toEqual([
+      {
+        id: "grant-created",
+        status: "GIFTED",
+        provider: null,
+        amountMinor: null,
+        currency: null,
+        occurredAt: "2026-11-24T00:00:00.000Z",
+        planCode: "PRO",
+      },
+    ]);
+    expect(billing.stripeRenewal).not.toHaveBeenCalled();
+  });
+
+  it("uses verified Stripe renewal data and preserves access if Stripe is unavailable", async () => {
+    const { service, entitlements, billing } = setup();
+    entitlements.resolveForBilling.mockResolvedValue({
+      tier: "PRO",
+      capabilities: [],
+      usage: [],
+      activeUntil: "2032-03-08T00:00:00.000Z",
+      cancelAtPeriodEnd: false,
+      activeSubscriptions: [
+        {
+          id: "local-sub",
+          source: "STRIPE",
+          status: "ACTIVE",
+          interval: "DAY",
+          intervalCount: 7,
+          currentPeriodEnd: new Date("2032-03-08"),
+          grants: [],
+          plan: { code: "PRO" },
+          providerSubscription: {
+            mode: "TEST",
+            providerSubscriptionId: "sub_intro",
+            providerStatus: "trialing",
+          },
+        },
+      ] as never,
+    });
+    const renewal = {
+      amountMinor: 17900,
+      currency: "UAH",
+      chargeAt: "2032-03-08T00:00:00.000Z",
+      interval: "MONTH",
+      intervalCount: 1,
+    };
+    billing.stripeRenewal
+      .mockResolvedValueOnce(renewal)
+      .mockRejectedValueOnce(new Error("Stripe unavailable"));
+    const input = {
+      botIntegrationId: "bot-1",
+      telegramBotUserId: "user-1",
+      profileId: "profile-1",
+    };
+    const catalog = await service.catalog(input);
+    expect(catalog.activeAccess?.stripe).toMatchObject({
+      id: "local-sub",
+      interval: "DAY",
+      intervalCount: 7,
+      renewal,
+      canChangePlan: false,
+    });
+    expect(billing.stripeRenewal).toHaveBeenCalledWith({
+      botIntegrationId: "bot-1",
+      mode: "TEST",
+      providerSubscriptionId: "sub_intro",
+    });
+    const unavailable = await service.catalog(input);
+    expect(unavailable.current.tier).toBe("PRO");
+    expect(unavailable.activeAccess?.stripe?.renewal).toBeNull();
+  });
+
+  it("opens a change confirmation only for a canonical recurring plan", async () => {
+    const { service, prisma, billing } = setup();
+    const request = {
+      botIntegrationId: "bot-1",
+      telegramBotUserId: "user-1",
+      subscriptionId: "paid-subscription",
+      priceId: "quarterly",
+      returnUrl: "https://example.test/app/subscription",
+    };
+    prisma.botPlanPrice.findFirst
+      .mockResolvedValueOnce({
+        currency: "UAH",
+        interval: "DAY",
+        intervalCount: 7,
+        amountMinor: 700,
+      })
+      .mockResolvedValueOnce({
+        currency: "UAH",
+        interval: "MONTH",
+        intervalCount: 3,
+        amountMinor: 39900,
+      });
+    await expect(service.changeStripePlan(request)).rejects.toThrow(
+      "recurring",
+    );
+    expect(billing.changeStripePlan).not.toHaveBeenCalled();
+    await expect(service.changeStripePlan(request)).resolves.toEqual({
+      url: "https://stripe.test/confirm",
+    });
+    expect(billing.changeStripePlan).toHaveBeenCalledWith(request);
   });
 
   it("rejects a non-canonical Stripe price before creating checkout", async () => {

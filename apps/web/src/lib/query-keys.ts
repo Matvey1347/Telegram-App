@@ -24,6 +24,8 @@ export const accountKeys = {
   me: () => ["account-me"] as const,
   shell: () => ["account-shell"] as const,
   accounts: () => ["accounts"] as const,
+  balanceTotals: () => ["accounts", "balance-totals"] as const,
+  investments: () => ["investments"] as const,
   transactions: () => ["transactions"] as const,
 };
 
@@ -157,6 +159,7 @@ export const telegramChannelKeys = {
 };
 
 export const telegramAiPostingKeys = {
+  autopilot: (channelId: string) => ["telegram-ai-posting", channelId, "autopilot"] as const,
   settings: (channelId: string) => ["telegram-ai-posting", channelId] as const,
   sourceChannels: (channelId: string) =>
     ["telegram-ai-posting", channelId, "source-channels"] as const,

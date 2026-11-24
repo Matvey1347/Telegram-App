@@ -100,18 +100,10 @@ export class BotBillingAnalyticsService {
           select: { id: true },
         })
       : null;
-    const periodStart = new Date(
-      Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
-    );
-    const where = {
-      workspaceId,
-      botIntegrationId,
-      ...(environment
-        ? { runtimeInstanceId: { in: runtime ? [runtime.id] : [] } }
-        : {}),
-      createdAt: { gte: periodStart },
-      status: { not: 'PENDING' },
-    };
+    const periodStart = this.aiUsagePeriodStart();
+    const where = environment && !runtime
+      ? { ...this.aiUsageScope(workspaceId, botIntegrationId, periodStart), runtimeInstanceId: { in: [] } }
+      : this.aiUsageScope(workspaceId, botIntegrationId, periodStart, runtime?.id);
     const [summary, models, users] = await Promise.all([
       this.prisma.aiUsageEvent.aggregate({
         where,
@@ -154,6 +146,25 @@ export class BotBillingAnalyticsService {
             telegramUserId: true,
             username: true,
             firstName: true,
+            billingSubscriptions: {
+              where: {
+                workspaceId,
+                botIntegrationId,
+                AND: [
+                  { OR: [
+                    { status: BotSubscriptionStatus.ACTIVE },
+                    { status: BotSubscriptionStatus.CANCELED, currentPeriodEnd: { gt: new Date() } },
+                  ] },
+                  { OR: [
+                    { providerSubscription: null },
+                    { providerSubscription: { is: { mode: environment === 'LOCAL' ? BotBillingProviderMode.TEST : BotBillingProviderMode.LIVE } } },
+                  ] },
+                ],
+              },
+              orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+              take: 1,
+              select: { plan: { select: { name: true } } },
+            },
           },
         })
       : [];
@@ -185,11 +196,59 @@ export class BotBillingAnalyticsService {
                 telegramUserId: identity.telegramUserId,
                 username: identity.username,
                 firstName: identity.firstName,
+                planName: identity.billingSubscriptions?.[0]?.plan?.name ?? null,
                 requests: row._count._all,
                 estimatedCostMicros: row._sum.estimatedCostMicros ?? null,
               },
             ]
           : [];
+      }),
+    };
+  }
+
+  async aiUsageForUsers(workspaceId: string, botIntegrationId: string, runtimeId: string | undefined, userIds: string[]) {
+    if (!runtimeId || !userIds.length) return new Map();
+    const rows = await this.prisma.aiUsageEvent.groupBy({
+      by: ['telegramBotUserId'],
+      where: {
+        ...this.aiUsageScope(workspaceId, botIntegrationId, this.aiUsagePeriodStart(), runtimeId),
+        telegramBotUserId: { in: userIds },
+      },
+      _count: { _all: true, estimatedCostMicros: true },
+      _sum: { estimatedCostMicros: true },
+    });
+    return new Map(rows.map((row) => [row.telegramBotUserId, {
+      requests: row._count._all,
+      estimatedCostMicros: row._sum.estimatedCostMicros,
+      unpricedRequests: row._count._all - row._count.estimatedCostMicros,
+    }]));
+  }
+
+  private aiUsagePeriodStart() {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  }
+
+  private aiUsageScope(
+    workspaceId: string,
+    botIntegrationId: string,
+    periodStart: Date,
+    runtimeId?: string,
+  ): Prisma.AiUsageEventWhereInput {
+    return {
+      workspaceId,
+      botIntegrationId,
+      createdAt: { gte: periodStart },
+      status: { not: 'PENDING' },
+      ...(runtimeId && {
+        OR: [
+          { runtimeInstanceId: runtimeId },
+          // Older assistant receipts omitted the runtime but kept the owned profile.
+          {
+            runtimeInstanceId: null,
+            profile: { is: { botIntegrationId, telegramUser: { runtimeInstanceId: runtimeId } } },
+          },
+        ],
       }),
     };
   }

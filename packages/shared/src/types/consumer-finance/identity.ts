@@ -47,3 +47,8 @@ export type ConsumerFinanceSettingsInput = {
   defaultExpenseCategoryId?: string | null;
   defaultIncomeCategoryId?: string | null;
 };
+
+export type ConsumerFinanceBrowserContext = {
+  financeBotId: string;
+  supportBotUsername?: string;
+};

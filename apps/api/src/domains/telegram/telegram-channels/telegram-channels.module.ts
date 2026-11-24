@@ -1,3 +1,8 @@
+import { TelegramAiPostingAutopilotSettingsService } from './telegram-ai-posting-autopilot-settings.service';
+import { TelegramAiPostingAutopilotChannelService } from './telegram-ai-posting-autopilot-channel.service';
+import { TelegramAiPostingAutopilotService } from './telegram-ai-posting-autopilot.service';
+import { TelegramAiPostingAutopilotController } from './telegram-ai-posting-autopilot.controller';
+import { TelegramAiPostingAutopilotNotificationService } from './telegram-ai-posting-autopilot-notification.service';
 import { TelegramManagedPostNativeRecoveryStore } from './telegram-managed-post-native-recovery.store';
 import { TelegramOperatorSendService } from './telegram-operator-send.service';
 import { TelegramOperatorContractController, TelegramProductionRecoveryTransportController } from './telegram-production-recovery-transport.controller';
@@ -30,6 +35,7 @@ import { TelegramAiPostingGeneratorService } from './telegram-ai-posting-generat
 import { TelegramAiPostingSourceService } from './telegram-ai-posting-source.service';
 import { TelegramAiPostingContentModelService } from './telegram-ai-posting-content-model.service';
 import { TelegramAiPostingStructureService } from './telegram-ai-posting-structure.service';
+import { TelegramAiPostingChannelAnalysisService } from './telegram-ai-posting-channel-analysis.service';
 import { TelegramAiPostingReferenceAnalysisService } from './telegram-ai-posting-reference-analysis.service';
 import { TelegramAiPostingImageService } from './telegram-ai-posting-image.service';
 import { TelegramAiPostingTestRunService } from './telegram-ai-posting-test-run.service';
@@ -161,6 +167,7 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramChannelPostGroupsController,
     TelegramChannelsController,
     TelegramAiPostingController,
+    TelegramAiPostingAutopilotController,
     TelegramAiPostingChatController,
     TelegramAiPostingRhythmController,
     TelegramChannelRemindersController,
@@ -193,10 +200,15 @@ import { TelegramChannelTrafficAttributionService } from './telegram-channel-tra
     TelegramAiPostingChatSourcesService,
     TelegramAiPostingChatMediaService,
     TelegramAiPostingGeneratorService,
+    TelegramAiPostingAutopilotService,
+    TelegramAiPostingAutopilotChannelService,
+    TelegramAiPostingAutopilotSettingsService,
+    TelegramAiPostingAutopilotNotificationService,
     TelegramAiPostingSourceService,
     TelegramAiPostingStructureService,
     TelegramAiPostingImageService,
     TelegramAiPostingReferenceAnalysisService,
+    TelegramAiPostingChannelAnalysisService,
     TelegramAiPostingTestRunService,
     TelegramAiPostingRuleFeedbackService,
     TelegramAiPostingFailedRetryService,

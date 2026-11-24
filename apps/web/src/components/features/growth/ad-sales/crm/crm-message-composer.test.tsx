@@ -284,6 +284,27 @@ describe("CRM message composer send constraints", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("inserts one line break at the caret on Shift+Enter and sends on Enter", async () => {
+    const send = vi.fn().mockResolvedValue(true);
+    render(composer(send));
+    enterText("First lineSecond line");
+    const editor = screen.getByRole("textbox");
+    const range = document.createRange();
+    range.setStart(editor.firstChild!, "First line".length);
+    range.collapse(true);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    expect(fireEvent.keyDown(editor, { key: "Enter", shiftKey: true })).toBe(false);
+    expect(editor.querySelectorAll("br")).toHaveLength(1);
+    expect(send).not.toHaveBeenCalled();
+
+    expect(fireEvent.keyDown(editor, { key: "Enter" })).toBe(false);
+    await waitFor(() => expect(send).toHaveBeenCalledOnce());
+    expect(send).toHaveBeenCalledWith("First line\nSecond line", expect.any(String));
+  });
+
   it("accepts the Telegram text boundary and the send shortcut, while respecting IME composition", async () => {
     const send = vi.fn().mockResolvedValue(false);
     render(composer(send));

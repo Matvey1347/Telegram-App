@@ -431,7 +431,7 @@ export class BotBillingReadModels {
         languageCode: true,
         firstSeenAt: true,
         lastInteractionAt: true,
-        runtimeInstance: { select: { environment: true } },
+        runtimeInstance: { select: { id: true, environment: true } },
         financeProfiles: {
           where: { botIntegrationId },
           take: 1,
@@ -457,6 +457,9 @@ export class BotBillingReadModels {
       },
     });
     const page = rows.slice(0, limit);
+    const usage = await this.analytics.aiUsageForUsers(
+      bot.workspaceId, botIntegrationId, page[0]?.runtimeInstance?.id, page.map((user) => user.id),
+    );
     return {
       items: page.map(
         ({
@@ -466,6 +469,7 @@ export class BotBillingReadModels {
           ...row
         }) => ({
           ...row,
+          aiUsage: usage.get(row.id) ?? { requests: 0, estimatedCostMicros: null, unpricedRequests: 0 },
           environment: runtimeInstance!.environment,
           firstSeenAt: row.firstSeenAt.toISOString(),
           lastInteractionAt: row.lastInteractionAt.toISOString(),

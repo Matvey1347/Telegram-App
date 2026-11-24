@@ -3,6 +3,11 @@ import type { FinanceLocale } from "@consumer-finance/web/components/i18n/core";
 const copy = {
   en: {
     title: "Jarvis",
+    messageActions: "Message actions",
+    copyMessage: "Copy",
+    reply: "Reply",
+    clearReply: "Remove reply",
+    you: "You",
     open: "Open Jarvis",
     close: "Close Jarvis",
     subtitle: "Your finance assistant",
@@ -26,6 +31,14 @@ const copy = {
     attach: "Attach receipt or voice",
     record: "Record a voice message",
     stopRecording: "Stop recording",
+    dictationStart: "Dictate a message",
+    dictationStop: "Stop dictation",
+    dictationListening: "Listening…",
+    dictationFinishing: "Finishing transcription…",
+    dictationUnavailable: "This browser doesn’t support live dictation. You can type your message instead.",
+    dictationPermission: "Microphone access is unavailable. Check your browser permissions and try again.",
+    dictationFailed: "Dictation was interrupted. You can edit the draft or try again.",
+    dictationEmpty: "No speech was recognized. Try speaking closer to the microphone.",
     voiceRequiresPro: "Voice messages require Pro or Ultra",
     recording: "Recording",
     dropHere: "Drop receipt images or one audio file here",
@@ -72,6 +85,11 @@ const copy = {
   },
   uk: {
     title: "Джаврис",
+    messageActions: "Дії з повідомленням",
+    copyMessage: "Скопіювати",
+    reply: "Відповісти",
+    clearReply: "Прибрати цитату",
+    you: "Ти",
     open: "Відкрити Джавриса",
     close: "Закрити Джавриса",
     subtitle: "Ваш фінансовий асистент",
@@ -94,6 +112,14 @@ const copy = {
     attach: "Додати чек або голос",
     record: "Записати голосове повідомлення",
     stopRecording: "Зупинити запис",
+    dictationStart: "Продиктувати повідомлення",
+    dictationStop: "Зупинити диктування",
+    dictationListening: "Слухаю…",
+    dictationFinishing: "Завершую розпізнавання…",
+    dictationUnavailable: "Цей браузер не підтримує диктування. Ти можеш набрати повідомлення вручну.",
+    dictationPermission: "Немає доступу до мікрофона. Перевір дозволи браузера й спробуй ще раз.",
+    dictationFailed: "Диктування перервано. Можеш відредагувати чернетку або спробувати ще раз.",
+    dictationEmpty: "Мовлення не розпізнано. Спробуй говорити ближче до мікрофона.",
     voiceRequiresPro: "Голосові повідомлення доступні в Pro та Ultra",
     recording: "Запис",
     dropHere: "Перетягніть сюди зображення чеків або один аудіофайл",
@@ -139,6 +165,11 @@ const copy = {
       "Джаврис лише готує пропозиції. Фінансові зміни завжди потребують підтвердження.",
   },
   ru: {
+    messageActions: "Действия с сообщением",
+    copyMessage: "Скопировать",
+    reply: "Ответить",
+    clearReply: "Убрать цитату",
+    you: "Вы",
     title: "Джаврис",
     open: "Открыть Джавриса",
     close: "Закрыть Джавриса",
@@ -162,6 +193,14 @@ const copy = {
     attach: "Добавить чек или голос",
     record: "Записать голосовое сообщение",
     stopRecording: "Остановить запись",
+    dictationStart: "Продиктовать сообщение",
+    dictationStop: "Остановить диктовку",
+    dictationListening: "Слушаю…",
+    dictationFinishing: "Завершаю распознавание…",
+    dictationUnavailable: "Этот браузер не поддерживает диктовку. Ты можешь набрать сообщение вручную.",
+    dictationPermission: "Нет доступа к микрофону. Проверь разрешения браузера и попробуй ещё раз.",
+    dictationFailed: "Диктовка прервалась. Можешь отредактировать черновик или попробовать снова.",
+    dictationEmpty: "Речь не распознана. Попробуй говорить ближе к микрофону.",
     voiceRequiresPro: "Голосовые сообщения доступны в Pro и Ultra",
     recording: "Запись",
     dropHere: "Перетащите сюда изображения чеков или один аудиофайл",
@@ -209,4 +248,44 @@ const copy = {
   },
 } as const;
 
-export const financeAssistantCopy = (locale: FinanceLocale) => copy[locale];
+type FinanceAssistantCopy = {
+  [Key in keyof typeof copy.en]: (typeof copy.en)[Key] extends readonly string[]
+    ? readonly string[]
+    : string;
+};
+
+export const financeAssistantCopy = (locale: FinanceLocale): FinanceAssistantCopy => copy[locale] ?? copy.uk;
+
+export function groshlyAssistantCopy(locale: FinanceLocale): FinanceAssistantCopy {
+  const base = financeAssistantCopy(locale);
+  const localized = {
+    uk: {
+      thinking: "Groshly AI готує відповідь",
+      providerError: "Groshly AI не зміг завершити відповідь.",
+      intro: "Привіт! Напиши, що тебе цікавить. Я допоможу розібратися у витратах, спланувати бюджет і керувати грошима ефективніше.",
+      placeholder: "Напиши повідомлення…",
+      limitUpgradeTitle: "Groshly AI доступний із Plus",
+      limitUpgradeDescription: "Оформи Plus, щоб запитувати про свої фінанси й додавати операції через асистента.",
+      limitUpgradeCta: "Переглянути Plus",
+    },
+    en: {
+      thinking: "Groshly AI is preparing a reply",
+      providerError: "Groshly AI couldn’t finish the reply.",
+      intro: "Hi! Tell me what’s on your mind. I can help you understand your spending, plan your budget, and manage your money more effectively.",
+      placeholder: "Write a message…",
+      limitUpgradeTitle: "Groshly AI is included with Plus",
+      limitUpgradeDescription: "Get Plus to ask about your finances and add transactions with the assistant.",
+      limitUpgradeCta: "View Plus",
+    },
+    ru: {
+      thinking: "Groshly AI готовит ответ",
+      providerError: "Groshly AI не смог завершить ответ.",
+      intro: "Привет! Напиши, что тебя интересует. Я помогу разобраться в расходах, спланировать бюджет и эффективнее управлять деньгами.",
+      placeholder: "Напиши сообщение…",
+      limitUpgradeTitle: "Groshly AI доступен с Plus",
+      limitUpgradeDescription: "Подключи Plus, чтобы задавать вопросы о финансах и добавлять операции через ассистента.",
+      limitUpgradeCta: "Посмотреть Plus",
+    },
+  }[locale];
+  return { ...base, ...(localized ?? {}), title: "Groshly AI", thinkingStages: [base.thinking, base.thinking, base.thinking] };
+}

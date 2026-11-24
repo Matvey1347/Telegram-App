@@ -31,8 +31,12 @@ function BrowserLoginRedirect() {
 
 const GroshlyRoot = GroshlyApp as ComponentType<{
   financeBotId: string;
+  assistantProfileId: string;
   financeIdentityScope: string;
   financeTelegramInitData?: string;
+  supportBotUsername?: string;
+  financeTimezone: string;
+  onAssistantLedgerChange: () => void;
   initialData: GroshlySnapshot;
   logoUrl: string;
   faviconUrl: string;
@@ -380,7 +384,8 @@ export function groshlySnapshot({
   };
 }
 
-export function GroshlyFinanceApp({ botId, bootstrap }: {
+export function GroshlyFinanceApp({ botId, bootstrap, supportBotUsername }: {
+  supportBotUsername?: string;
   botId: string;
   bootstrap: Extract<TelegramMiniAppBootstrap, { status: "ready" | "browser" }>;
 }) {
@@ -1119,6 +1124,13 @@ export function GroshlyFinanceApp({ botId, bootstrap }: {
   return (
     <GroshlyRoot
       financeBotId={botId}
+      assistantProfileId={financeData.data.profile.id}
+      supportBotUsername={supportBotUsername}
+      financeTimezone={financeData.data.profile.timezone}
+      onAssistantLedgerChange={() => {
+        void financeData.refetch();
+        void history.refetch();
+      }}
       financeIdentityScope={identityScope}
       financeTelegramInitData={bootstrap.status === "ready" ? bootstrap.initData : undefined}
       initialData={snapshot}

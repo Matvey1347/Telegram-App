@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   get: vi.fn(),
   checkout: vi.fn(),
   portal: vi.fn(),
+  changePlan: vi.fn(),
   cancel: vi.fn(),
   resume: vi.fn(),
 }));
@@ -18,7 +19,7 @@ const catalog = {
   tier: "FREE" as const,
   activeUntil: null,
   cancelAtPeriodEnd: false,
-  subscription: null,
+  activeAccess: { gift: null, stripe: null },
   history: [],
   offers: [
     {
@@ -40,6 +41,9 @@ const catalog = {
     },
     {
       code: "QUARTER",
+      id: "price-quarter",
+      mode: "TEST",
+      version: 1,
       amountMinor: 39900,
       currency: "UAH",
       intervalLabel: "Every 3 months",
@@ -110,13 +114,24 @@ describe("FinanceBillingPanel", () => {
     api.get.mockResolvedValue({
       ...catalog,
       tier: "PLUS",
-      subscription: {
-        id: "sub-1",
-        status: "ACTIVE",
-        source: "STRIPE",
-        offerCode: "MONTH",
-        currentPeriodEnd: "2026-11-28T00:00:00Z",
-        cancelAtPeriodEnd: false,
+      activeAccess: {
+        gift: null,
+        stripe: {
+          id: "sub-1",
+          currentPeriodEnd: "2026-11-28T12:00:00Z",
+          cancelAtPeriodEnd: false,
+          canManageRenewal: true,
+          canChangePlan: true,
+          interval: "MONTH",
+          intervalCount: 1,
+          renewal: {
+            amountMinor: 15900,
+            currency: "UAH",
+            chargeAt: "2026-11-28T12:00:00Z",
+            interval: "MONTH",
+            intervalCount: 1,
+          },
+        },
       },
       history: [
         {
@@ -133,8 +148,102 @@ describe("FinanceBillingPanel", () => {
     api.cancel.mockResolvedValue({ ...catalog, cancelAtPeriodEnd: true });
     view();
     expect(await screen.findByText("Paid")).toBeInTheDocument();
+    expect(screen.getByText("Next charge")).toBeInTheDocument();
+    expect(screen.getByText("Nov 28, 2026")).toBeInTheDocument();
+    expect(screen.getByText(/UAH\s*159\.00/)).toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Get PLUS" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: "Plan change options" }),
+    ).not.toBeInTheDocument();
+    api.changePlan.mockRejectedValue(
+      new Error("Stripe is temporarily unavailable"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Change plan" }));
+    fireEvent.click(screen.getByRole("button", { name: /3 months/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Stripe is temporarily unavailable",
+    );
+    expect(api.changePlan).toHaveBeenCalledWith(
+      "bot-1",
+      "sub-1",
+      "price-quarter",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Cancel renewal" }));
-    await waitFor(() => expect(api.cancel).toHaveBeenCalledWith("bot-1"));
+    await waitFor(() =>
+      expect(api.cancel).toHaveBeenCalledWith("bot-1", "sub-1"),
+    );
+  });
+
+  it.each([
+    ["2026-12-15T12:00:00Z", "Gift access until Dec 15, 2026"],
+    [null, "Lifetime access"],
+  ])(
+    "shows gifted Plus and its history without checkout or billing controls",
+    async (expiresAt, accessText) => {
+      api.get.mockResolvedValue({
+        ...catalog,
+        tier: "PLUS",
+        activeAccess: { gift: { expiresAt }, stripe: null },
+        history: [
+          {
+            id: "issued",
+            status: "GIFTED",
+            planCode: "PRO",
+            occurredAt: "2026-11-24T12:00:00Z",
+            amountMinor: null,
+            currency: null,
+          },
+        ],
+      });
+      view();
+      expect(await screen.findByText(accessText)).toBeInTheDocument();
+      expect(screen.getByText("Gifted")).toBeInTheDocument();
+      expect(screen.getByText("Nov 24, 2026").parentElement).toHaveTextContent(
+        "Groshly Plus",
+      );
+      expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
+      expect(screen.queryByText("Next charge")).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Change plan" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "AI assistant" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "Advanced analytics" }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText("Receipt scanning")).not.toBeInTheDocument();
+    },
+  );
+
+  it("keeps paid access until the end of a canceled renewal", async () => {
+    api.get.mockResolvedValue({
+      ...catalog,
+      tier: "PLUS",
+      activeAccess: {
+        stripe: {
+          id: "sub-canceled",
+          currentPeriodEnd: "2026-12-22T12:00:00Z",
+          cancelAtPeriodEnd: true,
+          canManageRenewal: true,
+          canChangePlan: false,
+          interval: "MONTH",
+          intervalCount: 3,
+          renewal: null,
+        },
+      },
+    });
+    view();
+    expect(await screen.findByText("Paid access until")).toBeInTheDocument();
+    expect(screen.getByText("Dec 22, 2026")).toBeInTheDocument();
+    expect(screen.queryByText("Next charge")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Resume renewal" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
   });
 
   it("shows a retry state when Finance billing is unavailable", async () => {

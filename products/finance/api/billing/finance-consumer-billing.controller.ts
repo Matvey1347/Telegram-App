@@ -79,13 +79,21 @@ export class FinanceConsumerBillingController {
   }
 
   @Post("billing/cancel-auto-renew")
-  cancelAutoRenew(@Param("botId") botId: string, @Req() request: Request) {
-    return this.setAutoRenewal(botId, request, true);
+  cancelAutoRenew(
+    @Param("botId") botId: string,
+    @Req() request: Request,
+    @Body() input?: { subscriptionId?: string },
+  ) {
+    return this.setAutoRenewal(botId, request, true, input?.subscriptionId);
   }
 
   @Post("billing/resume-auto-renew")
-  resumeAutoRenew(@Param("botId") botId: string, @Req() request: Request) {
-    return this.setAutoRenewal(botId, request, false);
+  resumeAutoRenew(
+    @Param("botId") botId: string,
+    @Req() request: Request,
+    @Body() input?: { subscriptionId?: string },
+  ) {
+    return this.setAutoRenewal(botId, request, false, input?.subscriptionId);
   }
 
   @Post("billing/payment-portal")
@@ -94,6 +102,31 @@ export class FinanceConsumerBillingController {
     return this.billing.stripePortal({
       botIntegrationId: botId,
       telegramBotUserId: session.telegramBotUserId,
+      returnUrl: this.financeReturnUrl(botId),
+    });
+  }
+
+  @Post("billing/change-plan")
+  changePlan(
+    @Param("botId") botId: string,
+    @Req() request: Request,
+    @Body() input: { subscriptionId?: string; priceId?: string },
+  ) {
+    const session = this.requests.authenticate(botId, request);
+    if (
+      typeof input?.subscriptionId !== "string" ||
+      !input.subscriptionId ||
+      typeof input.priceId !== "string" ||
+      !input.priceId
+    )
+      throw new BadRequestException(
+        "A subscription and recurring price are required",
+      );
+    return this.billing.changeStripePlan({
+      botIntegrationId: botId,
+      telegramBotUserId: session.telegramBotUserId,
+      subscriptionId: input.subscriptionId,
+      priceId: input.priceId,
       returnUrl: this.financeReturnUrl(botId),
     });
   }
@@ -123,12 +156,19 @@ export class FinanceConsumerBillingController {
     botId: string,
     request: Request,
     cancelAtPeriodEnd: boolean,
+    subscriptionId?: string,
   ) {
+    if (
+      subscriptionId !== undefined &&
+      (typeof subscriptionId !== "string" || !subscriptionId)
+    )
+      throw new BadRequestException("Invalid subscription");
     return this.billing.setStripeAutoRenewal({
       botIntegrationId: botId,
       telegramBotUserId: this.requests.authenticate(botId, request)
         .telegramBotUserId,
       cancelAtPeriodEnd,
+      subscriptionId,
     });
   }
 }

@@ -19,12 +19,16 @@ import { botBillingApi } from "@/lib/features/finance/bot-billing-api";
 import { botBillingKeys } from "@/lib/query-keys";
 import {
   formatBillingDate,
+  formatAiCost,
   formatBillingMoney,
 } from "./finance-billing-format";
-export function FinanceOverviewSection({ botId }: { botId: string }) {
+export function FinanceOverviewSection({ botId, environment = "PRODUCTION" }: {
+  botId: string;
+  environment?: "LOCAL" | "PRODUCTION";
+}) {
   const overview = useQuery({
-    queryKey: botBillingKeys.overview(botId, "PRODUCTION"),
-    queryFn: () => botBillingApi.overview(botId),
+    queryKey: botBillingKeys.overview(botId, environment),
+    queryFn: () => botBillingApi.overview(botId, environment),
   });
   return (
     <QueryContentState
@@ -70,7 +74,7 @@ function Overview({ data }: { data: BotBillingOverviewView }) {
           attention={analytics.failedPayments > 0}
         />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <Metric
           icon={CreditCard}
           label="Active subscriptions"
@@ -143,18 +147,6 @@ function Overview({ data }: { data: BotBillingOverviewView }) {
   );
 }
 
-function formatAiCost(micros: number | null) {
-  if (micros == null) return "—";
-  if (!micros) return "$0";
-  if (micros < 10) return "<$0.00001";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: micros < 10_000 ? 4 : 2,
-    maximumFractionDigits: 4,
-  }).format(micros / 1_000_000);
-}
-
 function AiUsagePanel({ data }: { data: BotBillingOverviewView["aiUsage"] }) {
   return (
     <Card>
@@ -219,7 +211,7 @@ function AiUsagePanel({ data }: { data: BotBillingOverviewView["aiUsage"] }) {
             label: row.username
               ? `@${row.username}`
               : row.firstName || row.telegramUserId,
-            detail: `${row.requests} requests · Telegram ${row.telegramUserId}`,
+            detail: `${row.planName ?? "Free"} · ${row.requests} requests · Telegram ${row.telegramUserId}`,
             cost: row.estimatedCostMicros,
           }))}
         />

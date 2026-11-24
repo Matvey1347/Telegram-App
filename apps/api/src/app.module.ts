@@ -2,6 +2,7 @@ import { AiModule } from './domains/operations/ai/ai.module';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { loadFinanceLocalSupportConfig } from './config/finance-local-support-config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AccountsModule } from './domains/finance/accounts/accounts.module';
 import { AdCampaignsModule } from './domains/growth/ad-campaigns/ad-campaigns.module';
@@ -12,6 +13,7 @@ import { AppController } from './app.controller';
 import { AuthModule } from './domains/identity/auth/auth.module';
 import { CommonModule } from './common/common.module';
 import { DashboardModule } from './domains/operations/dashboard/dashboard.module';
+import { InvestmentsModule } from './domains/finance/investments/investments.module';
 import { CurrenciesModule } from './domains/finance/currencies/currencies.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PromosModule } from './domains/growth/promos/promos.module';
@@ -50,6 +52,7 @@ import { TelegramChannelMessageTemplatesModule } from './domains/telegram/telegr
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['../../.env', '.env'],
+      load: [loadFinanceLocalSupportConfig],
     }),
     ScheduleModule.forRoot(),
     RequestContextModule,
@@ -59,6 +62,7 @@ import { TelegramChannelMessageTemplatesModule } from './domains/telegram/telegr
     ApplicationLogsModule,
     AuthModule,
     AccountsModule,
+    InvestmentsModule,
     CurrenciesModule,
     TransactionsModule,
     TransfersModule,

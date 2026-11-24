@@ -2,32 +2,24 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ArrowRight,
-  Mic,
-  ReceiptText,
-  RefreshCw,
-  ShieldCheck,
-  Sparkles,
-} from "lucide-react";
+import { ArrowRight, Crown, Gift, RefreshCw, ShieldCheck } from "lucide-react";
 import {
   financeBillingApi,
   type FinanceBillingOfferCode,
 } from "@finance-web/lib/billing/finance-billing-api";
 
+import { consumerFinanceKeys } from "@consumer-finance/web/lib/query/consumer-finance-query-keys";
+import {
+  FinanceBillingAccess,
+  FinancePlusBenefits,
+} from "./finance-billing-access";
+import {
+  financeBillingPlanName,
+  money,
+  offerNames,
+} from "./finance-billing-format";
+
 type Translate = (uk: string, en: string) => string;
-const offerNames: Record<FinanceBillingOfferCode, [string, string]> = {
-  INTRO: ["7 днів", "7 days"],
-  MONTH: ["1 місяць", "1 month"],
-  QUARTER: ["3 місяці", "3 months"],
-  YEAR: ["12 місяців", "12 months"],
-};
-
-const money = (minor: number, currency: string, locale: string) =>
-  new Intl.NumberFormat(locale, { style: "currency", currency }).format(
-    minor / 100,
-  );
-
 function redirect(url: string) {
   const target = new URL(url);
   if (
@@ -62,10 +54,14 @@ export function FinanceBillingPanel({
   const [actionError, setActionError] = useState("");
   const locale = language === "en" ? "en-US" : "uk-UA";
   const billing = useQuery({
-    queryKey: ["finance", botId, "billing", identityScope ?? "browser"],
+    queryKey: [
+      ...consumerFinanceKeys.billing(botId),
+      identityScope ?? "browser",
+    ],
     queryFn: () => financeBillingApi.get(botId),
     retry: false,
-    refetchOnMount: "always",
+    staleTime: 30_000,
+    refetchOnMount: returnedFromCheckout ? "always" : true,
     refetchOnWindowFocus: false,
   });
   const catalog = billing.data;
@@ -77,7 +73,10 @@ export function FinanceBillingPanel({
     selectedOffer?.introNextAmountMinor ??
     offers.find((offer) => offer.code === "MONTH")?.amountMinor;
 
-  async function act(action: "checkout" | "portal" | "cancel" | "resume") {
+  async function act(
+    action: "checkout" | "portal" | "cancel" | "resume" | "changePlan",
+    priceId?: string,
+  ) {
     setPending(action);
     setActionError("");
     try {
@@ -97,10 +96,20 @@ export function FinanceBillingPanel({
             )
           ).url,
         );
+      } else if (action === "changePlan") {
+        const subscriptionId = catalog?.activeAccess?.stripe?.id;
+        if (subscriptionId && priceId)
+          redirect(
+            (await financeBillingApi.changePlan(botId, subscriptionId, priceId))
+              .url,
+          );
       } else if (action === "portal") {
         redirect((await financeBillingApi.portal(botId)).url);
       } else {
-        await financeBillingApi[action](botId);
+        await financeBillingApi[action](
+          botId,
+          catalog?.activeAccess?.stripe?.id,
+        );
         await billing.refetch();
       }
     } catch (error) {
@@ -117,15 +126,10 @@ export function FinanceBillingPanel({
   return (
     <div className="finance-billing">
       <div className="title-area">
-        <small>GROSHLY PLUS</small>
-        <h1>{t("Більше можливостей.", "More possibilities.")}</h1>
+        <h1 className="billing-brand">
+          <Crown size={28} aria-hidden /> Groshly Plus
+        </h1>
       </div>
-      <p className="sublead">
-        {t(
-          "FREE для основних фінансів. PLUS відкриває всі платні можливості, незалежно від періоду оплати.",
-          "FREE covers the essentials. PLUS unlocks every paid feature, regardless of billing period.",
-        )}
-      </p>
       {billing.isPending && (
         <div className="paper billing-message" role="status">
           {t("Завантажуємо тарифи…", "Loading plans…")}
@@ -146,198 +150,127 @@ export function FinanceBillingPanel({
       )}
       {catalog && (
         <>
-          <section
-            className="paper billing-current"
-            aria-label={t("Поточний доступ", "Current access")}
-          >
-            <div>
-              <small>{t("ПОТОЧНИЙ ДОСТУП", "CURRENT ACCESS")}</small>
-              <strong>{catalog.tier}</strong>
-            </div>
-            {returnedFromCheckout && catalog.tier === "FREE" && (
-              <p role="status">
-                {t(
-                  "Очікуємо підтвердження від Stripe.",
-                  "Waiting for Stripe confirmation.",
+          <FinanceBillingAccess
+            catalog={catalog}
+            inTelegram={Boolean(telegramInitData)}
+            pending={Boolean(pending)}
+            returnedFromCheckout={returnedFromCheckout}
+            onAction={act}
+            t={t}
+            locale={locale}
+          />
+          <FinancePlusBenefits t={t} />
+          {catalog.tier === "FREE" &&
+            !catalog.hasOverduePayment &&
+            !telegramInitData && (
+              <>
+                <div className="eyebrow block-mt">
+                  {t("ТЕРМІН ПІДПИСКИ", "BILLING PERIOD")}
+                </div>
+                <div
+                  className="billing-options"
+                  role="radiogroup"
+                  aria-label={t("Варіант PLUS", "PLUS billing option")}
+                >
+                  {offers.map((offer) => (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={selectedOffer?.code === offer.code}
+                      key={offer.code}
+                      disabled={!offer.available || !!pending}
+                      className={`billing-option ${selectedOffer?.code === offer.code ? "on" : ""}`}
+                      onClick={() => setSelected(offer.code)}
+                    >
+                      <span className="radio-circle">
+                        {selectedOffer?.code === offer.code && <span />}
+                      </span>
+                      <span>
+                        <b>{t(...offerNames[offer.code])}</b>
+                        <small>
+                          {offer.code === "QUARTER"
+                            ? "−26%"
+                            : offer.code === "YEAR"
+                              ? "−49%"
+                              : offer.code === "MONTH"
+                                ? t("Рекомендуємо", "Recommended")
+                                : ""}
+                          {!offer.available &&
+                            ` · ${t("недоступно", "unavailable")}`}
+                        </small>
+                      </span>
+                      <strong>
+                        {money(offer.amountMinor, offer.currency, locale)}
+                      </strong>
+                    </button>
+                  ))}
+                </div>
+                {!offers.length && (
+                  <p className="paper billing-message">
+                    {t(
+                      "Варіанти оплати зараз недоступні.",
+                      "Billing options are currently unavailable.",
+                    )}
+                  </p>
                 )}
-              </p>
-            )}
-            {catalog.activeUntil && (
-              <p>
-                {catalog.cancelAtPeriodEnd
-                  ? t("Доступ до", "Access until")
-                  : t("Активний до", "Active until")}{" "}
-                {new Date(catalog.activeUntil).toLocaleDateString(locale)}
-              </p>
-            )}
-            {catalog.subscription?.status === "PAST_DUE" && (
-              <p role="status">
-                {t(
-                  "Оплату не отримано. Щоб оновити спосіб оплати, зверніться до підтримки: ",
-                  "Payment is overdue. To update your payment method, contact support: ",
+                {selectedOffer?.code === "INTRO" && (
+                  <p className="paper billing-disclosure">
+                    {introRenewalMinor !== undefined
+                      ? `${t("Зараз", "Pay")} ${money(selectedOffer.amountMinor, "UAH", locale)} ${t("за 7 днів. Потім підписка автоматично продовжується за", "for 7 days now. Your subscription then renews automatically at")} ${money(introRenewalMinor, "UAH", locale)} ${t("щомісяця, доки ви її не скасуєте.", "per month until you cancel.")}`
+                      : t(
+                          "Місячна ціна тимчасово недоступна. Спробуйте пізніше.",
+                          "Monthly renewal price is unavailable. Please try later.",
+                        )}
+                  </p>
                 )}
-                <a href="mailto:matveybogdantg@gmail.com">
-                  matveybogdantg@gmail.com
-                </a>
-              </p>
-            )}
-            {catalog.subscription?.source === "GIFT" && (
-              <p>{t("Подарований доступ PLUS", "Gifted PLUS access")}</p>
-            )}
-            {catalog.subscription?.source === "STRIPE" && (
-              <div className="billing-manage">
-                {!telegramInitData && (
+                {selectedOffer && selectedOffer.code !== "INTRO" && (
+                  <p className="paper billing-disclosure">
+                    {t(
+                      "Підписка поновлюється автоматично. Після скасування доступ діє до кінця оплаченого періоду.",
+                      "Your subscription renews automatically. If you cancel, access continues until the paid period ends.",
+                    )}
+                  </p>
+                )}
+                {selectedOffer?.mode === "TEST" && (
+                  <p className="paper billing-disclosure">
+                    {t("Тестовий режим Stripe", "Stripe test mode")}
+                  </p>
+                )}
+                <div className="paper subscription-footer">
+                  <div className="sub-state">
+                    <ShieldCheck size={19} />
+                    {t(
+                      "Оплата через захищений Stripe Checkout. PLUS активується після підтвердження платежу.",
+                      "Secure Stripe Checkout. PLUS starts after payment is confirmed.",
+                    )}
+                  </div>
                   <button
                     type="button"
-                    disabled={!!pending}
-                    onClick={() => void act("portal")}
+                    className="btn primary full"
+                    disabled={
+                      !selectedOffer ||
+                      !!pending ||
+                      (selectedOffer.code === "INTRO" &&
+                        introRenewalMinor === undefined)
+                    }
+                    onClick={() => void act("checkout")}
                   >
-                    {t("Платежі та картка", "Payments and card")}
+                    {pending === "checkout"
+                      ? t("Переходимо до оплати…", "Opening checkout…")
+                      : t("Оформити PLUS", "Get PLUS")}{" "}
+                    <ArrowRight size={18} />
                   </button>
-                )}
-                {catalog.cancelAtPeriodEnd ? (
-                  <button
-                    type="button"
-                    disabled={!!pending}
-                    onClick={() => void act("resume")}
-                  >
-                    {t("Відновити продовження", "Resume renewal")}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={!!pending}
-                    onClick={() => void act("cancel")}
-                  >
-                    {t("Скасувати продовження", "Cancel renewal")}
-                  </button>
-                )}
-              </div>
+                </div>
+              </>
             )}
-          </section>
-          <div
-            className="paper billing-manage"
-            aria-label={t("Можливості PLUS", "What PLUS includes")}
-          >
-            <span>
-              <Sparkles size={17} aria-hidden />{" "}
-              {t(
-                "AI-асистент та аналіз витрат",
-                "AI assistant and spending insights",
-              )}
-            </span>
-            <span>
-              <Mic size={17} aria-hidden />{" "}
-              {t("Голосове додавання операцій", "Voice entry")}
-            </span>
-            <span>
-              <ReceiptText size={17} aria-hidden />{" "}
-              {t("Сканування чеків", "Receipt scanning")}
-            </span>
-          </div>
-          <div className="eyebrow block-mt">
-            {t("ТЕРМІН ПІДПИСКИ", "BILLING PERIOD")}
-          </div>
-          <div
-            className="billing-options"
-            role="radiogroup"
-            aria-label={t("Варіант PLUS", "PLUS billing option")}
-          >
-            {offers.map((offer) => (
-              <button
-                type="button"
-                role="radio"
-                aria-checked={selectedOffer?.code === offer.code}
-                key={offer.code}
-                disabled={!offer.available || !!pending}
-                className={`billing-option ${selectedOffer?.code === offer.code ? "on" : ""}`}
-                onClick={() => setSelected(offer.code)}
-              >
-                <span className="radio-circle">
-                  {selectedOffer?.code === offer.code && <span />}
-                </span>
-                <span>
-                  <b>{t(...offerNames[offer.code])}</b>
-                  <small>
-                    {offer.code === "QUARTER"
-                      ? "−26%"
-                      : offer.code === "YEAR"
-                        ? "−49%"
-                        : offer.code === "MONTH"
-                          ? t("Рекомендуємо", "Recommended")
-                          : ""}
-                    {!offer.available && ` · ${t("недоступно", "unavailable")}`}
-                  </small>
-                </span>
-                <strong>
-                  {money(offer.amountMinor, offer.currency, locale)}
-                </strong>
-              </button>
-            ))}
-          </div>
-          {!offers.length && (
+          {catalog.tier === "FREE" && telegramInitData && (
             <p className="paper billing-message">
               {t(
-                "Варіанти оплати зараз недоступні.",
-                "Billing options are currently unavailable.",
+                "Придбати Plus можна у вебверсії Groshly.",
+                "Digital access cannot be purchased in the Telegram Mini App. Subscribe on the Groshly website.",
               )}
             </p>
           )}
-          {selectedOffer?.code === "INTRO" && (
-            <p className="paper billing-disclosure">
-              {introRenewalMinor !== undefined
-                ? `${t("Зараз", "Pay")} ${money(selectedOffer.amountMinor, "UAH", locale)} ${t("за 7 днів. Потім підписка автоматично продовжується за", "for 7 days now. Your subscription then renews automatically at")} ${money(introRenewalMinor, "UAH", locale)} ${t("щомісяця, доки ви її не скасуєте.", "per month until you cancel.")}`
-                : t(
-                    "Місячна ціна тимчасово недоступна. Спробуйте пізніше.",
-                    "Monthly renewal price is unavailable. Please try later.",
-                  )}
-            </p>
-          )}
-          {selectedOffer && selectedOffer.code !== "INTRO" && (
-            <p className="paper billing-disclosure">
-              {t(
-                "Підписка поновлюється автоматично. Після скасування доступ діє до кінця оплаченого періоду.",
-                "Your subscription renews automatically. If you cancel, access continues until the paid period ends.",
-              )}
-            </p>
-          )}
-          {selectedOffer?.mode === "TEST" && !telegramInitData && (
-            <p className="paper billing-disclosure">
-              {t("Тестовий режим Stripe", "Stripe test mode")}
-            </p>
-          )}
-          <div className="paper subscription-footer">
-            <div className="sub-state">
-              <ShieldCheck size={19} />
-              {telegramInitData
-                ? t(
-                    "Купівля цифрового доступу в Telegram Mini App недоступна. Тут можна переглянути стан підписки та історію платежів.",
-                    "Digital access cannot be purchased in the Telegram Mini App. You can view subscription status and payment history here.",
-                  )
-                : t(
-                    "Оплата через захищений Stripe Checkout. PLUS активується після підтвердження платежу.",
-                    "Secure Stripe Checkout. PLUS starts after payment is confirmed.",
-                  )}
-            </div>
-            {!telegramInitData && (
-              <button
-                type="button"
-                className="btn primary full"
-                disabled={
-                  !selectedOffer ||
-                  !!pending ||
-                  (selectedOffer.code === "INTRO" &&
-                    introRenewalMinor === undefined)
-                }
-                onClick={() => void act("checkout")}
-              >
-                {pending === "checkout"
-                  ? t("Переходимо до оплати…", "Opening checkout…")
-                  : t("Оформити PLUS", "Get PLUS")}{" "}
-                <ArrowRight size={18} />
-              </button>
-            )}
-          </div>
           {actionError && (
             <p role="alert" className="billing-error">
               {actionError}
@@ -356,18 +289,32 @@ export function FinanceBillingPanel({
                   <li key={item.id}>
                     <span>
                       <b>
-                        {item.status === "SUCCEEDED"
-                          ? t("Оплачено", "Paid")
-                          : t("Помилка оплати", "Payment failed")}
+                        {item.status === "GIFTED"
+                          ? t("Подаровано", "Gifted")
+                          : item.status === "SUCCEEDED"
+                            ? t("Оплачено", "Paid")
+                            : t("Помилка оплати", "Payment failed")}
                       </b>
                       <small>
-                        {new Date(item.occurredAt).toLocaleDateString(locale)}
+                        {item.status === "GIFTED" &&
+                          item.planCode &&
+                          `${financeBillingPlanName(item.planCode)} · `}
+                        <time dateTime={item.occurredAt}>
+                          {new Date(item.occurredAt).toLocaleDateString(
+                            locale,
+                            { dateStyle: "medium" },
+                          )}
+                        </time>
                       </small>
                     </span>
                     <strong>
-                      {item.amountMinor != null && item.currency
-                        ? money(item.amountMinor, item.currency, locale)
-                        : "—"}
+                      {item.status === "GIFTED" ? (
+                        <Gift size={19} aria-hidden />
+                      ) : item.amountMinor != null && item.currency ? (
+                        money(item.amountMinor, item.currency, locale)
+                      ) : (
+                        "—"
+                      )}
                     </strong>
                   </li>
                 ))}

@@ -8,6 +8,7 @@ import {
 import { SupportTicketsService } from './support-tickets.service';
 
 @Module({
+  exports: [SupportBotsService],
   controllers: [SupportController, SupportWebhookController],
   providers: [SupportBotsService, SupportTicketsService, TelegramBotApiClient],
 })

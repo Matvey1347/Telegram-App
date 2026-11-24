@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import type { AiGateway } from '../../operations/ai/ai-gateway';
 import { telegramAiPostingImageSourceUrls, type TelegramAiPostingImageSearchRound } from '@telegram-system/shared';
 
 type Query = Pick<
@@ -85,7 +87,7 @@ export function imageSearchRounds(
   if (Array.isArray(sources)) {
     const configured = telegramAiPostingImageSourceUrls(sources).map((url): Pick<Query, 'catalog' | 'domain'> => {
       const domain = new URL(url).hostname.replace(/^www\./u, '');
-      if (domain === 'pinterest.com') return { catalog: 'pinterest' };
+      if (domain === 'pinterest.com') return { catalog: 'pinterest', domain };
       if (domain === 'commons.wikimedia.org' || domain === 'wikipedia.org' || domain.endsWith('.wikipedia.org')) return { catalog: 'wikimedia' };
       return { catalog: 'website', domain };
     });
@@ -95,13 +97,16 @@ export function imageSearchRounds(
         all.findIndex((item) => item.toLowerCase() === text.toLowerCase()) === index,
       );
     rounds.splice(0, rounds.length,
-      ...configured.map((source) => (source.catalog === 'pinterest' ? phrases.slice(0, 3) : [primary])
-        .map((text) => ({ ...source, text, page }))),
-      configured.slice(0, 3).map((source) => ({ ...source, text: phrases[1] ?? primary, page })),
-      configured.slice(0, 3).map((source) => ({ ...source, text: phrases[2] ?? subject, page })),
-      configured.slice(0, 3).map((source) => ({ ...source, text: primary, page: page + 1 })),
+      ...configured.flatMap((source) => {
+        if (source.catalog === 'pinterest') {
+          return phrases.slice(0, 2).map((text) => [{ ...source, text, page }]);
+        }
+        const terms = source.catalog === 'wikimedia' ? phrases.slice(0, 2) : [primary];
+        return [terms.map((text) => ({ ...source, text, page }))];
+      }),
+      [{ text: phrases[2] ?? alternate, page, catalog: 'openai' }],
+      [{ text: alternate, page, catalog: 'auto' }],
     );
-
   }
   const seen = new Set<string>();
   return rounds
@@ -114,4 +119,25 @@ export function imageSearchRounds(
       }),
     )
     .filter((round) => round.length > 0);
+}
+
+export async function searchPostingWebsiteImages(
+  execute: AiGateway['execute'],
+  context: Pick<Parameters<AiGateway['execute']>[0], 'userId' | 'workspaceId' | 'aiPosting' | 'mode'>,
+  query: Query,
+  attempt: number,
+) {
+  const response = await execute({
+    userId: context.userId,
+    workspaceId: context.workspaceId,
+    mode: context.mode,
+    category: 'TELEGRAM_POSTING_REVIEW',
+    operationId: `${new Date().toISOString().slice(0, 10)}:${randomUUID()}`,
+    businessObjectId: context.aiPosting?.channelId,
+    aiPosting: context.aiPosting && { ...context.aiPosting, attempt },
+    postingImageSearch: { domain: query.domain },
+    input: `Search the web image index for photos matching this English search phrase: ${JSON.stringify(query.text)}. Return image search results of the actual subject and context. ${query.page > 1 ? 'Look beyond the most common results.' : ''}`,
+  });
+  const result = response.result as { images?: Array<{ url: string; sourceId: string; sourceType: string }> } | undefined;
+  return { response, candidates: result?.images ?? [] };
 }

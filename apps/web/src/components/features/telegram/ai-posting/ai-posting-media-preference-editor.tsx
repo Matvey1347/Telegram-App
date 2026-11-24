@@ -172,14 +172,15 @@ export function AiPostingMediaPreferenceEditor({
                     ariaLabel={`Эмодзи предпочтения ${index + 1}`}
                     allowImages
                     compact
-                    className="!h-8 !w-8 !min-w-8 !p-0.5"
-                    iconClassName="!h-6 !w-6 !border-0 !bg-transparent"
+                    className="!h-9 !w-9 !min-w-9 !rounded-lg !bg-neutral-800 !p-0.5"
+                    iconClassName="!h-9 !w-9 !border-0 !bg-transparent text-lg"
                   />
                 ) : (
                   <IconAvatar
                     icon={{ type: "unicode", value: preference.emoji || "🎨" }}
                     label={preference.name}
-                    size="xs"
+                    size="sm"
+                    className="!size-9 !rounded-lg !bg-neutral-800 text-lg"
                     bordered={false}
                   />
                 )}

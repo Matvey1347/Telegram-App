@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { BarChart3, CreditCard, UsersRound, Waypoints } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, BarChart3, CreditCard, UsersRound, Waypoints } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button, PageHeader } from "@/components/ui/primitives";
 import { FinanceOverviewSection } from "./finance-overview-section";
@@ -42,10 +43,16 @@ const sections: Array<{
   { id: "subscribers", label: "Users", icon: UsersRound },
   { id: "integrations", label: "Integrations", icon: Waypoints },
 ];
-export function FinanceBotAdmin({ botId }: { botId: string }) {
+export function FinanceBotAdmin({ botId, environment = "PRODUCTION" }: {
+  botId: string;
+  environment?: "LOCAL" | "PRODUCTION";
+}) {
   const [section, setSection] = useState<FinanceAdminSection>("overview");
   return (
     <AppShell>
+      <Link href="/telegram-bots" className="mb-3 inline-flex items-center gap-2 text-sm text-neutral-300 hover:text-white">
+        <ArrowLeft size={16} aria-hidden /> Back to bots
+      </Link>
       <PageHeader
         title="Finance Bot"
         subtitle="Billing, subscribers, and integrations for this bot."
@@ -66,13 +73,13 @@ export function FinanceBotAdmin({ botId }: { botId: string }) {
         ))}
       </nav>
       {section === "overview" ? (
-        <FinanceOverviewSection botId={botId} />
+        <FinanceOverviewSection botId={botId} environment={environment} />
       ) : null}
       {section === "monetization" ? (
         <FinanceMonetizationSection botId={botId} />
       ) : null}
       {section === "subscribers" ? (
-        <FinanceSubscribersSection botId={botId} />
+        <FinanceSubscribersSection key={environment} botId={botId} environment={environment} />
       ) : null}
       {section === "integrations" ? (
         <FinanceIntegrationsSection botId={botId} />

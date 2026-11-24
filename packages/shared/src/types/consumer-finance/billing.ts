@@ -81,9 +81,28 @@ export type ConsumerBillingCatalog = {
     currentPeriodEnd?: string | null;
     cancelAtPeriodEnd: boolean;
   }>;
+  activeAccess?: {
+    gift: { expiresAt: string | null } | null;
+    stripe: {
+      id: string;
+      currentPeriodEnd: string;
+      cancelAtPeriodEnd: boolean;
+      canManageRenewal: boolean;
+      canChangePlan: boolean;
+      interval: string | null;
+      intervalCount: number | null;
+      renewal: {
+        amountMinor: number;
+        currency: string;
+        chargeAt: string;
+        interval: string;
+        intervalCount: number;
+      } | null;
+    } | null;
+  };
   paymentHistory: Array<{
     id: string;
-    status: "SUCCEEDED" | "FAILED";
+    status: "SUCCEEDED" | "FAILED" | "GIFTED";
     provider: "STRIPE" | "TELEGRAM_STARS" | null;
     amountMinor: number | null;
     currency: string | null;

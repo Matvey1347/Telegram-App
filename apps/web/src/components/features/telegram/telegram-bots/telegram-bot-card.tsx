@@ -5,13 +5,11 @@ import type {
 } from "@telegram-system/shared";
 import { AccessBotSummary } from "./access-bot-summary";
 import { BotCardShell } from "./bot-card-shell";
-import { SupportCardLink } from "./telegram-support-inbox";
-import { FinanceBotSummary } from "./finance-bot-summary";
+import { BotAudienceMetrics } from "./bot-audience-metrics";
 
 export function TelegramBotCard({
   bot,
   support,
-  onSupport,
   checkingEnvironment,
   onCheck,
   onRequestDelete,
@@ -21,7 +19,6 @@ export function TelegramBotCard({
 }: {
   bot: TelegramBot;
   support?: SupportBotView;
-  onSupport?: () => void;
   checkingEnvironment: TelegramBotRuntimeEnvironment | null;
   onCheck: (environment: TelegramBotRuntimeEnvironment) => void;
   onRequestDelete: (environment: TelegramBotRuntimeEnvironment) => void;
@@ -30,6 +27,8 @@ export function TelegramBotCard({
   onEditProfile?: (environment: TelegramBotRuntimeEnvironment) => void;
 }) {
   const appType = bot.applicationType;
+  const finance = bot.applicationSummary?.finance;
+  const summary = finance?.PRODUCTION ?? finance?.LOCAL;
   return (
     <BotCardShell
       bot={bot}
@@ -39,19 +38,15 @@ export function TelegramBotCard({
       onSwitch={onSwitch}
       onConfigureRuntime={onConfigureRuntime}
       onEditProfile={onEditProfile}
+      support={appType === "FINANCE" ? support : undefined}
     >
       {appType === "FINANCE" ? (
-        () => (
-          <div className="space-y-3">
-            <FinanceBotSummary
-              summary={
-                bot.applicationSummary?.finance?.PRODUCTION ??
-                bot.applicationSummary?.finance?.LOCAL
-              }
-            />
-            {onSupport && <SupportCardLink bot={support} onOpen={onSupport} />}
-          </div>
-        )
+        <BotAudienceMetrics
+          label="Finance business metrics"
+          registered={summary?.registeredUsers}
+          active={summary?.activeUsers}
+          paid={{ total: summary?.paidUsers, active: summary?.activePaidUsers }}
+        />
       ) : (
         <AccessBotSummary summary={bot.channelAccessSummary} />
       )}

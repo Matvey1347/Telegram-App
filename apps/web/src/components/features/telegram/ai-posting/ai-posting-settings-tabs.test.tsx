@@ -18,6 +18,8 @@ describe("AiPostingSettingsTabs", () => {
     );
     expect(screen.getByRole("link", { name: "Import / export" })).toBeVisible();
     expect(screen.queryByRole("link", { name: "Источники" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Autopilot" }));
+    expect(onChange).toHaveBeenCalledWith("autopilot");
     fireEvent.click(screen.getByRole("link", { name: "Медиа" }));
     expect(onChange).toHaveBeenCalledWith("images");
     expect(screen.getByRole("link", { name: "Медиа" })).toHaveAttribute("href", "?aiPostingTab=images");

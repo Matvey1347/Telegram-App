@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Save, Pencil, RotateCcw } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -15,6 +15,8 @@ import {
 import { DateInput } from "@/components/ui/date-inputs";
 import { telegramAiPostingKeys, telegramChannelKeys, telegramPostKeys } from "@/lib/query-keys";
 import { api, telegramChannelsApi } from "@/lib/api";
+import { AiPostingChannelAnalysis } from "./ai-posting-channel-analysis";
+import { AiPostingSphereWeights } from "./ai-posting-sphere-weights";
 import { AiPostingChat } from "./ai-posting-chat";
 import { appendChannelEndingSignature } from "./channel-ending-signature";
 import type { ChannelEndingSignatureSource } from "./channel-ending-signature";
@@ -35,6 +37,7 @@ import {
 } from "./ai-posting-media-preferences";
 import { AiPostingTestConsole } from "./ai-posting-test-console";
 import { AiPostingReviewQueue } from "./ai-posting-review-queue";
+import { AiPostingAutopilot } from "./ai-posting-autopilot";
 import { AiPostingSettingsTransfer } from "./ai-posting-settings-transfer";
 import { RenderedPreviewText } from "@/components/features/telegram/telegram/telegram-post-preview-content";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
@@ -51,6 +54,10 @@ import type { TelegramChannelSelectOption } from "@/lib/api-types/telegram/teleg
 type Config = {
   language: string;
   topic: string;
+  style?: string;
+  visualStyle?: string;
+  visualVariety?: boolean;
+  sphereWeights?: Record<string, number>;
   audience: string;
   historyMode: string;
   historyFrom: string;
@@ -98,6 +105,10 @@ function comparableConfig(value?: Config): Config {
   return {
     language: config.language ?? "",
     topic: config.topic ?? "",
+    style: config.style ?? "",
+    visualStyle: config.visualStyle ?? "",
+    visualVariety: config.visualVariety ?? false,
+    sphereWeights: Object.fromEntries(Object.entries(config.sphereWeights ?? {}).sort()),
     audience: config.audience ?? "",
     historyMode: config.historyMode ?? "all",
     historyFrom: config.historyFrom ?? "",
@@ -134,32 +145,39 @@ type SettingsResponse = {
   mode: "TEST" | "REVIEW";
   draftExpirationDays: number;
   configured: boolean;
+  configurationVersion: number;
   detectedLanguage: string;
 };
 
 export function AiPostingPage({
+  viewNavigation,
   channelId,
   channelTitle,
+  captionLengthMax,
+  messageLengthMax,
 }: {
+  viewNavigation?: ReactNode;
   channelId: string;
   channelTitle: string;
+  captionLengthMax?: number;
+  messageLengthMax?: number;
 }) {
   const client = useQueryClient();
   const [configs, setConfigs] = useState<Record<string, Config>>({});
-  const [settingsTab, setSettingsTab] = useState<AiPostingSettingsTab>("idea");
+  const [settingsTab, setSettingsTab] = useState<AiPostingSettingsTab>("autopilot");
   useEffect(() => {
     const syncTabFromUrl = () => {
       const requested = new URLSearchParams(window.location.search).get(
         "aiPostingTab",
       );
       if (
-        ["chat", "idea", "writing", "images", "transfer"].includes(
+        ["chat", "idea", "writing", "images", "autopilot", "transfer"].includes(
           requested ?? "",
         )
       ) {
         setSettingsTab(requested as AiPostingSettingsTab);
       } else {
-        setSettingsTab("idea");
+        setSettingsTab("autopilot");
       }
     };
     syncTabFromUrl();
@@ -184,13 +202,7 @@ export function AiPostingPage({
   const settings = useQuery<SettingsResponse>({
     queryKey: key(channelId),
     queryFn: async () =>
-      (await api.get(`/telegram-channels/${channelId}/ai-posting`)).data as {
-        configuration: Config;
-        mode: SettingsResponse["mode"];
-        draftExpirationDays: number;
-        configured: boolean;
-        detectedLanguage: string;
-      },
+      (await api.get<SettingsResponse>(`/telegram-channels/${channelId}/ai-posting`)).data,
     enabled: Boolean(channelId),
   });
   const cachedChannelPhotoUrl =
@@ -229,10 +241,6 @@ export function AiPostingPage({
     ...config,
     mediaPreferences: normalizeAiPostingMediaPreferences(config),
   };
-  const saveValues = {
-    mode: settings.data?.mode ?? "TEST",
-    draftExpirationDays: settings.data?.draftExpirationDays ?? 30,
-  };
   const save = useMutation({
     onMutate: (configuration?: Config) => ({
       channelId,
@@ -243,7 +251,7 @@ export function AiPostingPage({
       (
         await api.put(`/telegram-channels/${channelId}/ai-posting`, {
           configuration: configuration ?? effectiveConfig,
-          ...saveValues,
+          expectedConfigurationVersion: settings.data?.configurationVersion,
         })
       ).data,
     onSuccess: async (_result, _variables, snapshot) => {
@@ -283,7 +291,17 @@ export function AiPostingPage({
     !save.isPending;
   const section = "space-y-4 bg-neutral-900/60";
   return (
-    <div className="@container mt-4 min-w-0 space-y-4">
+    <div className="@container min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        {viewNavigation}
+        {settings.data && <AiPostingChannelAnalysis key={channelId} channelId={channelId}
+          version={settings.data.configurationVersion} dirty={!settingsReady}
+          onUse={(configuration) => {
+            patch(configuration as Partial<Config>);
+            changeSettingsTab("writing");
+          }}
+        />}
+      </div>
       {settings.isLoading ? (
         <Card className={section + " text-sm text-neutral-400"}>
           Загружаем настройки…
@@ -305,6 +323,8 @@ export function AiPostingPage({
                 key={channelId}
                 channelId={channelId}
                 channelTitle={channelTitle}
+                captionLengthMax={captionLengthMax}
+                messageLengthMax={messageLengthMax}
                 channelPhotoUrl={settings.data?.channel?.photoUrl ?? cachedChannelPhotoUrl}
                 watermarkPreview={{
                   enabled: config.useChannelAvatarInMedia,
@@ -406,11 +426,17 @@ export function AiPostingPage({
                     onRubrics={(rubrics) => patch({ rubrics })}
                     onLengths={(lengths) => patch({ lengths })}
                   />
+                  <AiPostingSphereWeights spheres={config.spheres ?? []} weights={config.sphereWeights ?? {}}
+                    onChange={(sphereWeights) => patch({ sphereWeights })} />
                 </Card>
               </div>
               <div hidden={settingsTab !== "writing"}>
                 <Card className={section}>
                   <h2 className="text-lg font-semibold">Как писать</h2>
+                  <FormField label="Редакционный стиль канала">
+                    <Textarea value={config.style ?? ""} rows={4} maxLength={1200}
+                      onChange={(event) => patch({ style: event.currentTarget.value })} />
+                  </FormField>
                   <FormField label="Использование истории публикаций">
                     <CustomSelect
                       value={config.historyMode}
@@ -532,7 +558,17 @@ export function AiPostingPage({
                   </FormField>
                 </Card>
               </div>
-              <div hidden={settingsTab !== "images"}>
+              <div hidden={settingsTab !== "images"} className="space-y-3">
+                <Card>
+                  <FormField label="Общий визуальный стиль канала">
+                    <Textarea value={config.visualStyle ?? ""} rows={3} maxLength={850}
+                      onChange={(event) => patch({ visualStyle: event.currentTarget.value })} />
+                  </FormField>
+                  <ToggleRow checked={config.visualVariety === true}
+                    onChange={(visualVariety) => patch({ visualVariety })}
+                    label="Чередовать формы изображений"
+                    description="Натюрморт, иллюстрация, пейзаж, визуальная метафора и репортажный кадр. Для партии эти формы задают композицию вместо привязанных к сферам медиа-предпочтений." />
+                </Card>
                 <AiPostingImagesSection
                   key={channelId}
                   channelId={channelId}
@@ -571,6 +607,9 @@ export function AiPostingPage({
                   }
                 />
               </div>
+              {settingsTab === "autopilot" ? (
+                <AiPostingAutopilot key={channelId} channelId={channelId} />
+              ) : null}
               <div hidden={settingsTab !== "transfer"}>
                 <Card className={section}>
                   <AiPostingSettingsTransfer
@@ -589,7 +628,7 @@ export function AiPostingPage({
                   />
                 </Card>
               </div>
-              {settingsTab !== "chat" && settingsTab !== "transfer" ? (
+              {settingsTab !== "chat" && settingsTab !== "transfer" && settingsTab !== "autopilot" ? (
                 <div className="flex justify-end border-t border-neutral-800 pt-3">
                   <Button
                     disabled={
@@ -608,7 +647,9 @@ export function AiPostingPage({
               ) : null}
               {save.isError && (
                 <p role="alert" className="text-sm text-rose-300">
-                  Не удалось сохранить настройки.
+                  {(save.error as { response?: { status?: number } })?.response?.status === 409
+                    ? "Настройки канала изменились. Скопируйте свои правки и обновите страницу."
+                    : "Не удалось сохранить настройки."}
                 </p>
               )}
             </section>

@@ -13,6 +13,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { TELEGRAM_AI_POSTING_MAX_MEDIA_GUIDANCE_LENGTH, TELEGRAM_AI_POSTING_MAX_MEDIA_REFERENCES, type TelegramAiPostingReferenceAnalysisInput, type TelegramAiPostingRunAccepted } from '@telegram-system/shared';
+import { TelegramAiPostingChannelAnalysisService } from './telegram-ai-posting-channel-analysis.service';
 import { TelegramAiPostingReferenceAnalysisService } from './telegram-ai-posting-reference-analysis.service';
 import type { Response } from 'express';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsObject, IsOptional, IsString, IsUrl, Max, MaxLength, Min } from 'class-validator';
@@ -39,6 +40,7 @@ class AnalyzeReferencesDto implements TelegramAiPostingReferenceAnalysisInput {
 
 class SaveTelegramAiPostingDto {
   @IsObject() configuration!: Record<string, unknown>;
+  @IsOptional() @IsInt() @Min(1) expectedConfigurationVersion?: number;
   @IsOptional() @IsIn(['TEST', 'REVIEW']) mode?: 'TEST' | 'REVIEW';
   @IsOptional() @IsInt() @Min(1) @Max(365) draftExpirationDays?: number;
 }
@@ -83,6 +85,7 @@ export class TelegramAiPostingController {
     private readonly failedRetry: TelegramAiPostingFailedRetryService,
     private readonly streams: StreamResponseService,
     private readonly referenceAnalysis: TelegramAiPostingReferenceAnalysisService,
+    private readonly channelAnalysis: TelegramAiPostingChannelAnalysisService,
   ) {}
   @Get() get(@CurrentUser() user: JwtUser, @Param('channelId') id: string) {
     return this.service.get(user.sub, id);
@@ -106,6 +109,11 @@ export class TelegramAiPostingController {
   @Post('media-preferences/analyze-references')
   analyzeReferences(@CurrentUser() user: JwtUser, @Param('channelId') id: string, @Body() dto: AnalyzeReferencesDto) {
     return this.referenceAnalysis.analyze(user.sub, id, dto);
+  }
+  @Post('channel-analysis')
+  @HttpCode(200)
+  analyzeChannel(@CurrentUser() user: JwtUser, @Param('channelId') id: string) {
+    return this.channelAnalysis.analyze(user.sub, id);
   }
   @Post('generate') generate(
     @CurrentUser() user: JwtUser,

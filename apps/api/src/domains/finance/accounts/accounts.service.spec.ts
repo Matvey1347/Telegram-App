@@ -68,6 +68,37 @@ describe('AccountsService', () => {
     );
   });
 
+  it("totals all matching accounts in their native currencies, independent of pagination", async () => {
+    prisma.account.findMany.mockResolvedValue([
+      { id: 'pln-card', currency: 'PLN', initialBalance: 30 },
+      { id: 'pln-cash', currency: 'PLN', initialBalance: 2 },
+      { id: 'uah-account', currency: 'UAH', initialBalance: 120 },
+    ]);
+    prisma.transaction.groupBy.mockResolvedValue([
+      { accountId: 'pln-card', type: 'expense', _sum: { amount: 5 }, _count: { _all: 1 } },
+      { accountId: 'uah-account', type: 'income', _sum: { amount: 70 }, _count: { _all: 1 } },
+    ]);
+    prisma.transfer.groupBy
+      .mockResolvedValueOnce([{ fromAccountId: 'pln-card', _sum: { fromAmount: 4 } }])
+      .mockResolvedValueOnce([{ toAccountId: 'uah-account', _sum: { toAmount: 45 } }]);
+
+    await expect(service.balances('user-1', { scope: 'mine', page: 2, pageSize: 1 })).resolves.toEqual([
+      { currency: 'PLN', balance: 23 },
+      { currency: 'UAH', balance: 235 },
+    ]);
+    expect(prisma.account.findMany).toHaveBeenCalledWith({
+      where: expect.objectContaining({ workspaceId: 'workspace-1', assignedMemberId: 'member-1', isActive: true, deletedAt: null }),
+      select: { id: true, currency: true, initialBalance: true },
+    });
+    expect(conversion.convertCurrency).not.toHaveBeenCalled();
+  });
+
+  it("skips ledger aggregation when the visible scope has no accounts", async () => {
+    await expect(service.balances('user-1', { scope: 'mine' })).resolves.toEqual([]);
+    expect(prisma.transaction.groupBy).not.toHaveBeenCalled();
+    expect(prisma.transfer.groupBy).not.toHaveBeenCalled();
+  });
+
   it('loads archived accounts without treating them as deleted', async () => {
     await service.findAll('user-1', { scope: 'archived' });
 

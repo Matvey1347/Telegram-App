@@ -234,7 +234,10 @@ export function FinanceLegacyBillingSummary({
                 type="button"
                 aria-pressed={selected}
                 disabled={
-                  price.available === false || !plan.canPurchase || !stripeAvailable || checkout.isPending
+                  price.available === false ||
+                  !plan.canPurchase ||
+                  !stripeAvailable ||
+                  checkout.isPending
                 }
                 onClick={() => setSelectedPriceId(price.id)}
                 className={`rounded-xl border p-4 text-left transition ${selected ? "border-emerald-400 bg-emerald-950/30" : "border-white/10 bg-white/[0.02] hover:border-white/25"}`}
@@ -300,7 +303,8 @@ export function FinanceLegacyBillingSummary({
           <Button
             className="mt-4 w-full sm:w-auto"
             disabled={
-              selectedPrice.available === false || !selectedPrice.plan.canPurchase ||
+              selectedPrice.available === false ||
+              !selectedPrice.plan.canPurchase ||
               !stripeAvailable ||
               checkout.isPending
             }
@@ -373,17 +377,31 @@ export function FinanceLegacyBillingSummary({
           <ul className="mt-3 space-y-2">
             {paymentHistory.map((item) => (
               <li key={item.id} className="text-sm">
-                {item.status === "SUCCEEDED" ? copy.paid : copy.failed} ·{" "}
-                {item.amountMinor != null && item.currency
-                  ? new Intl.NumberFormat(
-                      locale === "uk"
-                        ? "uk-UA"
-                        : locale === "ru"
-                          ? "ru-RU"
-                          : "en-US",
-                      { style: "currency", currency: item.currency },
-                    ).format(item.amountMinor / 100)
-                  : "—"}
+                {item.status === "GIFTED" ? (
+                  <>
+                    {locale === "uk"
+                      ? "Подаровано"
+                      : locale === "ru"
+                        ? "Подарено"
+                        : "Gifted"}{" "}
+                    · {item.planCode === "PRO" ? "Groshly Plus" : item.planCode}{" "}
+                    · {new Date(item.occurredAt).toLocaleDateString(locale)}
+                  </>
+                ) : (
+                  <>
+                    {item.status === "SUCCEEDED" ? copy.paid : copy.failed} ·{" "}
+                    {item.amountMinor != null && item.currency
+                      ? new Intl.NumberFormat(
+                          locale === "uk"
+                            ? "uk-UA"
+                            : locale === "ru"
+                              ? "ru-RU"
+                              : "en-US",
+                          { style: "currency", currency: item.currency },
+                        ).format(item.amountMinor / 100)
+                      : "—"}
+                  </>
+                )}
               </li>
             ))}
           </ul>

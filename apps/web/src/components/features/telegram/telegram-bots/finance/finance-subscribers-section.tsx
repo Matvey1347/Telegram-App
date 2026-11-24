@@ -19,15 +19,18 @@ import {
   type BotBillingUsersQuery,
 } from "@/lib/features/finance/bot-billing-api";
 import { botBillingKeys } from "@/lib/query-keys";
-import { formatBillingDate } from "./finance-billing-format";
+import { formatAiCost, formatBillingDate } from "./finance-billing-format";
 import { financeAdminTimezoneOptions } from "@/lib/features/finance/finance-admin-timezones";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
 
 type FinanceUser = BotBillingUserPage["items"][number];
 
-export function FinanceSubscribersSection({ botId }: { botId: string }) {
+export function FinanceSubscribersSection({ botId, environment = "PRODUCTION" }: {
+  botId: string;
+  environment?: "LOCAL" | "PRODUCTION";
+}) {
   const [query, setQuery] = useState<BotBillingUsersQuery>({
-    environment: "PRODUCTION",
+    environment,
   });
   const [history, setHistory] = useState<string[]>([]);
   const [selected, setSelected] = useState<FinanceUser | null>(null);
@@ -60,7 +63,7 @@ export function FinanceSubscribersSection({ botId }: { botId: string }) {
             onChange={(event) => {
               setHistory([]);
               setQuery({
-                environment: "PRODUCTION",
+                environment,
                 search: event.target.value || undefined,
               });
             }}
@@ -158,6 +161,12 @@ function UserCard({
             ? " · onboarding incomplete"
             : ""}
         </p>
+        {user.aiUsage && (
+          <p className="mt-1 text-xs text-neutral-400">
+            AI this month · {user.aiUsage.requests} requests · {formatAiCost(user.aiUsage.estimatedCostMicros)}
+            {user.aiUsage.unpricedRequests > 0 && ` · ${user.aiUsage.unpricedRequests} unpriced`}
+          </p>
+        )}
       </div>
       <button
         type="button"

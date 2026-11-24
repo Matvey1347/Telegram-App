@@ -79,6 +79,15 @@ export function ChatThread({
     reportedNearBottomRef.current = signature;
     onNearBottomChange(nearBottom, visible);
   }, [onNearBottomChange]);
+  useLayoutEffect(() => {
+    const history = scrollRef.current;
+    if (!history || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (nearBottomRef.current) history.scrollTop = history.scrollHeight;
+    });
+    observer.observe(history);
+    return () => observer.disconnect();
+  }, []);
   const previousRef = useRef({ threadId, firstId: "", lastId: "", height: 0 });
   useLayoutEffect(() => {
     const element = scrollRef.current;

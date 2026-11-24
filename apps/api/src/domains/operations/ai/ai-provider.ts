@@ -1,3 +1,4 @@
+import { postingImageSearchPayload, readPostingImageSearch } from './ai-posting-image-search';
 import { Injectable } from '@nestjs/common';
 import type {
   AiCategoryConfiguration,
@@ -15,6 +16,7 @@ export type AiProviderOutcome = {
   providerModel: string | null;
   providerRequestId: string | null;
   audioDurationSeconds?: number | null;
+  webSearchCalls?: number;
 };
 const safeIdentifier = (value: unknown, max: number) =>
   typeof value === 'string' &&
@@ -39,6 +41,7 @@ export class AiProvider {
     audio?: { mime: 'audio/wav'; data: Buffer },
     chatPlan = false,
     revisionDraft = false,
+    postingImageSearch?: { domain?: string },
   ): Promise<AiProviderOutcome> {
     let generationStarted = false;
     const controller = new AbortController();
@@ -55,6 +58,21 @@ export class AiProvider {
     });
     try {
       if (controller.signal.aborted) return empty('ABORTED');
+      if (postingImageSearch) {
+        generationStarted = true;
+        const response = await this.post('', postingImageSearchPayload(config.modelId, input, postingImageSearch.domain), controller.signal);
+        const results = readPostingImageSearch(response.body.output, postingImageSearch.domain);
+        return {
+          generationStarted,
+          providerModel: safeIdentifier(response.body.model, 100),
+          providerRequestId: response.requestId,
+          usage: parseUsage(response.body.usage),
+          ...(Array.isArray(response.body.output) ? { webSearchCalls: results.calls } : {}),
+          errorCategory: !response.ok ? `PROVIDER_${this.failure(response.status)}`
+            : results.completed ? null : 'IMAGE_SEARCH_OUTPUT_INVALID',
+          ...(results.completed ? { result: { images: results.images } } : {}),
+        };
+      }
       if (audio) {
         if (
           config.category !== 'TELEGRAM_POSTING_PLAN' ||
