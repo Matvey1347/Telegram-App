@@ -1,8 +1,12 @@
-import { FinanceProductionBotEnvironmentService } from '@consumer-finance/api/identity/finance-production-bot-environment.service';
+import {
+  FinanceProductionBotEnvironmentService,
+  RESOLVE_FINANCE_PRODUCTION_RUNTIME,
+} from '@consumer-finance/api/identity/finance-production-bot-environment.service';
 import { TelegramSupportModule } from '../telegram-support/telegram-support.module';
 import { FinanceAiConfigController } from '@consumer-finance/api/ai/finance-ai-config.controller';
 import { FinanceAiConfigService } from '@consumer-finance/api/ai/finance-ai-config.service';
 import { Module } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { TelegramBotApiClient } from '@api/telegram/shared/bot/telegram-bot-api.client';
 import { TelegramSourceAccessService } from '@api/telegram/shared/imports/telegram-source-access.service';
 import { TelegramBotInteractiveReplyService } from '@api/telegram/shared/bot/telegram-bot-interactive-reply.service';
@@ -191,6 +195,12 @@ import { SystemBotBrandingStartupService } from './core/system-bot-branding-star
     FinanceBrowserContextService,
     FinanceLocalDevelopmentService,
     FinanceProductionBotEnvironmentService,
+    {
+      provide: RESOLVE_FINANCE_PRODUCTION_RUNTIME,
+      inject: [ModuleRef],
+      useFactory: (modules: ModuleRef) => () =>
+        modules.resolve(TelegramBotRuntimeService),
+    },
     FinanceDebtService,
     FinanceRegularPaymentService,
     FinanceRegularPaymentConfirmationService,

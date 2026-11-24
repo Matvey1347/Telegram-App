@@ -1,12 +1,13 @@
-import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
+import { Inject, Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { ModuleRef } from "@nestjs/core";
 import { PrismaService } from "@api/prisma/prisma.service";
 import { isProductionEnvironment } from "@api/config/deployment-config";
 import { TokenEncryptionService } from "@api/common/security/token-encryption.service";
 import { TelegramBotApiClient } from "@api/telegram/shared/bot/telegram-bot-api.client";
-import { TelegramBotRuntimeService } from "@api/domains/telegram/telegram-bots/core/telegram-bot-runtime.service";
+import type { TelegramBotRuntimeService } from "@api/domains/telegram/telegram-bots/core/telegram-bot-runtime.service";
 import { TelegramBotRuntimeEnvironmentService } from "@api/domains/telegram/telegram-bots/core/telegram-bot-runtime-environment.service";
+
+export const RESOLVE_FINANCE_PRODUCTION_RUNTIME = Symbol("RESOLVE_FINANCE_PRODUCTION_RUNTIME");
 
 @Injectable()
 export class FinanceProductionBotEnvironmentService implements OnApplicationBootstrap {
@@ -18,7 +19,8 @@ export class FinanceProductionBotEnvironmentService implements OnApplicationBoot
     private readonly config: ConfigService,
     private readonly db: PrismaService,
     private readonly telegram: TelegramBotApiClient,
-    private readonly modules: ModuleRef,
+    @Inject(RESOLVE_FINANCE_PRODUCTION_RUNTIME)
+    private readonly resolveRuntime: () => Promise<TelegramBotRuntimeService>,
     private readonly runtimeEnvironment: TelegramBotRuntimeEnvironmentService,
     private readonly encryption: TokenEncryptionService,
   ) {}
@@ -79,7 +81,7 @@ export class FinanceProductionBotEnvironmentService implements OnApplicationBoot
     ) return;
     // The dispatcher depends on request-scoped services. Resolve the runtime
     // only for rotation so its scope cannot suppress this startup hook.
-    const runtime = await this.modules.resolve(TelegramBotRuntimeService);
+    const runtime = await this.resolveRuntime();
     const identity = await this.telegram.getMe(token);
     if (
       identity.username?.toLowerCase() !== username.toLowerCase() ||
