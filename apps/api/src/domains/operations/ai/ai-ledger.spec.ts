@@ -180,6 +180,31 @@ function harness(usageSource: 'PRODUCTION' | 'LOCAL_UNSYNCED' = 'LOCAL_UNSYNCED'
 }
 
 describe('AI locked admission and settlement', () => {
+  it('opens posting admission transactions in order and continues after a failure', async () => {
+    const h = harness('PRODUCTION');
+    const request = () => ({
+      ...h.request(), category: 'TELEGRAM_POSTING_TEXT' as const,
+      businessObjectId: 'channel',
+      aiPosting: { channelId: 'channel', postingMode: 'TEST' as const },
+    });
+    let rejectFirst!: (error: Error) => void;
+    const blocked = new Promise<never>((_, reject) => { rejectFirst = reject; });
+    const transactions = jest.spyOn(h.prisma, '$transaction')
+      .mockImplementationOnce(() => blocked);
+
+    const first = expect(h.admission.admit(request())).rejects.toThrow('AI_ADMISSION_TIMEOUT');
+    const second = h.admission.admit(request());
+    await Promise.resolve();
+    expect(transactions).toHaveBeenCalledTimes(1);
+
+    rejectFirst(new Prisma.PrismaClientKnownRequestError('transaction expired', {
+      code: 'P2028', clientVersion: 'fixture',
+    }));
+    await first;
+    await expect(second).resolves.toMatchObject({ operation: { status: 'RUNNING' } });
+    expect(h.operations).toHaveLength(1);
+  });
+
   it('marks local AI operations as unsynced and production operations as production', async () => {
     const localHarness = harness('LOCAL_UNSYNCED');
     const local = await localHarness.admission.admit(localHarness.request());

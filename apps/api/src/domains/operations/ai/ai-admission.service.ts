@@ -101,6 +101,8 @@ export const operationFingerprint = (request: AiExecutionRequest) =>
 
 @Injectable()
 export class AiAdmissionService {
+  private readonly postingAdmissions = new Map<string, Promise<void>>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly registry: AiModelRegistry,
@@ -136,6 +138,29 @@ export class AiAdmissionService {
     return operation;
   }
   async admit(request: AiExecutionRequest) {
+    if (!request.aiPosting) return this.admitOperation(request);
+
+    // Queue before opening a transaction. Parallel slots otherwise spend their
+    // transaction time waiting for the same workspace advisory lock.
+    const previous = this.postingAdmissions.get(request.workspaceId) ??
+      Promise.resolve();
+    const admission = previous.then(() => this.admitOperation(request));
+    const tail = admission.then(() => undefined, () => undefined);
+    this.postingAdmissions.set(request.workspaceId, tail);
+    try {
+      return await admission;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError &&
+        ['P2024', 'P2028'].includes(error.code))
+        throw new ServiceUnavailableException('AI_ADMISSION_TIMEOUT');
+      throw error;
+    } finally {
+      if (this.postingAdmissions.get(request.workspaceId) === tail)
+        this.postingAdmissions.delete(request.workspaceId);
+    }
+  }
+
+  private async admitOperation(request: AiExecutionRequest) {
     const now = new Date();
     if (request.postingImageSearch && (
       request.category !== 'TELEGRAM_POSTING_REVIEW' || !request.aiPosting || request.image || request.audio ||

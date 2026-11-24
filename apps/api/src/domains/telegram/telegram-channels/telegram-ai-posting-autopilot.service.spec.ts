@@ -1,7 +1,15 @@
+import { BadGatewayException } from '@nestjs/common';
 import { TelegramAiPostingAutopilotService } from './telegram-ai-posting-autopilot.service';
 import { TelegramAiPostingAutopilotChannelService } from './telegram-ai-posting-autopilot-channel.service';
+import { classifyAutopilotError } from './telegram-ai-posting-autopilot-error';
 
 describe('TelegramAiPostingAutopilotService', () => {
+  it('classifies structured draft errors for the run report', () => {
+    expect(classifyAutopilotError(new BadGatewayException({
+      code: 'AI_POSTING_NO_DRAFTS_CREATED', failures: [],
+    }))).toBe('GENERATION_FAILED');
+  });
+
   const row = {
     id: 'settings', workspaceId: 'ws', telegramChannelId: 'channel',
     configurationVersion: 3, autopilotNextRunAt: new Date(), autopilotRetryOfRunId: null,
