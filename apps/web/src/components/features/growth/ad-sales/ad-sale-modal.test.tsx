@@ -308,10 +308,14 @@ describe("AdSaleModal", () => {
   });
 
   it("deletes an unfinished draft when the user chooses to start again", async () => {
-    window.localStorage.setItem(
-      "telegram-ad-sales:draft:default",
-      JSON.stringify({ version: 1, placements: [] }),
+    const first = renderModal();
+    fireEvent.change(screen.getByLabelText("Time"), {
+      target: { value: "18:30" },
+    });
+    await waitFor(() =>
+      expect(window.localStorage.getItem("telegram-ad-sales:draft:default")).toContain("18:30"),
     );
+    first.unmount();
     renderModal();
 
     fireEvent.click(

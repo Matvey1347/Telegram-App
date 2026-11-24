@@ -99,7 +99,8 @@ export function ConsumerFinanceLogin({
     enabled: waiting && Boolean(challenge.data?.token),
     retry: false,
     staleTime: 0,
-    refetchOnWindowFocus: (query) => query.state.data?.status === "pending",
+    refetchOnWindowFocus: (query) =>
+      !query.state.data || query.state.data.status === "pending",
     refetchInterval: (query) =>
       query.state.data?.status === "pending" ? 1_500 : false,
   });

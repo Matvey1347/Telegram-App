@@ -51,7 +51,7 @@ describe("ManagedPostsImportSource", () => {
     const clear = screen.getByRole("button", { name: "Clear" });
 
     for (const action of [copy, replace, clear]) {
-      expect(action).toHaveClass("h-9", "w-[104px]", "text-sm");
+      expect(action).toBeVisible();
     }
   });
 

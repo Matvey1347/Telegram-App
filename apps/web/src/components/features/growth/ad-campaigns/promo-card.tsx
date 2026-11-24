@@ -32,7 +32,7 @@ export function PromoCard({
         ? [promo.imageData]
         : [];
   const post = {
-    text: promo.text || "",
+    text: promo.text || promo.previewText || "",
     plainText: promo.plainText,
     formattedHtml: promo.formattedHtml,
     imageUrls,

@@ -3,14 +3,15 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { GroshlyFinanceApp } from "./groshly-finance-app";
 
+const { startup } = vi.hoisted(() => ({
+  startup: vi.fn().mockResolvedValue({ authenticated: false }),
+}));
 vi.mock("@finance-web/groshly/main", () => ({ GroshlyApp: () => null }));
 vi.mock("@consumer-finance/web/components/hooks/use-finance-bot-branding", () => ({
   useFinanceBotBranding: () => ({ logoUrl: "", faviconUrl: "" }),
 }));
 vi.mock("@consumer-finance/web/lib/api/consumer-finance-insights-api", () => ({
-  consumerFinanceInsightsApi: {
-    startup: () => Promise.resolve({ authenticated: false }),
-  },
+  consumerFinanceInsightsApi: { startup },
 }));
 vi.mock("@consumer-finance/web/components/app/consumer-finance-login", () => ({
   ConsumerFinanceLogin: () => <button>Telegram sign in</button>,
@@ -30,6 +31,7 @@ describe("GroshlyFinanceApp unauthenticated entry", () => {
   });
 
   it("keeps a rejected Telegram launch inside the Mini App", async () => {
+    startup.mockRejectedValueOnce(new Error("Invalid Telegram signature"));
     const client = new QueryClient();
     render(
       <QueryClientProvider client={client}>
@@ -38,6 +40,7 @@ describe("GroshlyFinanceApp unauthenticated entry", () => {
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Unable to sign in to Mini App");
+    expect(startup).toHaveBeenLastCalledWith("finance-bot", "telegram-launch");
     expect(screen.queryByRole("button", { name: "Telegram sign in" })).toBeNull();
   });
 });
