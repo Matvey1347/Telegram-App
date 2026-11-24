@@ -95,6 +95,14 @@ two hosts. Verify `getWebhookInfo` against the expected HTTPS runtime route,
 then check browser/PWA sign-in and open the Mini App directly from the Telegram
 menu. A Telegram launch uses signed launch data without opening a bot chat.
 
+While Telegram sign-in is unavailable, a signed-in Groshly browser can transfer
+access through **Profile → Sign in on another device**. Scan the private QR on
+the target phone or enter its code at **Login → Use a code from another device**
+in the browser or installed PWA. Confirm on the target device. The existing
+server transfer expires in ten minutes and can be consumed once. The QR
+credential is in the URL fragment and is removed before use. Generation and
+redemption each occur only after a user action and add no recurring work.
+
 The standalone API remains independent of the customer path during recovery.
 Before any future data cutover, run the read-only
 `pnpm --filter finance-api migration:plan`, verify source/destination identity,

@@ -15,7 +15,6 @@ vi.mock("@consumer-finance/web/lib/api/consumer-finance-insights-api", () => ({
 }));
 vi.mock("@consumer-finance/web/components/app/consumer-finance-login", () => ({
   ConsumerFinanceLogin: () => <button>Telegram sign in</button>,
-  ConsumerFinanceBootstrapError: () => <p role="alert">Unable to sign in to Mini App</p>,
 }));
 
 describe("GroshlyFinanceApp unauthenticated entry", () => {
@@ -39,7 +38,8 @@ describe("GroshlyFinanceApp unauthenticated entry", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Unable to sign in to Mini App");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Telegram/);
+    expect(document.querySelector(".groshly-login-card")).toContainElement(screen.getByRole("alert"));
     expect(startup).toHaveBeenLastCalledWith("finance-bot", "telegram-launch");
     expect(screen.queryByRole("button", { name: "Telegram sign in" })).toBeNull();
   });

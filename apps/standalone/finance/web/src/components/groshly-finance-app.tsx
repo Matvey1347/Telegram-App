@@ -5,9 +5,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GroshlyApp } from "@finance-web/groshly/main";
 import { readFinanceRateCache } from "@finance-web/groshly/rate-cache";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
+import { GroshlyStartupError } from "@finance-web/components/groshly-startup-error";
+import { GroshlyDeviceTransferLogin } from "@finance-web/components/groshly-device-transfer";
 import { recordInvestmentMovement, type InvestmentMovement } from "@finance-web/components/groshly-investment-movement";
 import type { TelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
-import { ConsumerFinanceBootstrapError, ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
+import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
 import { useFinanceBotBranding } from "@consumer-finance/web/components/hooks/use-finance-bot-branding";
 import { consumerFinanceInsightsApi } from "@consumer-finance/web/lib/api/consumer-finance-insights-api";
 import { consumerFinanceInvestmentsApi } from "@consumer-finance/web/lib/api/consumer-finance-investments-api";
@@ -1096,30 +1098,23 @@ export function GroshlyFinanceApp({ botId, bootstrap }: {
     return <GroshlyLoadingScreen />;
   }
   if (financeData.isError || (bootstrap.status === "ready" && !financeData.data?.authenticated)) {
-    return <ConsumerFinanceBootstrapError onRetry={() => window.location.reload()} />;
+    return <GroshlyStartupError telegram={bootstrap.status === "ready"} onRetry={() => window.location.reload()} />;
   }
   if (!financeData.data?.authenticated) {
     if (typeof window !== "undefined" && window.location.pathname.startsWith("/app")) return <BrowserLoginRedirect />;
+    const openApp = () => {
+      void queryClient.invalidateQueries({ queryKey: groshlyReadKey });
+    };
     return (
       <ConsumerFinanceLogin
         botId={botId}
-        onAuthenticated={() => {
-          void queryClient.invalidateQueries({ queryKey: groshlyReadKey });
-        }}
+        onAuthenticated={openApp}
+        renderDeviceTransfer={(locale) => <GroshlyDeviceTransferLogin botId={botId} locale={locale} onAuthenticated={openApp} />}
       />
     );
   }
   if (!snapshot) {
-    return (
-      <main className="app-shell">
-        <div className="busy-cover">
-          <div className="busy-card">
-            <b>Finance data is unavailable.</b>
-            <button onClick={() => financeData.refetch()}>Retry</button>
-          </div>
-        </div>
-      </main>
-    );
+    return <GroshlyStartupError onRetry={() => void financeData.refetch()} />;
   }
   return (
     <GroshlyRoot

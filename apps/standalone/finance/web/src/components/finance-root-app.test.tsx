@@ -9,7 +9,6 @@ vi.mock("@finance-web/components/groshly-finance-app", () => ({
 }));
 vi.mock("@consumer-finance/web/components/app/consumer-finance-login", () => ({
   ConsumerFinanceLogin: () => <button>Browser sign in</button>,
-  ConsumerFinanceBootstrapError: () => <p role="alert">Cannot read Telegram launch</p>,
 }));
 
 describe("FinanceRootApp", () => {

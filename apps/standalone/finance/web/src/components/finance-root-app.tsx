@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { GroshlyFinanceApp } from "@finance-web/components/groshly-finance-app";
 import { GroshlyLoadingScreen } from "@finance-web/components/groshly-loading-screen";
-import { ConsumerFinanceBootstrapError, ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
+import { GroshlyStartupError } from "@finance-web/components/groshly-startup-error";
+import { GroshlyDeviceTransferLogin } from "@finance-web/components/groshly-device-transfer";
+import { ConsumerFinanceLogin } from "@consumer-finance/web/components/app/consumer-finance-login";
 import { useTelegramMiniAppBootstrap } from "@consumer-finance/web/components/hooks/use-telegram-mini-app-bootstrap";
 
 type FinanceContext = { financeBotId: string };
@@ -52,12 +54,20 @@ export function FinanceRootApp({ botId, entry = "app", initialLocale = "uk", ini
 
   const activeBotId = botId ?? (state.status === "ready" ? state.financeBotId : undefined);
   if (activeBotId && bootstrap.status === "error") {
-    return <ConsumerFinanceBootstrapError locale={initialLocale} onRetry={() => window.location.reload()} />;
+    return <GroshlyStartupError telegram onRetry={() => window.location.reload()} />;
   }
 
   if (activeBotId && (bootstrap.status === "ready" || bootstrap.status === "browser")) {
     if (entry === "login" && bootstrap.status === "browser") {
-      return <ConsumerFinanceLogin key={activeBotId} botId={activeBotId} initialLocale={initialLocale} initialTheme={initialTheme} onAuthenticated={() => window.location.replace("/app")} />;
+      const openApp = () => window.location.replace("/app");
+      return <ConsumerFinanceLogin
+        key={activeBotId}
+        botId={activeBotId}
+        initialLocale={initialLocale}
+        initialTheme={initialTheme}
+        onAuthenticated={openApp}
+        renderDeviceTransfer={(locale) => <GroshlyDeviceTransferLogin botId={activeBotId} locale={locale} onAuthenticated={openApp} />}
+      />;
     }
     return <GroshlyFinanceApp key={activeBotId} botId={activeBotId} bootstrap={bootstrap} />;
   }
@@ -66,18 +76,7 @@ export function FinanceRootApp({ botId, entry = "app", initialLocale = "uk", ini
     return <GroshlyLoadingScreen />;
   }
 
-  return (
-    <main className="app-shell">
-      <div className="busy-cover">
-        <div className="busy-card">
-          <b>Unable to open Groshly.</b>
-          <button className="btn primary" onClick={() => window.location.reload()}>
-            Retry
-          </button>
-        </div>
-      </div>
-    </main>
-  );
+  return <GroshlyStartupError onRetry={() => window.location.reload()} />;
 }
 
 export { readFinanceContext };

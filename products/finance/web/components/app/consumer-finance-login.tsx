@@ -1,7 +1,7 @@
 "use client";
 import { useFinanceBrandDevelopment } from "@consumer-finance/web/provider/finance-brand-environment";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Moon, Send, ShieldCheck, Sun } from "lucide-react";
 import {
@@ -24,11 +24,13 @@ export function ConsumerFinanceLogin({
   initialLocale = "uk",
   initialTheme = "light",
   onAuthenticated,
+  renderDeviceTransfer,
 }: {
   botId: string;
   initialLocale?: "uk" | "en";
   initialTheme?: "light" | "dark";
   onAuthenticated: () => void;
+  renderDeviceTransfer?: (locale: "uk" | "en") => ReactNode;
 }) {
   const [locale, setLocale] = useState<"uk" | "en">(initialLocale);
   const [theme, setTheme] = useState<"light" | "dark">(initialTheme);
@@ -150,6 +152,7 @@ export function ConsumerFinanceLogin({
           {challenge.isError || approval.isError || approval.data?.status === "expired" ? (
             <div className="groshly-login-error"><p role="alert">{approval.data?.status === "expired" ? t.telegramSignInExpired : t.signInUnavailable}</p><Button variant="secondary" onClick={() => void retry()}>{t.retry}</Button></div>
           ) : null}
+          {renderDeviceTransfer?.(locale)}
           <div className="groshly-login-security"><ShieldCheck size={18} aria-hidden="true" /><span>{t.landingSecurity}</span></div>
           <a className="groshly-login-back" href="/">← {locale === "uk" ? "На головну" : "Back to home"}</a>
         </section>

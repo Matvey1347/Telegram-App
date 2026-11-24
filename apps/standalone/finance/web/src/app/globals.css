@@ -64,3 +64,11 @@ button:disabled,
 .groshly-loading-brand { display: inline-flex; align-items: center; gap: 10px; color: #123d2d; font-size: 26px !important; font-weight: 850; letter-spacing: -.06em; }
 .groshly-loading-brand img { width: 40px !important; height: 40px !important; border-radius: 10px; }
 .groshly-loading-brand span { color: #80af48; font-size: inherit !important; }
+.groshly-device-transfer { display:grid; justify-items:start; gap:12px; padding:16px; }
+.groshly-device-transfer p { margin:0; color:inherit; }
+.groshly-device-transfer svg { max-width:100%; height:auto; border-radius:10px; }
+.groshly-device-transfer label { display:grid; gap:6px; width:100%; font-size:14px; }
+.groshly-device-transfer input { min-width:0; width:100%; padding:10px; border:1px solid #82958b; border-radius:10px; background:transparent; color:inherit; }
+.groshly-device-transfer-login > button { display:inline-flex; align-items:center; gap:8px; }
+.groshly-device-transfer-login form { padding-inline:0; }
+.groshly-sign-out-error { margin:0; padding:0 16px 12px; color:var(--red); }
