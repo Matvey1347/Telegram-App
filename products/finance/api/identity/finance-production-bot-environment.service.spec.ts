@@ -35,7 +35,7 @@ function setup() {
   const encryption = { decrypt: jest.fn().mockReturnValue('old-token') };
   const service = new FinanceProductionBotEnvironmentService(
     config as never, db as never, telegram as never,
-    runtime as never, ownership as never, encryption as never,
+    { resolve: async () => runtime } as never, ownership as never, encryption as never,
   );
   return { service, telegram, runtime, encryption };
 }

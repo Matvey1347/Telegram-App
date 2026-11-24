@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { ModuleRef } from "@nestjs/core";
 import { PrismaService } from "@api/prisma/prisma.service";
 import { isProductionEnvironment } from "@api/config/deployment-config";
 import { TokenEncryptionService } from "@api/common/security/token-encryption.service";
@@ -17,7 +18,7 @@ export class FinanceProductionBotEnvironmentService implements OnApplicationBoot
     private readonly config: ConfigService,
     private readonly db: PrismaService,
     private readonly telegram: TelegramBotApiClient,
-    private readonly runtime: TelegramBotRuntimeService,
+    private readonly modules: ModuleRef,
     private readonly runtimeEnvironment: TelegramBotRuntimeEnvironmentService,
     private readonly encryption: TokenEncryptionService,
   ) {}
@@ -76,6 +77,9 @@ export class FinanceProductionBotEnvironmentService implements OnApplicationBoot
         authTag: current.botTokenAuthTag,
       }) === token
     ) return;
+    // The dispatcher depends on request-scoped services. Resolve the runtime
+    // only for rotation so its scope cannot suppress this startup hook.
+    const runtime = await this.modules.resolve(TelegramBotRuntimeService);
     const identity = await this.telegram.getMe(token);
     if (
       identity.username?.toLowerCase() !== username.toLowerCase() ||
@@ -85,14 +89,15 @@ export class FinanceProductionBotEnvironmentService implements OnApplicationBoot
         "Configured Groshly identity does not match the saved runtime",
       );
     const webhook = await this.telegram.getWebhookInfo(token);
-    const existingUrl = current && this.runtime.webhookUrlFor(current.id, "PRODUCTION");
+    const existingUrl = current && runtime.webhookUrlFor(current.id, "PRODUCTION");
     if (webhook.url && webhook.url !== existingUrl)
       throw new Error("Configured Groshly bot already has a webhook owner");
     const input = {
       botIntegrationId: bot.id,
       environment: "PRODUCTION" as const,
     };
-    await this.runtime.configureRuntime({ ...input, token });
-    await this.runtime.enableRuntime(input);
+    await runtime.configureRuntime({ ...input, token });
+    await runtime.enableRuntime(input);
+    this.logger.log("Groshly production bot credential reconciled");
   }
 }
