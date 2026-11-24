@@ -370,7 +370,6 @@ export function AppShell({ children }: PropsWithChildren) {
               <X size={16} />
             </button>
           </div>
-          <div className={mobileMenuOpen ? "mt-2" : "mt-2 hidden lg:block"}><LanguageSwitcher /></div>
         </div>
 
         <GlobalSearchBox
