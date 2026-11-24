@@ -3,12 +3,14 @@ import { useLocalDatabase } from "./dev-local-database.mjs";
 import { localDatabaseEnvironment } from "./dev-database-environment.mjs";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { assertPortAvailable } from "./dev-port-availability.mjs";
 import { terminateDevChildren } from "./dev-process-termination.mjs";
 import { waitForHttpReady } from "./dev-service-readiness.mjs";
 import { extractCloudflareQuickTunnelUrl } from "./dev-cloudflare-tunnel.mjs";
+import { checkDevTelegramBot, checkDevTelegramWebhook, sharesBotIdentity } from "./dev-telegram-bot-check.mjs";
 import { localBotPublicEnvironment } from "../deployment/public-origin-environment.mjs";
 import {
   createDevTerminalDashboard,
@@ -125,18 +127,89 @@ const FINANCE_LOCAL_BOT_RUNTIME_KEYS = new Set([
   "FINANCE_BOT_LOCAL_TOKEN",
 ]);
 
+const { parse: parseEnv } = createRequire(new URL("../../apps/api/package.json", import.meta.url))("dotenv");
+
 function financeProfileEnvironment(profilePath, allowedKeys) {
-  if (!existsSync(profilePath)) return {};
-  return Object.fromEntries(
-    readFileSync(profilePath, "utf8")
-      .split(/\r?\n/u)
-      .flatMap((line) => {
-        const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u);
-        if (!match || !allowedKeys.has(match[1])) return [];
-        return [[match[1], match[2].trim().replace(/^(['"])(.*)\1$/u, "$2")]];
-      }),
-  );
+  return Object.fromEntries(Object.entries(readEnvFile(profilePath)).filter(
+    ([key]) => allowedKeys.has(key),
+  ));
 }
+
+function readEnvFile(path) {
+  return existsSync(path) ? parseEnv(readFileSync(path)) : {};
+}
+
+function configuredBotProfiles(products) {
+  const financePath = "products/finance/.env.local";
+  const root = { ...readEnvFile(".env"), ...process.env };
+  const finance = readEnvFile(financePath);
+  return products.flatMap((product) => ["LOCAL", "PRODUCTION"].map((environment) => {
+    const system = product === "nexeloq";
+    const env = system ? root : finance;
+    const key = `${system ? "TELEGRAM_SYSTEM_BOT" : "FINANCE_BOT"}_${environment}`;
+    return {
+      product,
+      environment,
+      id: `${product}-bot-${environment.toLowerCase()}`,
+      label: `Bot · ${environment}`,
+      path: system ? ".env" : financePath,
+      key,
+      token: env[`${key}_TOKEN`]?.trim(),
+      username: env[`${key}_USERNAME`]?.trim(),
+    };
+  }));
+}
+
+const localBotProfiles = new Map();
+
+async function prepareBotProfiles(profiles) {
+  const notes = {
+    missing: ["No token", "Set", "TOKEN"],
+    invalid: ["Invalid token", "Replace", "TOKEN"],
+    usernameMismatch: ["Username mismatch", "Check", "USERNAME"],
+    shared: ["Shared bot identity", "Use a separate bot for", "TOKEN"],
+    unavailable: ["Check unavailable", "Retry Telegram verification for", "TOKEN"],
+  };
+  await Promise.all(profiles.map(async (profile) => {
+    dashboard.update(profile.id, "starting", "Checking token");
+    const result = sharesBotIdentity(profile, profiles) ? { status: "shared" } : await checkDevTelegramBot(profile);
+    if (result.status === "valid") {
+      if (profile.environment === "LOCAL") {
+        if (profile.product === "nexeloq" && !withSystemBot) {
+          dashboard.update(profile.id, "waiting", "Disabled");
+          return;
+        }
+        if (profile.product === "finance") {
+          try {
+            assertFinanceLocalBotProfile();
+          } catch {
+            dashboard.update(profile.id, "failed", "LOCAL profile required");
+            dashboard.notice("⚠ Set FINANCE_BOT_RUNTIME_ENVIRONMENT=LOCAL in products/finance/.env.local.");
+            return;
+          }
+        }
+        localBotProfiles.set(profile.product, profile);
+        dashboard.update(profile.id, "waiting", "Token valid");
+        return;
+      }
+      const details = {
+        registered: ["ready", "Webhook set"],
+        absent: ["waiting", "No remote webhook"],
+        invalid: ["failed", "Invalid token"],
+        deliveryError: ["failed", "Webhook delivery error"],
+        unavailable: ["waiting", "Webhook check unavailable"],
+      };
+      dashboard.update(profile.id, ...details[result.webhook.status]);
+      if (result.webhook.status === "invalid")
+        dashboard.notice(`⚠ Replace ${profile.key}_TOKEN in ${profile.path}.`);
+      return;
+    }
+    const [detail, action, field] = notes[result.status];
+    dashboard.update(profile.id, "failed", detail);
+    dashboard.notice(`⚠ ${action} ${profile.key}_${field} in ${profile.path}.`);
+  }));
+}
+
 
 export function financeWebEnvironment(
   profilePath = "products/finance/.env.local",
@@ -190,6 +263,10 @@ export function selectedProducts(mode) {
   if (mode === "nexeloq" || mode === "finance") return [mode];
   if (mode === "all") return ["nexeloq", "finance"];
   throw new Error("Usage: node scripts/dev/dev-products.mjs <nexeloq|finance|all>");
+}
+
+export function localSystemBotEnvironment({ optedIn, tunnel, tokenVerified }) {
+  return { TELEGRAM_SYSTEM_BOT_ENVIRONMENT: optedIn && (!tunnel || tokenVerified) ? "LOCAL" : "" };
 }
 
 const mode = process.argv[2];
@@ -268,14 +345,19 @@ function spawnPnpm(args, options) {
 function start(product, definition) {
   const { name, args, env } = definition;
   const id = serviceId(product, name);
+  const verifiedBot = withCloudflare ? localBotProfiles.get(product) : undefined;
   const financeWebEnvironmentVariables =
     name === "Finance Web" ? financeWebEnvironment() : {};
   const financeApiEnvironmentVariables =
     name === "Finance API" ? financeApiEnvironment() : {};
   const localFinanceBotEnvironment =
-    name === "Finance API" && financeApiEnvironmentVariables.FINANCE_BROWSER_LOGIN_BOT_USERNAME
-      ? financeLocalBotRuntimeEnvironment()
-      : {};
+    name !== "Finance API" ? {} :
+    withCloudflare ? {
+      FINANCE_BROWSER_LOGIN_BOT_USERNAME: verifiedBot?.username ?? "",
+      FINANCE_BOT_LOCAL_USERNAME: verifiedBot?.username ?? "",
+      FINANCE_BOT_LOCAL_TOKEN: verifiedBot?.token ?? "",
+    } : financeApiEnvironmentVariables.FINANCE_BROWSER_LOGIN_BOT_USERNAME
+      ? financeLocalBotRuntimeEnvironment() : {};
   const financeTunnelEnvironment =
     name === "Finance API" && withCloudflare
       ? {
@@ -290,7 +372,17 @@ function start(product, definition) {
       : {};
   const systemBotEnvironment =
     name === "Nexeloq API"
-      ? { TELEGRAM_SYSTEM_BOT_ENVIRONMENT: withSystemBot ? "LOCAL" : "" }
+      ? {
+        ...localSystemBotEnvironment({
+          optedIn: withSystemBot,
+          tunnel: withCloudflare,
+          tokenVerified: Boolean(verifiedBot),
+        }),
+        ...(verifiedBot ? {
+          TELEGRAM_SYSTEM_BOT_LOCAL_USERNAME: verifiedBot.username,
+          TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN: verifiedBot.token,
+        } : {}),
+      }
       : {};
   const child = spawnPnpm(args, {
     cwd: process.cwd(),
@@ -510,15 +602,25 @@ async function startProduct(product) {
       }
     }
   }
-  if (product === "finance" && withCloudflare) {
-    const publicUrl = tunnelOrigins.get("finance");
-    await Promise.all([
-      waitForHttpReady(`${publicUrl}/api/health`),
-      waitForHttpReady(`${publicUrl}/health`),
-    ]);
-    await synchronizeFinanceLocalBot(true);
-    dashboard?.notice("✓ Finance bot: LOCAL webhook and Mini App links reconciled");
-  } else if (product === "finance") {
+  if (withCloudflare && localBotProfiles.has(product)) {
+    const profile = localBotProfiles.get(product);
+    const publicUrl = tunnelOrigins.get(product);
+    dashboard?.update(profile.id, "starting", "Checking local webhook");
+    try {
+      await waitForHttpReady(`${publicUrl}/api/health`);
+      if (product === "finance") {
+        await waitForHttpReady(`${publicUrl}/health`);
+        await synchronizeFinanceLocalBot(true);
+      }
+      const webhook = await checkDevTelegramWebhook(profile.token);
+      if (webhook.status !== "registered" || webhook.origin !== new URL(publicUrl).origin)
+        throw new Error("LOCAL webhook did not confirm this tunnel");
+      dashboard?.update(profile.id, "ready", "Running on tunnel");
+    } catch {
+      dashboard?.update(profile.id, "failed", "Local webhook failed");
+      dashboard?.notice(`⚠ ${product === "finance" ? "Finance" : "Nexeloq"} LOCAL bot could not confirm its webhook. Check API diagnostics and ${profile.key}_TOKEN.`);
+    }
+  } else if (product === "finance" && !withCloudflare) {
     const configured = financeLocalBotRuntimeEnvironment();
     if (configured.FINANCE_BOT_LOCAL_TOKEN && financeApiEnvironment().FINANCE_BROWSER_LOGIN_BOT_USERNAME)
       await synchronizeFinanceLocalBot(false).catch(() =>
@@ -533,7 +635,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     products = selectedProducts(mode);
     await useLocalDatabase();
-    if (withCloudflare && products.includes("finance")) assertFinanceLocalBotProfile();
     await Promise.all(
       products.flatMap((product) =>
         LOCAL_PRODUCTS[product].ports.map(([port, name]) =>
@@ -575,6 +676,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       });
     }
   }
+  const botProfiles = withCloudflare ? configuredBotProfiles(products) : [];
+  for (const profile of botProfiles) {
+    dashboard.register(profile.id, { column: profile.product, label: profile.label });
+  }
   dashboard.register("database", {
     column: products[0],
     label: "Database",
@@ -585,6 +690,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   });
   dashboard.render();
   try {
+    await prepareBotProfiles(botProfiles);
     await prepareStartupStep({
       id: "database",
       args: ["--filter", "api", "run", "db:deploy:safe"],
@@ -598,6 +704,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       starting: "Building",
       ready: "Build ready",
       failure: "Shared package build failed",
+    });
+    dashboard.register("prisma", { column: products[0], label: "Prisma client" });
+    await prepareStartupStep({
+      id: "prisma",
+      args: ["db:generate"],
+      starting: "Generating",
+      ready: "Client ready",
+      failure: "Prisma client generation failed",
     });
     if (withCloudflare) {
       await assertCloudflaredAvailable();

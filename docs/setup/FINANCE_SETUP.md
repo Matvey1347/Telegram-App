@@ -31,7 +31,8 @@ These commands check the effective `DATABASE_URL`, its local Compose binding
 and their listener ports before migration. They run
 `pnpm --filter api run db:deploy:safe` on that database before starting either
 API. This applies pending Nexeloq schema migrations and checks the resulting
-schema. The dedicated tunnel launcher retries failed database preparation.
+schema. The all-products launcher also generates the shared Prisma client
+before either API watcher compiles. The dedicated tunnel launcher retries failed database preparation.
 Stop an existing launcher in its own terminal before starting another on the
 same ports. A port conflict fails before migration.
 
@@ -70,6 +71,12 @@ activates and cleans up only the selected LOCAL runtime. Ordinary
    valuable local snapshot.
 4. Stop the launcher with Ctrl-C. Check webhook cleanup and that ports 3001,
    4001 and 4100 are released.
+
+The `pnpm dev:all:tunnel` dashboard checks the LOCAL and PRODUCTION bot
+credentials for Nexeloq and Finance at startup. An invalid token shows the
+environment variable and file to update. Only validated LOCAL bots can
+attach to the generated tunnel. The PRODUCTION row reflects the remote
+webhook, and the launcher leaves it under the production host's control.
 
 ## Production acceptance preparation
 

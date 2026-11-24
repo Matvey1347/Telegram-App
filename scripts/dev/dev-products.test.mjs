@@ -34,6 +34,13 @@ test("Nexeloq API overrides a conflicting root API port", () => {
   assert.equal(api?.env.API_PORT, "4000");
 });
 
+test("all-products startup prepares Prisma before starting API watchers", () => {
+  const source = readFileSync(new URL("./dev-products.mjs", import.meta.url), "utf8");
+  const generateClient = source.indexOf('args: ["db:generate"]');
+  assert.ok(generateClient > source.indexOf('"db:deploy:safe"'));
+  assert.ok(generateClient < source.indexOf("products.map((product) => startProduct(product))"));
+});
+
 test("Finance waits for its API before starting the web host", () => {
   const api = LOCAL_PRODUCTS.finance.processes.find(
     (processDefinition) => processDefinition.name === "Finance API",

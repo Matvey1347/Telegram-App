@@ -69,16 +69,16 @@ test("script-only flags stay out of the permanent environment profile", () => {
   }
 });
 
-test("local System Bot has an explicit opt-in development command", () => {
+test("local System Bot requires opt-in and validated tunnel credentials", async () => {
   const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
   const localProducts = readFileSync("scripts/dev/dev-products.mjs", "utf8");
   assert.equal(scripts.dev, "pnpm dev:nexeloq");
   assert.match(localProducts, /TELEGRAM_SYSTEM_BOT_ENVIRONMENT:\s*""/u);
   assert.match(scripts["dev:all:tunnel"], /--system-bot(?:\s|$)/u);
-  assert.match(
-    localProducts,
-    /TELEGRAM_SYSTEM_BOT_ENVIRONMENT:\s*withSystemBot\s*\?\s*"LOCAL"\s*:\s*""/u,
-  );
+  const { localSystemBotEnvironment } = await import("../dev/dev-products.mjs");
+  assert.equal(localSystemBotEnvironment({ optedIn: true, tunnel: true, tokenVerified: true }).TELEGRAM_SYSTEM_BOT_ENVIRONMENT, "LOCAL");
+  assert.equal(localSystemBotEnvironment({ optedIn: true, tunnel: true, tokenVerified: false }).TELEGRAM_SYSTEM_BOT_ENVIRONMENT, "");
+  assert.equal(localSystemBotEnvironment({ optedIn: false, tunnel: true, tokenVerified: true }).TELEGRAM_SYSTEM_BOT_ENVIRONMENT, "");
   assert.match(scripts["dev:system-bot"], /--system-bot(?:\s|$)/u);
 
   const runner = readFileSync("scripts/dev/dev-tunnel.mjs", "utf8");
