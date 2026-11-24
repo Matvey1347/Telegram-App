@@ -162,11 +162,35 @@ export function PerformanceCell({
   const t = useCampaignText();
   const displayMode = moneySettings?.currencyDisplayMode ?? "code";
 
+  const botPerformance = campaign.botRequestPerformance;
+  const botBadge = botPerformance ? (
+    <button
+      type="button"
+      onClick={onOpenBotRequests}
+      className="rounded border border-cyan-800/80 bg-cyan-950/20 px-1.5 py-0.5 text-cyan-200"
+      title={
+        botPerformance.confirmed === false
+          ? "Telegram has not confirmed the bot request counters for this campaign."
+          : botPerformance.estimated
+            ? "При пересечении кампаний заявки распределяются приблизительно по времени снимков."
+            : botPerformance.channels.map((channel) =>
+                `${channel.title}: +${formatMetric(channel.requests)}`,
+              ).join("\n")
+      }
+    >
+      {t("Bot requests")}{" "}
+      {botPerformance.confirmed === false
+        ? "—"
+        : `${botPerformance.estimated ? "≈" : "+"}${formatMetric(botPerformance.total)}`}
+    </button>
+  ) : null;
+
   if (campaign.periodCountsUnavailable)
     return (
       <div className="text-sm text-amber-400">
         {t("Joined")}: {campaign.analytics?.joinedCount ?? "—"} ·{" "}
         {t("Requests")}: {campaign.analytics?.requestedCount ?? "—"}
+        {botBadge && <div className="mt-1">{botBadge}</div>}
       </div>
     );
   return (
@@ -280,29 +304,7 @@ export function PerformanceCell({
             ) : null}
           </>
         ) : null}
-        {campaign.botRequestPerformance ? (
-          <button
-            type="button"
-            onClick={onOpenBotRequests}
-            className="rounded border border-cyan-800/80 bg-cyan-950/20 px-1.5 py-0.5 text-cyan-200"
-            title={
-              campaign.botRequestPerformance.estimated
-                ? "При пересечении кампаний заявки распределяются приблизительно по времени снимков."
-                : campaign.botRequestPerformance.channels.length
-                  ? campaign.botRequestPerformance.channels
-                      .map(
-                        (channel) =>
-                          `${channel.title}: +${formatMetric(channel.requests)}`,
-                      )
-                      .join("\n")
-                  : "No new bot requests in the selected period"
-            }
-          >
-            {t("Bot requests")}{" "}
-            {campaign.botRequestPerformance.estimated ? "≈" : "+"}
-            {formatMetric(campaign.botRequestPerformance.total)}
-          </button>
-        ) : null}
+        {botBadge}
       </div>
       <AdmissionViewUpliftBlock
         campaign={campaign}

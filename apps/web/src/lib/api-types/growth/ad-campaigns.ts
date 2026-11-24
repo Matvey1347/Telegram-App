@@ -209,6 +209,7 @@ export type AdCampaign = AdCampaignAnalyticsFields & {
   botInviteLinkIds?: string[];
   trackingLinkKind?: string;
   trackingChannelIds?: string[];
+  trackingAllChannels?: boolean;
   accountId?: string;
   telegramChannel?: TelegramChannel;
   promo?: Promo | null;
@@ -223,6 +224,7 @@ export type AdCampaign = AdCampaignAnalyticsFields & {
   botRequestPerformance?: {
     total: number;
     estimated?: boolean;
+    confirmed?: boolean;
     points: Array<{
       syncedAt: string;
       joinedCount: number;

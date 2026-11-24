@@ -1,3 +1,4 @@
+import { savedTrackingScope } from './ad-campaign-link-selection';
 import { NotFoundException } from '@nestjs/common';
 import { campaignDetailMetrics } from './ad-campaign-detail-metrics';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -121,8 +122,9 @@ export class AdCampaignDetailRead {
       telegramInviteLinkId: telegramInviteLink?.id || row.telegramInviteLinkId,
       inviteLinkIds: inviteLinks.map((link: any) => link.id),
       botInviteLinkIds: botInviteLinks.map((link: any) => link.id),
-      trackingLinkKind: row.botInviteLinks?.[0]?.kind ?? 'BOT',
-      trackingChannelIds: [
+      trackingAllChannels: row.trackingScope == null ? undefined : savedTrackingScope(row.trackingScope)?.channelIds === null,
+      trackingLinkKind: savedTrackingScope(row.trackingScope)?.kind ?? row.botInviteLinks?.[0]?.kind ?? 'BOT',
+      trackingChannelIds: savedTrackingScope(row.trackingScope)?.channelIds ?? [
         ...new Set(botInviteLinks.map((link: any) => link.telegramChannelId)),
       ],
       botInviteLinks,

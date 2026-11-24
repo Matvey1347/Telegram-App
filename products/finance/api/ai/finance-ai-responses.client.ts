@@ -19,6 +19,7 @@ type FinanceStructuredResponseInput = {
   schema: Record<string, unknown>;
   schemaName: string;
   maxOutputTokens: number;
+  reasoningEffort?: 'low';
   instructions?: string;
   providerFailureMessage: string;
   onOutputTextDelta?: (delta: string) => void;
@@ -32,6 +33,7 @@ export async function requestFinanceStructuredResponse(
     model: input.model,
     store: false,
     max_output_tokens: input.maxOutputTokens,
+    ...(input.reasoningEffort ? { reasoning: { effort: input.reasoningEffort } } : {}),
     safety_identifier: createHash('sha256')
       .update(input.profileId)
       .digest('hex')
@@ -123,6 +125,8 @@ async function readStreamingResponse(
   let pending = '';
   let text = '';
   let usage: FinanceAiResponseUsage | undefined;
+  let completed = false;
+  let incompleteReason: string | undefined;
 
   const consumeBlock = (block: string) => {
     const payload = block
@@ -134,14 +138,18 @@ async function readStreamingResponse(
     const event = JSON.parse(payload) as {
       type?: string;
       delta?: string;
-      response?: { usage?: FinanceAiResponseUsage };
+      response?: { usage?: FinanceAiResponseUsage; incomplete_details?: { reason?: string } };
       error?: { message?: string };
     };
     if (event.type === 'response.output_text.delta' && event.delta) {
       text += event.delta;
       onOutputTextDelta(event.delta);
     } else if (event.type === 'response.completed') {
+      completed = true;
       usage = event.response?.usage;
+    } else if (event.type === 'response.incomplete') {
+      usage = event.response?.usage;
+      incompleteReason = event.response?.incomplete_details?.reason ?? 'incomplete';
     } else if (event.type === 'error' || event.type === 'response.failed') {
       throw new BadGatewayException(
         event.error?.message || 'Finance AI stream failed',
@@ -158,5 +166,6 @@ async function readStreamingResponse(
     if (done) break;
   }
   if (pending.trim()) consumeBlock(pending);
+  if (!completed) return { text: undefined, usage, incompleteReason: incompleteReason ?? 'stream_ended' };
   return { text, usage };
 }

@@ -71,6 +71,18 @@ export function TelegramPostWorkspace(props: TelegramPostWorkspaceProps) {
     selectedPosts,
   } = model;
 
+  const viewNavigation = (
+    <TelegramPostsViewNavigation
+      view={postView}
+      onViewChange={changePostView}
+      labels={{
+        editor: t("telegram.posts.tabs.editor"),
+        calendar: t("telegram.posts.tabs.calendar"),
+        "ai-posting": "AI Posting",
+      }}
+    />
+  );
+
   return (
     <>
       <TelegramPostsPageTabHead
@@ -82,22 +94,14 @@ export function TelegramPostWorkspace(props: TelegramPostWorkspaceProps) {
           editor: t("telegram.posts.tabs.editor"),
         }}
       />
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <TelegramPostsViewNavigation
-          view={postView}
-          onViewChange={changePostView}
-          labels={{
-            editor: t("telegram.posts.tabs.editor"),
-            calendar: t("telegram.posts.tabs.calendar"),
-            "ai-posting": "AI Posting",
-          }}
-        />
-        {postView !== "ai-posting" ? (
+      {postView !== "ai-posting" && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          {viewNavigation}
           <Button type="button" className="ml-auto" onClick={onRequestNewPost}>
             <Plus size={16} /> {t("telegram.posts.newPost")}
           </Button>
-        ) : null}
-      </div>
+        </div>
+      )}
       <TelegramCalendarImportModal model={model} />
       <ConfirmDeleteModal
         open={Boolean(deletingPlannerFormat)}
@@ -183,7 +187,13 @@ export function TelegramPostWorkspace(props: TelegramPostWorkspaceProps) {
         }}
       />
       {postView === "ai-posting" ? (
-        <AiPostingPage channelId={channelId} channelTitle={channelTitle} />
+        <AiPostingPage
+          viewNavigation={viewNavigation}
+          channelId={channelId}
+          channelTitle={channelTitle}
+          captionLengthMax={props.channelPublishingCapabilities?.captionLengthMax}
+          messageLengthMax={props.channelPublishingCapabilities?.messageLengthMax}
+        />
       ) : postView === "calendar" ? (
         <TelegramPostCalendar model={model} />
       ) : (

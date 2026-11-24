@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { ModuleRef } from '@nestjs/core';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AiPostingAutopilotNotificationsService } from '../../operations/notifications/ai-posting-autopilot-notifications.service';
@@ -13,6 +14,14 @@ type RunNotificationSummary = {
   scheduledInWindow: number;
   errors: string[];
   scheduleMode: string;
+  scheduled?: number;
+  scheduledThrough?: string | null;
+  channelTitle?: string;
+  timezone?: string;
+  costs?: Record<string, string>;
+  unknownCosts?: number;
+  spheres?: string[];
+  rubrics?: string[];
 };
 
 @Injectable()
@@ -90,30 +99,32 @@ export class TelegramAiPostingAutopilotNotificationService {
           metadata: { errorCount: result.errors.length },
           priority: 'HIGH',
         });
-      if (result.generated > 0)
-        await service.notify({
-          workspaceId,
-          channelId,
-          runId,
-          event: 'WEEKLY_REPLENISHMENT',
-          title: 'Черновики AI Posting пополнены',
-          body: `Создано ${result.generated} черновиков; в календаре ${result.scheduledInWindow} публикаций.`,
-          metadata: {
-            generated: result.generated,
-            scheduled: result.scheduledInWindow,
-          },
-        });
+      const labels: Record<string, string> = { planning: 'планирование', text: 'текст', search: 'проверка найденных изображений', image: 'генерация изображений', review: 'редакторская проверка' };
+      const costs = Object.entries(result.costs ?? {});
+      const total = costs.reduce((sum, [, cost]) => sum.plus(cost), new Prisma.Decimal(0));
+      const through = result.scheduledThrough && new Intl.DateTimeFormat('ru-RU', {
+        timeZone: result.timezone ?? 'Europe/Warsaw', dateStyle: 'medium', timeStyle: 'short',
+      }).format(new Date(result.scheduledThrough));
+      const body = [
+        `Создано черновиков: ${result.generated}. Запланировано публикаций: ${result.scheduled ?? 0}.`,
+        through ? `Крайний заполненный слот: ${through} (${result.timezone ?? 'Europe/Warsaw'}).` : '',
+        `Покрытие без пропусков: ${result.coverageDays} дн. Готовый запас: ${result.readyDrafts}.`,
+        result.spheres?.length ? `Сферы: ${result.spheres.join(', ')}.` : '',
+        result.rubrics?.length ? `Рубрики: ${result.rubrics.join(', ')}.` : '',
+        costs.length ? `Подтверждённый расход: $${total}. ${costs.map(([key, cost]) => `${labels[key] ?? key} $${cost}`).join(', ')}.` : '',
+        result.unknownCosts ? `Операций с неподтверждённой стоимостью: ${result.unknownCosts}.` : '',
+      ].filter(Boolean).join('\n');
       await service.notify({
         workspaceId,
         channelId,
         runId,
         event: 'WEEKLY_REPORT',
-        title: 'Еженедельный отчёт Content Autopilot',
-        body: `Покрытие ${result.coverageDays} дней, черновиков ${result.readyDrafts}, режим ${result.scheduleMode}.`,
+        title: `AI Posting · ${result.channelTitle || 'Автопилот'}`,
+        body,
         metadata: {
           coverageDays: result.coverageDays,
           readyDrafts: result.readyDrafts,
-          scheduled: result.scheduledInWindow,
+          scheduled: result.scheduled ?? 0,
           scheduleMode: result.scheduleMode,
         },
       });

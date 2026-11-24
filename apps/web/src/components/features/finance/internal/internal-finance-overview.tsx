@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -43,7 +43,9 @@ import { useAppToast } from "@/providers/toast-provider";
 import { patchFinanceAccountCache } from "@/lib/features/finance/account-cache";
 import { invalidateFinanceDashboardSummary } from "@/lib/features/finance/finance-dashboard-cache";
 import { FinanceActionMenu } from "./finance-action-menu";
-import { AccountPreview, CurrencyAmount } from "./finance-format";
+import { FinanceAccountTotal } from "./finance-account-total";
+import { AccountPreview } from "./finance-format";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 import type {
   AccountFormValues,
   CategoryFormValues,
@@ -222,7 +224,7 @@ export function InternalFinanceOverview() {
           qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
           invalidateFinanceDashboardSummary(qc),
           ...(openingInvestmentAdded
-            ? [qc.invalidateQueries({ queryKey: accountKeys.transactions() })]
+            ? [qc.invalidateQueries({ queryKey: accountKeys.transactions() }), qc.invalidateQueries({ queryKey: accountKeys.investments() })]
             : []),
         ]);
         return;
@@ -249,6 +251,7 @@ export function InternalFinanceOverview() {
         await Promise.all([
           qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
           qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
+          qc.invalidateQueries({ queryKey: accountKeys.investments() }),
           invalidateFinanceDashboardSummary(qc),
         ]);
       } else if (variables.target.kind === "transfer") {
@@ -298,6 +301,7 @@ export function InternalFinanceOverview() {
         await Promise.all([
           qc.invalidateQueries({ queryKey: accountKeys.accounts() }),
           qc.invalidateQueries({ queryKey: accountKeys.transactions() }),
+          qc.invalidateQueries({ queryKey: accountKeys.investments() }),
           invalidateFinanceDashboardSummary(qc),
         ]);
       } else if (target.kind === "transfer") {
@@ -369,14 +373,7 @@ export function InternalFinanceOverview() {
       <PageHeader
         title="Finance"
         subtitle="Manage accounts, transactions, categories and transfers in one place"
-        action={
-          <Link
-            href="/currencies"
-            className="inline-flex min-h-9 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-2 text-sm font-medium text-neutral-100 transition hover:bg-neutral-800"
-          >
-            Currencies
-          </Link>
-        }
+        action={<Link href="/investments" className="min-h-9 items-center justify-center rounded-lg border border-neutral-700 px-3 text-sm font-medium hover:bg-neutral-800">Investments</Link>}
       />
       <Card className="mb-5">
         <div className="max-w-md">
@@ -398,13 +395,14 @@ export function InternalFinanceOverview() {
           hint={
             accountScope === "archived"
               ? "Archived accounts keep their full financial history"
-              : "Balances in each account currency"
+              : "Account balances and their equivalents"
           }
           create={
             accountScope === "archived"
               ? undefined
               : () => setEditor({ kind: "account" })
           }
+          summary={<FinanceAccountTotal scope={accountScope} />}
           query={accounts}
           skeleton={
             <AccountCardsSkeleton count={accounts.data?.items.length || 4} />
@@ -684,6 +682,7 @@ function Section({
   create,
   query,
   skeleton,
+  summary,
   toolbar,
   footer,
   children,
@@ -694,6 +693,7 @@ function Section({
   create?: () => void;
   query: { isLoading: boolean; isPlaceholderData: boolean; error: unknown };
   skeleton: ReactNode;
+  summary?: ReactNode;
   toolbar?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
@@ -701,20 +701,23 @@ function Section({
   const loading = query.isLoading || query.isPlaceholderData;
   return (
     <section id={id} aria-busy={loading} className="scroll-mt-6">
-      <div className="mb-3 flex items-start justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-white">{title}</h2>
           <p className="mt-0.5 text-sm leading-5 text-neutral-500">{hint}</p>
         </div>
-        {create ? (
-          <Button
-            variant="secondary"
-            onClick={create}
-            className="shrink-0 px-3 sm:px-4"
-          >
-            <Plus size={16} /> <span className="hidden sm:inline">Create</span>
-          </Button>
-        ) : null}
+        <div className="flex shrink-0 flex-wrap items-start justify-end gap-2">
+          {summary}
+          {create ? (
+            <Button
+              variant="secondary"
+              onClick={create}
+              className="shrink-0 px-3 sm:px-4"
+            >
+              <Plus size={16} /> <span className="hidden sm:inline">Create</span>
+            </Button>
+          ) : null}
+        </div>
       </div>
       {toolbar}
       {query.error ? (

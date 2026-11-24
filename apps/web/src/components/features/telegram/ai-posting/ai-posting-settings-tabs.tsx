@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Film, MessageCircle, PenLine, Sparkles } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, Film, MessageCircle, PenLine, Sparkles } from "lucide-react";
 import { useI18n } from "@/providers/i18n-provider";
 
 export type AiPostingSettingsTab =
@@ -6,13 +6,15 @@ export type AiPostingSettingsTab =
   | "idea"
   | "writing"
   | "images"
+  | "autopilot"
   | "transfer";
 
 const options = [
-  { value: "chat", label: "Чат", icon: MessageCircle },
+  { value: "autopilot", icon: CalendarClock },
   { value: "idea", label: "Идея канала", icon: Sparkles },
   { value: "writing", label: "Как писать", icon: PenLine },
   { value: "images", label: "Медиа", icon: Film },
+  { value: "chat", label: "Чат", icon: MessageCircle },
   { value: "transfer", icon: ArrowLeftRight },
 ] as const;
 
@@ -30,7 +32,7 @@ export function AiPostingSettingsTabs({
     <div
       role="group"
       aria-label="Разделы AI Posting"
-      className="flex w-fit max-w-full flex-wrap gap-1 rounded-md border border-neutral-700 bg-neutral-950 p-1"
+      className="flex w-fit min-w-0 max-w-full flex-wrap gap-1 @min-[54rem]:flex-nowrap @min-[54rem]:overflow-x-auto rounded-md border border-neutral-700 bg-neutral-950 p-1"
     >
       {options.map(({ value: tab, icon: Icon, ...option }) => (
         <a
@@ -42,14 +44,14 @@ export function AiPostingSettingsTabs({
             event.preventDefault();
             onChange(tab);
           }}
-          className={`inline-flex h-7 items-center gap-1.5 rounded px-2 text-[11px] font-medium transition ${
+          className={`inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-2 text-[11px] font-medium transition ${
             value === tab
               ? "bg-blue-600 text-white"
               : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
           }`}
         >
           <Icon size={13} aria-hidden="true" />
-          <span>{"label" in option ? option.label : t("telegram.posts.aiPostingTransfer.tab")}</span>
+          <span>{"label" in option ? option.label : t(tab === "autopilot" ? "telegram.posts.aiPostingAutopilot.tab" : "telegram.posts.aiPostingTransfer.tab")}</span>
         </a>
       ))}
     </div>

@@ -79,6 +79,7 @@ export class CreateAdCampaignDto {
   @IsString({ each: true })
   botInviteLinkIds?: string[];
   @IsOptional() @IsString() trackingLinkKind?: string;
+  @IsOptional() @IsBoolean() trackingAllChannels?: boolean;
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -158,6 +159,7 @@ export class UpdateAdCampaignDto {
   @IsString({ each: true })
   botInviteLinkIds?: string[];
   @IsOptional() @IsString() trackingLinkKind?: string;
+  @IsOptional() @IsBoolean() trackingAllChannels?: boolean;
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

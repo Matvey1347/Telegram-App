@@ -321,6 +321,48 @@ describe('FinanceUltimateService', () => {
     expect(proposals.createBatch).not.toHaveBeenCalled();
   });
 
+  it('sends a greeting to the model without reading private ledger data', async () => {
+    const { service, ai, analytics, prisma } = setup();
+    ai.routeAssistantMessage.mockResolvedValue({ kind: 'ANSWER', message: 'Привет!', recommendedScreen: null });
+    await expect(service.message(context, { text: 'привет' })).resolves.toMatchObject({ message: 'Привет!' });
+    expect(ai.routeAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
+      text: 'привет',
+      facts: { accountBalances: [], recentTransactions: [] },
+    }));
+    expect(analytics.analytics).not.toHaveBeenCalled();
+    expect(prisma.financeTransaction.findMany).not.toHaveBeenCalled();
+  });
+
+  it('passes a quoted message and bounded data from only the authenticated profile', async () => {
+    const { service, ai, analytics, prisma } = setup();
+    const replyTo = { role: 'assistant' as const, text: 'Which dates?' };
+    prisma.financeProfile.findUnique.mockResolvedValueOnce({
+      defaultCurrency: 'UAH', timezone: 'Europe/Warsaw', locale: 'en',
+      debts: [{ name: 'Car loan', amount: '200', currency: 'UAH' }],
+      recurringPayments: [{ name: 'Phone plan', amount: '50', currency: 'UAH' }],
+    });
+    await service.message(context, { text: 'What about last month?', replyTo });
+    expect(prisma.financeProfile.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        id: context.profileId,
+        botIntegrationId: context.botIntegrationId,
+        telegramBotUserId: context.telegramBotUserId,
+      },
+      select: expect.objectContaining({
+        debts: expect.objectContaining({ take: 20 }),
+        recurringPayments: expect.objectContaining({ take: 20 }),
+      }),
+    }));
+    expect(analytics.analytics).toHaveBeenCalledWith(expect.anything(), { period: 'PREVIOUS_MONTH' });
+    expect(ai.routeAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
+      replyTo,
+      facts: expect.objectContaining({
+        debts: [expect.objectContaining({ name: 'Car loan' })],
+        recurringPayments: [expect.objectContaining({ name: 'Phone plan' })],
+      }),
+    }));
+  });
+
   it('turns a concrete message into a reviewable proposal', async () => {
     const { service, ai, proposals } = setup();
     ai.routeAssistantMessage.mockResolvedValue({

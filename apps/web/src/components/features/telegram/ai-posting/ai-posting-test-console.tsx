@@ -39,6 +39,8 @@ import { useOperationFeedback } from "@/providers/toast-provider";
 export function AiPostingTestConsole({
   channelId,
   channelTitle,
+  captionLengthMax,
+  messageLengthMax,
   channelPhotoUrl,
   watermarkPreview,
   customEmojiPacks,
@@ -50,6 +52,8 @@ export function AiPostingTestConsole({
 }: {
   channelId: string;
   channelTitle: string;
+  captionLengthMax?: number;
+  messageLengthMax?: number;
   channelPhotoUrl?: string | null;
   watermarkPreview?: AiPostingWatermarkPreviewSettings;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
@@ -474,6 +478,8 @@ export function AiPostingTestConsole({
           onStop={run.canStop ? () => stopRun.mutate(run.id) : undefined}
           stopPending={stopRun.isPending}
           channelTitle={channelTitle}
+          captionLengthMax={captionLengthMax}
+          messageLengthMax={messageLengthMax}
           channelId={channelId}
           channelPhotoUrl={channelPhotoUrl}
           watermarkPreview={watermarkPreview}

@@ -1,11 +1,13 @@
 import { execFile } from "node:child_process";
-import { resolve } from "node:path";
+import { realpathSync } from "node:fs";
+import { relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { stopRegisteredDevLaunchers } from "./dev-launcher-ownership.mjs";
 
 const execFileAsync = promisify(execFile);
-const ports = [3000, 3001, 4000, 4001, 4002, 4100];
+const defaultPorts = [3000, 3001, 4000, 4001, 4002, 4100];
 const STOP_GRACE_MS = 3_000;
 const STOP_TIMEOUT_MS = 6_000;
 
@@ -15,12 +17,13 @@ async function listeningPids(port) {
       "-tiTCP:" + port,
       "-sTCP:LISTEN",
     ]);
-    return stdout
-      .split("\n")
-      .map((value) => Number(value.trim()))
-      .filter(Number.isInteger);
-  } catch {
-    return [];
+    return stdout.split("\n").flatMap((value) =>
+      /^[1-9]\d*$/u.test(value.trim()) ? [Number(value.trim())] : [],
+    );
+  } catch (error) {
+    // lsof exits 1 without output when the port has no listeners.
+    if (error.code === 1 && !error.stderr?.trim()) return [];
+    throw error;
   }
 }
 
@@ -43,23 +46,32 @@ async function processDetails(pid) {
 }
 
 function belongsToWorkspace(cwd, workspace) {
-  return cwd === workspace || cwd?.startsWith(`${workspace}/`);
+  if (!cwd) return false;
+  const path = relative(workspace, cwd);
+  return path !== ".." && !path.startsWith(`..${sep}`) && resolve(workspace, path) === cwd;
 }
 
 export async function stopLocalDevProcesses({
   workspace = process.cwd(),
+  ports = defaultPorts,
   delayImpl = delay,
   signalProcess = (pid, signal) => process.kill(pid, signal),
+  listListeners = listeningPids,
+  getProcessDetails = processDetails,
+  stopLaunchers = stopRegisteredDevLaunchers,
 } = {}) {
+  workspace = realpathSync(workspace);
+  await stopLaunchers(ports, workspace);
   const stopped = new Set();
-  const skipped = new Set();
+  const listeners = async () => Promise.all(
+    ports.map(async (port) => ({ port, pids: await listListeners(port) })),
+  );
   const workspaceListeners = async () => {
-    const candidates = [...new Set((await Promise.all(ports.map(listeningPids))).flat())];
+    const candidates = [...new Set((await listeners()).flatMap(({ pids }) => pids))];
     const workspacePids = [];
     for (const pid of candidates) {
-      const { cwd } = await processDetails(pid);
+      const { cwd } = await getProcessDetails(pid);
       if (!belongsToWorkspace(cwd, workspace)) {
-        skipped.add(pid);
         continue;
       }
       workspacePids.push(pid);
@@ -101,10 +113,12 @@ export async function stopLocalDevProcesses({
     );
   }
 
-  const outsideListeners = [...new Set((await Promise.all(ports.map(listeningPids))).flat())];
+  const outsideListeners = (await listeners()).flatMap(({ port, pids }) =>
+    pids.map((pid) => `${port} (PID ${pid})`),
+  );
   if (outsideListeners.length) {
     throw new Error(
-      `Local development ports are still occupied by process(es) outside this workspace: ${outsideListeners.join(", ")}. Inspect them with lsof, then retry the tunnel command.`,
+      `Local development ports are still occupied outside this workspace: ${outsideListeners.join(", ")}. Inspect the listeners with lsof before retrying.`,
     );
   }
 
@@ -112,11 +126,6 @@ export async function stopLocalDevProcesses({
     console.log(`Stopped local development listeners: ${[...stopped].join(", ")}.`);
   } else {
     console.log("No local development listeners were running.");
-  }
-  if (skipped.size) {
-    console.log(
-      `Left listeners outside this workspace untouched: ${[...skipped].join(", ")}.`,
-    );
   }
 }
 

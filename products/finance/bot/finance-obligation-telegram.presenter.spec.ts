@@ -5,6 +5,20 @@ import {
 import { parseFinanceRegularPaymentCallback } from '@consumer-finance/bot/finance-regular-payment-callback.handler';
 
 describe('Finance obligation Telegram presentation', () => {
+  const originalWebUrl = process.env.FINANCE_WEB_PUBLIC_URL;
+
+  beforeEach(() => {
+    process.env.FINANCE_WEB_PUBLIC_URL = 'https://finance.example.test';
+  });
+
+  afterEach(() => {
+    if (originalWebUrl === undefined) {
+      delete process.env.FINANCE_WEB_PUBLIC_URL;
+    } else {
+      process.env.FINANCE_WEB_PUBLIC_URL = originalWebUrl;
+    }
+  });
+
   it('keeps the exact occurrence in a bounded callback and links amount changes to the regular screen', () => {
     const occurrence = new Date('2026-10-25T23:00:00.000Z');
     const callback = financeRegularPaymentConfirmCallback(

@@ -47,14 +47,13 @@ import { CampaignInviteLinksSelect } from "./campaign-invite-links-select";
 import { accountAdCampaignSelectOption } from "./ad-campaign-view-options";
 import { AdFormSkeleton } from "./ad-form-skeleton";
 import { CurrencyAmountInput } from "@/components/ui/currency-amount-input";
-import { SystemLinkKindBadge } from "@/components/features/telegram/telegram/telegram-invite-link-option-label";
+import { CampaignTrackingEditor } from "./campaign-tracking-editor";
 
 type CampaignSubmission = Omit<
   CampaignValues,
   "customTitle" | "trackCrossChannelRequests" | "endedAt"
 > & {
   customTitle: string | null;
-  endedAt?: string | null;
 };
 type CampaignChannel = {
   id: string;
@@ -155,7 +154,8 @@ function initialValues(row?: CampaignInitial): CampaignValues {
         trackingChannelIds: Array.isArray(row.trackingChannelIds)
           ? row.trackingChannelIds
           : [],
-        trackCrossChannelRequests: Boolean(
+        trackingAllChannels: row.trackingAllChannels,
+        trackCrossChannelRequests: row.trackingAllChannels === true || Boolean(
           row.trackingChannelIds?.length || row.botInviteLinkIds?.length,
         ),
         advertisingChannelIds: campaignSources(row)
@@ -178,6 +178,7 @@ function initialValues(row?: CampaignInitial): CampaignValues {
         trackingLinkKind: "BOT",
         trackingChannelIds: [],
         trackCrossChannelRequests: false,
+        trackingAllChannels: true,
         advertisingChannelIds: [],
         price: undefined,
         accountId: "",
@@ -251,6 +252,7 @@ export function CampaignModal({
   const inviteLinkWindows = watch("inviteLinkWindows") || {};
   const windowsQuery = useQuery({ queryKey: adCampaignKeys.inviteLinkWindows(initial?.id), queryFn: () => adCampaignsApi.inviteLinkWindows(initial!.id!), enabled: open && Boolean(initial?.id), staleTime: 0 });
   const selectedTrackingChannelIds = watch("trackingChannelIds") || [];
+  const savedAllChannels = watch("trackingAllChannels");
   const trackingLinkKind = watch("trackingLinkKind") || "BOT";
   const trackCrossChannelRequests = watch("trackCrossChannelRequests") || false;
   const watchedAdChannels = watch("advertisingChannelIds");
@@ -309,6 +311,7 @@ export function CampaignModal({
     register("inviteLinkWindows");
     register("botInviteLinkIds");
     register("trackCrossChannelRequests");
+    register("trackingAllChannels");
   }, [register]);
   useEffect(() => {
     if (open) reset(initialValues(initial));
@@ -343,11 +346,17 @@ export function CampaignModal({
     data: trackingInviteLinks,
     isError: trackingInviteLinksError,
   } = useQuery({
-    // New key deliberately avoids retaining the 404 cached by the obsolete endpoint.
-    queryKey: ["ad-campaign-tracking-invite-links-v2"],
+    queryKey: adCampaignKeys.trackingInviteLinks(),
     queryFn: adCampaignsApi.trackingInviteLinks,
-    enabled: open && !loading,
+    enabled: open && !loading && trackCrossChannelRequests,
   });
+  const configuredDestinations = trackingInviteLinks?.kinds.find((item) => item.kind === trackingLinkKind)
+    ?.channels.filter((channel) => channel.id !== selectedChannelId && channel.hasSystemLink) ?? [];
+  const trackingAllChannels = savedAllChannels === true || (
+    savedAllChannels === undefined && configuredDestinations.length > 0 &&
+    configuredDestinations.length === selectedTrackingChannelIds.length &&
+    configuredDestinations.every(({ id }) => selectedTrackingChannelIds.includes(id))
+  );
   const ownChannels = useMemo(
     () => (channels || []).filter(isOwnChannel),
     [channels],
@@ -362,11 +371,6 @@ export function CampaignModal({
       ),
     [promos, initial],
   );
-  const trackingChannelsForKind = (kind: string) =>
-    (trackingInviteLinks?.kinds || [])
-      .find((item) => item.kind === kind)
-      ?.channels.filter((channel) => channel.id !== selectedChannelId)
-      .map((channel) => channel.id) || [];
   const setArray = (
     name: "promoIds" | "inviteLinkIds" | "botInviteLinkIds" | "trackingChannelIds" | "advertisingChannelIds",
     value: string[],
@@ -397,29 +401,25 @@ export function CampaignModal({
           onSubmit={handleSubmit(async (value) => {
             if (initial?.id && (windowsQuery.isLoading || windowsQuery.isError)) return;
             try {
-              const {
-                price,
-                accountId,
-                customTitle,
-                // This only controls the form. The API receives the selected
-                // tracking links, never this presentation toggle.
-                trackCrossChannelRequests: _trackCrossChannelRequests,
-                ...campaign
-              } = value;
+              const { price, accountId, customTitle } = value;
               await onSubmit({
-                ...campaign,
+                telegramChannelId: value.telegramChannelId,
+                inviteLinkWindows: value.inviteLinkWindows,
+                trackingLinkKind: value.trackingLinkKind || "BOT",
+                date: value.date,
+                notes: value.notes,
                 assignedMemberId: value.assignedMemberId || null,
                 promoIds: value.promoIds || [],
                 inviteLinkIds: value.inviteLinkIds || [],
-                botInviteLinkIds: value.botInviteLinkIds || [],
-                trackingChannelIds: value.trackingChannelIds || [],
-                trackingLinkKind: value.trackingLinkKind || "BOT",
+                botInviteLinkIds: [],
+                trackingAllChannels: value.trackCrossChannelRequests && trackingAllChannels,
+                trackingChannelIds: value.trackCrossChannelRequests && !trackingAllChannels
+                  ? value.trackingChannelIds.filter((id) => id !== value.telegramChannelId) : [],
                 ...(Number.isFinite(Number(price)) && Number(price) > 0
                   ? { price: Number(price) }
                   : {}),
                 ...(accountId ? { accountId } : {}),
                 advertisingChannelIds: value.advertisingChannelIds || [],
-                endedAt: value.endedAt?.trim() || null,
                 customTitle: customTitle?.trim() || null,
               });
               campaignDrafts.clearCurrentDraft();
@@ -510,58 +510,34 @@ export function CampaignModal({
             checked={trackCrossChannelRequests}
             onChange={(enabled) => {
               setValue("trackCrossChannelRequests", enabled, { shouldDirty: true });
-              if (enabled && !selectedTrackingChannelIds.length) {
-                setArray("trackingChannelIds", trackingChannelsForKind(trackingLinkKind));
-              } else if (!enabled) {
-                setArray("botInviteLinkIds", []);
-                setArray("trackingChannelIds", []);
+              if (enabled) {
+                setValue("trackingAllChannels", true, { shouldDirty: true });
+                setValue("trackingLinkKind", "BOT", { shouldDirty: true });
               }
             }}
             label="Track cross-channel requests"
-            description="Measure requests to selected owned channels while this campaign is running."
+            description="Track requests to other owned channels through their system links."
             activeTone="blue"
           />
-          {trackCrossChannelRequests ? (
-            <div className="grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
-              <FormField label="System link">
-                <CustomSelect
-                  value={trackingLinkKind}
-                  onChange={(value) => {
-                    setValue("trackingLinkKind", value, { shouldDirty: true });
-                    setArray("trackingChannelIds", trackingChannelsForKind(value));
-                  }}
-                  options={(trackingInviteLinks?.kinds || []).map((kind) => ({
-                    value: kind.kind,
-                    label: `${kind.label} · ${kind.tag}`,
-                    labelContent: <SystemLinkKindBadge kind={kind.kind} />,
-                  }))}
-                />
-              </FormField>
-              <FormField label="Destination channels">
-                <CampaignMultiValueSelect
-                  value={selectedTrackingChannelIds}
-                  onChange={(value) => setArray("trackingChannelIds", value)}
-                  placeholder="Select channels"
-                  options={(trackingInviteLinks?.kinds || [])
-                    .find((kind) => kind.kind === trackingLinkKind)
-                    ?.channels.filter((channel) => channel.id !== selectedChannelId)
-                    .map((channel) => ({
-                      value: channel.id,
-                      label: channel.title,
-                      description: "System link configured in Channel Settings",
-                      iconUrl: channel.photoUrl ?? undefined,
-                      iconFallback: channel.title,
-                      searchText: channel.title,
-                    })) || []}
-                />
-              </FormField>
-              {trackingInviteLinksError ? (
-                <p className="sm:col-span-2 text-sm text-rose-300">
-                  Could not load system links from Channel Settings. Please refresh and try again.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+          {trackCrossChannelRequests && (
+            <CampaignTrackingEditor
+              allChannels={trackingAllChannels}
+              kinds={trackingInviteLinks?.kinds ?? []}
+              hasError={trackingInviteLinksError}
+              kind={trackingLinkKind}
+              channelId={selectedChannelId}
+              selectedIds={selectedTrackingChannelIds}
+              onKindChange={(kind) => {
+                setValue("trackingAllChannels", trackingAllChannels, { shouldDirty: true });
+                setValue("trackingLinkKind", kind, { shouldDirty: true });
+              }}
+              onScopeChange={(all, ids) => {
+                setValue("trackingAllChannels", all, { shouldDirty: true });
+                setArray("trackingChannelIds", ids);
+              }}
+              endedAt={watch("endedAt")}
+            />
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField label="Account">
               <CustomSelect
@@ -596,15 +572,6 @@ export function CampaignModal({
                 }
               />
             </FormField>
-            {trackCrossChannelRequests && <FormField label="Date end">
-              <DateInput
-                name="endedAt"
-                value={watch("endedAt") || ""}
-                onChange={(event) =>
-                  setValue("endedAt", event.target.value || undefined, { shouldDirty: true })
-                }
-              />
-            </FormField>}
           </div>
           <FormField label="Notes">
             <Textarea {...register("notes")} />

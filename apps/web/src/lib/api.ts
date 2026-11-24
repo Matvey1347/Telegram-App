@@ -259,6 +259,7 @@ const financeApi = createFinanceApi({
 
 export const {
   accountsApi,
+  investmentsApi,
   transactionsApi,
   transactionCategoriesApi,
   transfersApi,

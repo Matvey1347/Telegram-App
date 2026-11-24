@@ -1,3 +1,5 @@
+import type { TelegramAiPostingVisualDirection } from './telegram-ai-posting-visual-direction';
+import { telegramAiPostingSphereWeights } from './telegram-ai-posting-analysis-configuration';
 import { telegramAiPostingVisibleText } from './telegram-ai-posting-render';
 
 type EditorialUse = {
@@ -10,6 +12,7 @@ export function telegramAiPostingEditorialSelection(
   editorialIndex: number,
   lengthIndex = editorialIndex,
   recent: EditorialUse[] = [],
+  rubricBoost: ReadonlyMap<string, number> = new Map(),
 ) {
   const leastUsed = <T extends { id: string }>(choices: T[], field: keyof EditorialUse, offset: number) => {
     const usage = new Map<string, number>();
@@ -17,8 +20,9 @@ export function telegramAiPostingEditorialSelection(
       const id = item?.[field]?.id;
       if (id) usage.set(id, (usage.get(id) ?? 0) + 1);
     }
-    const minimum = Math.min(...choices.map(({ id }) => usage.get(id) ?? 0));
-    const available = choices.filter(({ id }) => (usage.get(id) ?? 0) === minimum);
+    const priority = (id: string) => (usage.get(id) ?? 0) - (field === 'rubric' ? rubricBoost.get(id) ?? 0 : 0);
+    const minimum = Math.min(...choices.map(({ id }) => priority(id)));
+    const available = choices.filter(({ id }) => priority(id) === minimum);
     return available[offset % available.length] ?? null;
   };
   const spheres = (
@@ -43,11 +47,26 @@ export function telegramAiPostingEditorialSelection(
     : primarySpheres.length
       ? primarySpheres
       : secondarySpheres;
-  let parent = sphereChoices.length
-    ? sphereChoices[
-        Math.floor(editorialIndex / 2) % sphereChoices.length
-      ]
-    : null;
+  const parentUsage = recent.map((item) => ({
+    sphere: roots.find(({ id }) => id === item.sphere?.id || spheres.some((sphere) => sphere.id === item.sphere?.id && sphere.parentId === id)),
+  }));
+  const rotation = Math.floor(editorialIndex / 2);
+  const parentCounts = new Map<string, number>();
+  for (const item of parentUsage) {
+    if (item.sphere) parentCounts.set(item.sphere.id, (parentCounts.get(item.sphere.id) ?? 0) + 1);
+  }
+  const minimum = Math.min(...sphereChoices.map(({ id }) => parentCounts.get(id) ?? 0));
+  const leastRepresented = sphereChoices.filter(({ id }) => (parentCounts.get(id) ?? 0) === minimum);
+  const weights = telegramAiPostingSphereWeights(config.sphereWeights, roots);
+  const weighted = Object.values(weights).some((weight) => weight > 0);
+  const activeRoots = roots.filter(({ id }) => (weights[id] ?? 1) > 0);
+  const totalWeight = activeRoots.reduce((total, { id }) => total + (weights[id] ?? 1), 0);
+  const totalUsed = activeRoots.reduce((total, { id }) => total + (parentCounts.get(id) ?? 0), 0);
+  const deficit = (id: string) =>
+    ((weights[id] ?? 1) / totalWeight) * (totalUsed + 1) - (parentCounts.get(id) ?? 0);
+  let parent = weighted
+    ? [...activeRoots].sort((left, right) => deficit(right.id) - deficit(left.id))[0]
+    : leastRepresented[rotation % leastRepresented.length] ?? null;
   const children = parent ? spheres.filter((item: any) => item.parentId === parent.id) : [];
   let selectedSphere = leastUsed(children, 'sphere', editorialIndex) ?? parent;
   const rubrics = (Array.isArray(config.rubrics) ? config.rubrics : []).filter(
@@ -59,31 +78,34 @@ export function telegramAiPostingEditorialSelection(
     .sort((left: any, right: any) => (left.minCharacters ?? 0) - (right.minCharacters ?? 0));
   const acceptsLength = (rubric: any, length: any) =>
     !rubric.lengthIds?.length || rubric.lengthIds.includes(length.id);
+  const scopedRubrics = weighted ? rubrics.filter((rubric) =>
+    !rubric.sphereId || [selectedSphere?.id, parent?.id].includes(rubric.sphereId),
+  ) : rubrics;
   const usableLengths = lengths.filter((length) =>
-    !rubrics.length || rubrics.some((rubric) => acceptsLength(rubric, length)),
+    !scopedRubrics.length || scopedRubrics.some((rubric) => acceptsLength(rubric, length)),
   );
   const varietyOrder = [usableLengths[0], usableLengths.at(-1), ...usableLengths.slice(1, -1)]
     .filter((length, index, list) => length && list.indexOf(length) === index);
   const selectedLength = config.variedLength !== false && varietyOrder.length
     ? varietyOrder[lengthIndex % varietyOrder.length] : null;
   const compatibleRubrics = selectedLength ? rubrics.filter((rubric) => acceptsLength(rubric, selectedLength)) : rubrics;
-  const quoteRubrics = typeof selectedLength?.maxCharacters === 'number' && selectedLength.maxCharacters <= 99
-    ? compatibleRubrics.filter((rubric) => /цитат|quote/iu.test(rubric.name)) : [];
-  const quote = leastUsed(quoteRubrics, 'rubric', editorialIndex);
-  if (quote?.sphereId) {
-    const quoteSphere = spheres.find(({ id }) => id === quote.sphereId);
-    if (quoteSphere) {
-      parent = quoteSphere.parentId
-        ? roots.find(({ id }) => id === quoteSphere.parentId) ?? null
-        : quoteSphere;
-      const children = spheres.filter(({ parentId }) => parentId === quoteSphere.id);
-      selectedSphere = leastUsed(children, 'sphere', editorialIndex) ?? quoteSphere;
+  const compactRubrics = typeof selectedLength?.maxCharacters === 'number' && selectedLength.maxCharacters <= 99
+    ? compatibleRubrics.filter((rubric) => (!weighted || scopedRubrics.includes(rubric)) && rubric.lengthIds?.length &&
+      rubric.lengthIds.every((id: string) => lengths.find((length) => length.id === id)?.maxCharacters < 300)) : [];
+  const compactRubric = leastUsed(compactRubrics, 'rubric', rotation);
+  if (compactRubric?.sphereId) {
+    const compactSphere = spheres.find(({ id }) => id === compactRubric.sphereId);
+    if (compactSphere) {
+      parent = compactSphere.parentId
+        ? roots.find(({ id }) => id === compactSphere.parentId) ?? null
+        : compactSphere;
+      selectedSphere = compactSphere;
     }
   }
   const choices = compatibleRubrics.filter((rubric) =>
     !rubric.sphereId || [selectedSphere?.id, parent?.id].includes(rubric.sphereId),
   );
-  const rubric = quote ?? leastUsed(choices, 'rubric', editorialIndex);
+  const rubric = compactRubric ?? leastUsed(choices, 'rubric', editorialIndex);
   return {
     sphere: selectedSphere,
     parentSphere: selectedSphere?.parentId ? parent : null,
@@ -93,6 +115,8 @@ export function telegramAiPostingEditorialSelection(
 }
 
 export type TelegramAiPostingEditorialAssignment = {
+  visualDirection?: TelegramAiPostingVisualDirection;
+  visualMotif?: string;
   sphereId?: string;
   rubricId?: string;
   lengthId?: string;

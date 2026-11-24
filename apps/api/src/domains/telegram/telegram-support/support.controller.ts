@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Header,
   Headers,
   HttpCode,
   Param,
@@ -9,12 +11,15 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   Sse,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { TelegramSupportProduct, WorkspaceRole } from '@prisma/client';
-import { IsString, IsUUID, MaxLength, Matches } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength, Matches } from 'class-validator';
 import { map, startWith } from 'rxjs';
+import type { Response } from 'express';
 import {
   CurrentUser,
   type JwtUser,
@@ -26,14 +31,25 @@ import {
   type SupportUpdate,
 } from './support-tickets.service';
 
-class ReplyDto {
-  @IsUUID()
-  replyId!: string;
-
+class MessageTextDto {
   @IsString()
   @MaxLength(4096)
   @Matches(/\S/)
   text!: string;
+}
+
+class ReplyDto extends MessageTextDto {
+  @IsUUID()
+  replyId!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  formatted?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  targetId?: string;
 }
 
 @Controller('telegram-support')
@@ -92,6 +108,23 @@ export class SupportController {
     );
   }
 
+  @Get('tickets/:id/avatar')
+  @Header('Cache-Control', 'private, no-store')
+  @Header('X-Content-Type-Options', 'nosniff')
+  async avatar(
+    @CurrentUser() user: JwtUser,
+    @Param('id') id: string,
+    @Query('kind', new ParseEnumPipe({ sender: 'sender', bot: 'bot' })) kind: 'sender' | 'bot',
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const avatar = await this.tickets.avatar(await this.scope(user), id, kind);
+    if (!avatar) {
+      response.status(204);
+      return;
+    }
+    return new StreamableFile(avatar.bytes, { type: avatar.contentType });
+  }
+
   @Get('tickets/:id/messages')
   async thread(
     @CurrentUser() user: JwtUser,
@@ -106,6 +139,11 @@ export class SupportController {
     return this.tickets.close(await this.scope(user), id);
   }
 
+  @Patch('tickets/:id/reopen')
+  async reopen(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.tickets.reopen(await this.scope(user), id);
+  }
+
   @Post('tickets/:id/reply')
   async reply(
     @CurrentUser() user: JwtUser,
@@ -117,7 +155,19 @@ export class SupportController {
       id,
       body.replyId,
       body.text.trim(),
+      body.formatted,
+      body.targetId,
     );
+  }
+
+  @Patch('tickets/:id/messages/:messageId')
+  async editMessage(@CurrentUser() user: JwtUser, @Param('id') id: string, @Param('messageId') messageId: string, @Body() body: MessageTextDto) {
+    return this.tickets.changeMessage(await this.scope(user), id, messageId, body.text.trim());
+  }
+
+  @Delete('tickets/:id/messages/:messageId')
+  async deleteMessage(@CurrentUser() user: JwtUser, @Param('id') id: string, @Param('messageId') messageId: string) {
+    return this.tickets.changeMessage(await this.scope(user), id, messageId);
   }
 
   @Sse('events')

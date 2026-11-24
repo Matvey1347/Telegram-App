@@ -9,7 +9,7 @@ function Action({ label, children, disabled, onClick }: { label: string; childre
   return <button type="button" aria-label={label} title={label} disabled={disabled} onMouseDown={(event) => event.preventDefault()} onClick={onClick} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-neutral-300 hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50">{children}</button>;
 }
 
-export function CrmCompactEditor({ value, onChange, disabled, onExpand, leading, trailing }: { value: string; onChange: (value: string) => void; disabled?: boolean; onExpand: () => void; leading?: ReactNode; trailing?: ReactNode }) {
+export function CrmCompactEditor({ value, onChange, disabled, onExpand, onSubmit, leading, trailing }: { value: string; onChange: (value: string) => void; disabled?: boolean; onExpand: () => void; onSubmit: () => void; leading?: ReactNode; trailing?: ReactNode }) {
   const editor = useRef<HTMLDivElement>(null);
   const selection = useRef<Range | null>(null);
   const lastEmitted = useRef<string | null>(null);
@@ -76,7 +76,23 @@ export function CrmCompactEditor({ value, onChange, disabled, onExpand, leading,
     const fragment = document.createElement("span"); renderCrmDraft(fragment, markup);
     const nodes = [...fragment.childNodes];
     for (const node of nodes) { range.insertNode(node); range.setStartAfter(node); }
-    range.collapse(true); selection.current = range.cloneRange();
+    range.collapse(true);
+    if (markup.endsWith("\n")) {
+      const tail = range.cloneRange();
+      tail.selectNodeContents(editor.current);
+      tail.setStart(range.startContainer, range.startOffset);
+      const remaining = tail.cloneContents();
+      if (!remaining.textContent && !remaining.querySelector("br")) {
+        // Contenteditable needs a trailing placeholder so the caret stays after the soft break.
+        const placeholder = document.createElement("br");
+        placeholder.dataset.crmCaret = "";
+        range.insertNode(placeholder);
+        range.setStartBefore(placeholder);
+        range.collapse(true);
+      }
+    }
+    selection.current = range.cloneRange();
+    restore();
     commit();
   };
   return <div>
@@ -99,9 +115,21 @@ export function CrmCompactEditor({ value, onChange, disabled, onExpand, leading,
         const text = event.clipboardData.getData("text/plain");
         insert(text);
       }} onDrop={(event) => { event.preventDefault(); remember(); insert(event.dataTransfer.getData("text/plain")); }} onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          if (composing.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+          event.preventDefault();
+          if (disabled) return;
+          if (event.shiftKey) {
+            remember();
+            insert("\n");
+          } else if (!event.repeat) {
+            onSubmit();
+          }
+          return;
+        }
         if (event.key === "Escape" && emojiOpen) { event.preventDefault(); setEmojiOpen(false); editor.current?.focus(); restore(); }
         if ((event.metaKey || event.ctrlKey) && !event.shiftKey && ["b", "i"].includes(event.key.toLowerCase())) { event.preventDefault(); remember(); format(event.key.toLowerCase() === "b" ? "bold" : "italic"); }
-      }} className="min-h-10 max-h-48 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words px-2 py-2 text-base leading-6 text-white outline-none empty:before:pointer-events-none empty:before:text-neutral-500 empty:before:content-[attr(data-placeholder)] md:text-sm" />
+      }} className="min-h-10 max-h-28 min-w-0 flex-1 overflow-y-auto overscroll-y-contain [overflow-anchor:none] whitespace-pre-wrap break-words px-2 py-2 text-base leading-6 text-white outline-none empty:before:pointer-events-none empty:before:text-neutral-500 empty:before:content-[attr(data-placeholder)] md:text-sm" />
       <Action label="Formatting" disabled={disabled} onClick={() => { remember(); setFormatOpen(!formatOpen); }}><Type size={18} /></Action>
       <Action label={emojiOpen ? "Close emoji" : "Insert emoji"} disabled={disabled} onClick={() => { remember(); if (!emojiOpen) editor.current?.blur(); setEmojiOpen(!emojiOpen); }}><Smile size={18} /></Action>
       </div>

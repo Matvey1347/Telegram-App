@@ -10,7 +10,7 @@ import {
   normalizeTelegramUsername,
   parseTelegramImportInput,
 } from '@api/telegram/shared/imports/telegram-import.helpers';
-import { livePending } from '@api/telegram/shared/mtproto/telegram-pending-join-requests';
+import { livePending, readInviteImporterCount } from '@api/telegram/shared/mtproto/telegram-pending-join-requests';
 import {
   type ImportableTelegramEntity,
   type StoredTelegramChannelReference,
@@ -520,24 +520,22 @@ export class TelegramMtprotoInviteLinks {
     }
     const client = await this.context.createClient(params);
     try {
-      const resolved = await this.context.resolveStoredChannel(
-        client,
-        params.channel,
+      let resolved = await this.context.resolveStoredChannel(client, params.channel);
+      const fetchInvite = () => this.context.withTimeout(
+        client.invoke(new Api.messages.GetExportedChatInvite({ peer: resolved.peer, link: parsed.inviteLink })),
+        this.context.telegramResolveTimeoutMs, 'Telegram invite-link lookup',
       );
       let response: unknown;
       try {
-        response = await this.context.withTimeout(
-          client.invoke(
-            new Api.messages.GetExportedChatInvite({
-              peer: resolved.peer,
-              link: parsed.inviteLink,
-            }),
-          ),
-          this.context.telegramResolveTimeoutMs,
-          'Telegram invite-link lookup',
-        );
+        response = await fetchInvite();
       } catch (error) {
-        this.context.mapInviteError(error);
+        // Access hashes belong to the connected account. Re-resolve the same
+        // channel once when the stored hash is rejected.
+        const code = (error as { errorMessage?: string })?.errorMessage;
+        if (code !== 'CHANNEL_INVALID' || resolved.channel?.resolvedBy !== 'stored-peer')
+          this.context.mapInviteError(error);
+        resolved = await this.context.resolveStoredChannel(client, { ...params.channel, telegramAccessHash: null });
+        response = await fetchInvite().catch((failure: unknown) => this.context.mapInviteError(failure));
       }
 
       const invite = this.unwrapExportedChatInvite(response);
@@ -590,6 +588,16 @@ export class TelegramMtprotoInviteLinks {
             })
           : undefined;
 
+      const runCount = <T>(request: Promise<T>) => this.context.withTimeout(
+        request, this.context.telegramResolveTimeoutMs, 'Telegram invite-link counter lookup',
+      );
+      const usage = this.context.toFiniteNumber(invite.usage) ??
+        await readInviteImporterCount(client, resolved.peer, false, runCount, url);
+      const requested = this.context.toFiniteNumber(invite.requested) ??
+        (invite.requestNeeded
+          ? await readInviteImporterCount(client, resolved.peer, true, runCount, url)
+          : 0);
+
       return {
         url: canonicalTelegramInviteLink(parsed.inviteHash),
         title:
@@ -609,12 +617,10 @@ export class TelegramMtprotoInviteLinks {
         startDate: this.context.toTelegramDate(invite.startDate),
         expireDate: this.context.toTelegramDate(invite.expireDate),
         usageLimit: this.context.toFiniteNumber(invite.usageLimit),
-        usage: this.context.toFiniteNumber(invite.usage) ?? 0,
-        requested: this.context.toFiniteNumber(invite.requested) ?? 0,
-        usageObserved: this.context.toFiniteNumber(invite.usage) != null,
-        requestedObserved:
-          this.context.toFiniteNumber(invite.requested) != null ||
-          !invite.requestNeeded,
+        usage: usage ?? 0,
+        requested: requested ?? 0,
+        usageObserved: usage != null,
+        requestedObserved: requested != null,
         requestNeeded: Boolean(invite.requestNeeded),
         permanent: Boolean(invite.permanent),
         revoked: Boolean(invite.revoked),

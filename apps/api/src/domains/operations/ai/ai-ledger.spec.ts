@@ -180,6 +180,31 @@ function harness(usageSource: 'PRODUCTION' | 'LOCAL_UNSYNCED' = 'LOCAL_UNSYNCED'
 }
 
 describe('AI locked admission and settlement', () => {
+  it('opens posting admission transactions in order and continues after a failure', async () => {
+    const h = harness('PRODUCTION');
+    const request = () => ({
+      ...h.request(), category: 'TELEGRAM_POSTING_TEXT' as const,
+      businessObjectId: 'channel',
+      aiPosting: { channelId: 'channel', postingMode: 'TEST' as const },
+    });
+    let rejectFirst!: (error: Error) => void;
+    const blocked = new Promise<never>((_, reject) => { rejectFirst = reject; });
+    const transactions = jest.spyOn(h.prisma, '$transaction')
+      .mockImplementationOnce(() => blocked);
+
+    const first = expect(h.admission.admit(request())).rejects.toThrow('AI_ADMISSION_TIMEOUT');
+    const second = h.admission.admit(request());
+    await Promise.resolve();
+    expect(transactions).toHaveBeenCalledTimes(1);
+
+    rejectFirst(new Prisma.PrismaClientKnownRequestError('transaction expired', {
+      code: 'P2028', clientVersion: 'fixture',
+    }));
+    await first;
+    await expect(second).resolves.toMatchObject({ operation: { status: 'RUNNING' } });
+    expect(h.operations).toHaveLength(1);
+  });
+
   it('marks local AI operations as unsynced and production operations as production', async () => {
     const localHarness = harness('LOCAL_UNSYNCED');
     const local = await localHarness.admission.admit(localHarness.request());
@@ -190,6 +215,26 @@ describe('AI locked admission and settlement', () => {
       productionHarness.request(),
     );
     expect(production.operation.source).toBe('PRODUCTION');
+  });
+
+  it('reserves and settles the image search call fee together with model tokens', async () => {
+    const h = harness();
+    h.workspace.dailyBudget = decimal('1');
+    const request = {
+      ...h.request(), category: 'TELEGRAM_POSTING_REVIEW' as const, businessObjectId: 'channel',
+      aiPosting: { channelId: 'channel', postingMode: 'TEST' as const },
+      postingImageSearch: { domain: 'pinterest.com' },
+    };
+    const { operation } = await h.admission.admit(request);
+    expect(operation.reservedCost.gt('0.01')).toBe(true);
+    const settled = await h.settlement.settle(operation, {
+      providerModel: 'gpt-6-luna', providerRequestId: 'req_test',
+      generationStarted: true, errorCategory: null, webSearchCalls: 1,
+      usage: { inputTokens: 1000, outputTokens: 100, cachedInputTokens: 0, cacheWriteTokens: 0, totalTokens: 1100, reasoningTokens: 0 },
+      result: { images: [] },
+    });
+    expect(settled.actualCost?.toString()).toBe('0.01015');
+    expect(settled.pricingStatus).toBe('PRICED');
   });
 
   it('prices audio by provider duration and retains the reservation when usage is missing', async () => {
@@ -282,6 +327,24 @@ describe('AI locked admission and settlement', () => {
     await expect(h.admission.admit(req)).resolves.toMatchObject({
       operation: { category: 'TELEGRAM_POSTING_TEXT' },
     });
+  });
+
+  it('enforces the channel budget on paid Autopilot work even in an unlimited posting workspace', async () => {
+    const h = harness();
+    h.workspace.aiPostingUnlimited = true;
+    h.workspace.automaticEnabled = true;
+    Object.assign(h.config, h.registry.category('TELEGRAM_POSTING_TEXT'), {
+      enabled: true, automaticEnabled: true,
+    });
+    await expect(h.admission.admit({
+      ...h.request(),
+      mode: 'AUTOMATIC',
+      category: 'TELEGRAM_POSTING_TEXT',
+      businessObjectId: 'channel',
+      aiPosting: {
+        channelId: 'channel', autopilotRunId: 'autopilot-run', postingMode: 'AUTOMATIC', monthlyBudget: '0',
+      },
+    })).rejects.toThrow('AI_BUDGET_EXHAUSTED');
   });
 
   it('allows an explicit image request limit above the workspace cap without changing text limits', async () => {

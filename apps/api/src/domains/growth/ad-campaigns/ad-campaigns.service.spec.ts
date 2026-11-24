@@ -4,7 +4,7 @@ import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 
 describe('AdCampaignsService.refreshInviteLinkData', () => {
   it('refreshes each acquisition and bot-tracking link once before returning the campaign', async () => {
-    const register = jest.fn().mockResolvedValue({});
+    const register = jest.fn().mockResolvedValue({ currentJoinedCount: 0, currentRequestedCount: 0 });
     const onProgress = jest.fn();
     const prisma = {
       adCampaign: {
@@ -88,7 +88,7 @@ describe('AdCampaignsService.refreshInviteLinkData', () => {
   it('reports individual refresh failures while preserving completed links', async () => {
     const register = jest
       .fn()
-      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ currentJoinedCount: 0, currentRequestedCount: 0 })
       .mockRejectedValueOnce(
         new Error(
           '400: CHAT_ADMIN_REQUIRED (caused by messages.GetExportedChatInvite)',
@@ -397,7 +397,7 @@ describe('AdCampaignsService campaign creation without a cost', () => {
 });
 
 describe('AdCampaignListReadService bot request performance', () => {
-  it('uses the saved bot-link baseline instead of counting the link lifetime', async () => {
+  it('uses the verified opening observation when tracking was enabled retroactively', async () => {
     const prisma = {
       adCampaignBotInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
       telegramInviteLinkSnapshot: {
@@ -440,8 +440,8 @@ describe('AdCampaignListReadService bot request performance', () => {
               requestedCount: 9,
               telegramChannel: { title: 'Bot channel' },
             },
-            baselineJoinedCount: 0,
-            baselineRequestedCount: 8,
+            baselineJoinedCount: 1,
+            baselineRequestedCount: 9,
           },
         ],
       },
@@ -449,6 +449,7 @@ describe('AdCampaignListReadService bot request performance', () => {
 
     expect(result.get('campaign-1')).toMatchObject({
       total: 2,
+      confirmed: true,
       points: expect.arrayContaining([
         expect.objectContaining({
           syncedAt: '2026-10-01T12:00:00.000Z',
@@ -510,6 +511,7 @@ describe('AdCampaignListReadService bot request performance', () => {
               telegramChannelId: 'channel-2',
               joinedCount: 0,
               requestedCount: 29,
+              requestedObservedAt: new Date('2026-10-14T00:00:00Z'),
               telegramChannel: { title: 'Live-only channel' },
             },
             baselineJoinedCount: 0,

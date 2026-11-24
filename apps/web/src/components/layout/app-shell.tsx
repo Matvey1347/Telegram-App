@@ -31,6 +31,7 @@ import { NotificationCenter } from "@/components/features/operations/notificatio
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { AppPwaNavigation } from "@/components/layout/app-pwa-navigation";
 import pwaStyles from "@/components/layout/app-pwa-navigation.module.css";
+import { FinanceDisplayProvider } from "@/providers/finance-display-provider";
 import { useI18n } from "@/providers/i18n-provider";
 import { accountKeys, workspaceKeys } from "@/lib/query-keys";
 import { ChevronRight, LogOut, Menu, Plus, X } from "lucide-react";
@@ -287,6 +288,8 @@ export function AppShell({ children }: PropsWithChildren) {
   const activeWorkspace = (workspaces ?? []).find(
     (workspace) => workspace.id === activeWorkspaceId,
   );
+  const canViewFinance = activeWorkspace?.access?.permissionKeys.includes("finance.view") ??
+    ["owner", "admin"].includes(activeWorkspace?.role ?? "");
   const canViewSystemLogs =
     activeWorkspace?.access?.permissionKeys.includes(
       "operations.viewSystemLogs",
@@ -300,6 +303,13 @@ export function AppShell({ children }: PropsWithChildren) {
       ),
     );
   return (
+    <FinanceDisplayProvider
+      userId={currentAccount?.id}
+      workspaceId={activeWorkspaceId}
+      primaryCurrency={activeWorkspace?.primaryCurrency}
+      canChoose={canViewFinance}
+      loadRates={pathname === "/" || pathname === "/finance" || pathname === "/investments" || pathname === "/workspace-members" || pathname === "/settings"}
+    >
     <div className="min-h-dvh overflow-x-hidden bg-neutral-950 text-neutral-100">
       <header className={pwaStyles.header}>
         <button
@@ -329,37 +339,36 @@ export function AppShell({ children }: PropsWithChildren) {
       <aside
         id="app-sidebar"
         aria-label={t("navigation.sidebar")}
-        className={`${pwaStyles.sidebar} fixed left-0 top-0 z-40 flex h-[100dvh] w-[min(19rem,calc(100vw-1.25rem))] -translate-x-full flex-col border-r border-neutral-800 bg-neutral-950 p-4 shadow-2xl transition-transform duration-200 lg:z-30 lg:h-screen lg:w-64 lg:translate-x-0 lg:p-5 lg:shadow-none ${mobileMenuOpen ? "translate-x-0" : ""}`}
+        className={`${pwaStyles.sidebar} fixed left-0 top-0 z-40 flex h-[100dvh] w-[min(21rem,calc(100vw-0.75rem))] -translate-x-full flex-col border-r border-neutral-800 bg-neutral-950 p-4 shadow-2xl transition-transform duration-200 lg:z-30 lg:h-screen lg:translate-x-0 lg:p-5 lg:shadow-none ${mobileMenuOpen ? "translate-x-0" : ""}`}
         onClickCapture={(event) => {
           if ((event.target as HTMLElement).closest("a"))
             setMobileMenuOpen(false);
         }}
       >
-        <button
-          type="button"
-          onClick={() => setMobileMenuOpen(false)}
-          className={`${pwaStyles.sidebarClose} absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg border border-neutral-800 text-neutral-300 hover:bg-neutral-900 lg:hidden`}
-          aria-label={t("navigation.close")}
-        >
-          <X size={18} />
-        </button>
-        <div className="mb-4">
-          <div className="flex items-center justify-between gap-2 pr-10 lg:pr-0">
+        <div className="relative mb-4 flex items-center gap-2">
+          <div className="mr-auto min-w-0 [&_img]:shrink-0 [&>span>span]:truncate">
             <SystemBrandLogo compact />
-            <div className="flex shrink-0 items-center gap-1">
-              <LanguageSwitcher />
-              <NotificationCenter
-                workspaceId={activeWorkspaceId}
-                enabled={canViewNotifications && publicWebEnvironment.liveMode !== "operator"}
-                compact
-              />
-              <GlobalRefreshButton
-                compact
-                hidden={mobileMenuOpen}
-                refreshing={refreshing}
-                onRefresh={() => void handleGlobalRefresh()}
-              />
-            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <LanguageSwitcher />
+            <NotificationCenter
+              workspaceId={activeWorkspaceId}
+              enabled={canViewNotifications && publicWebEnvironment.liveMode !== "operator"}
+              compact
+            />
+            <GlobalRefreshButton
+              compact
+              refreshing={refreshing}
+              onRefresh={() => void handleGlobalRefresh()}
+            />
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-neutral-800 text-neutral-300 hover:bg-neutral-900 lg:hidden"
+              aria-label={t("navigation.close")}
+            >
+              <X size={16} />
+            </button>
           </div>
         </div>
 
@@ -518,5 +527,6 @@ export function AppShell({ children }: PropsWithChildren) {
         effectiveFeatureIds={activeWorkspace?.access?.featureIds}
       />
     </div>
+    </FinanceDisplayProvider>
   );
 }

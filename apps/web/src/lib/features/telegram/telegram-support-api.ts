@@ -1,10 +1,13 @@
-import { api } from "@/lib/api";
+import { api, silentFeedbackConfig } from "@/lib/http/api-client";
 import type {
   SupportBotView,
   SupportMessage,
   SupportProduct,
   SupportTicket,
+  SupportThreadPage,
 } from "@telegram-system/shared";
+
+export type SupportAvatarKind = "sender" | "bot";
 
 const root = "/telegram-support";
 export const supportKeys = {
@@ -12,11 +15,22 @@ export const supportKeys = {
   summary: ["telegram-support", "summary"] as const,
   list: (closed: boolean, product?: SupportProduct) =>
     ["telegram-support", "list", closed, product] as const,
+  avatar: (workspaceId: string, id: string, kind: SupportAvatarKind) =>
+    ["telegram-support-avatar", workspaceId, id, kind] as const,
   thread: (id: string | null) => ["telegram-support", "thread", id] as const,
 };
 
 type Page<T> = { items: T[]; nextCursor: string | null };
 export const telegramSupportApi = {
+  avatar: async (id: string, kind: SupportAvatarKind, signal: AbortSignal) => {
+    const response = await api.get<Blob>(`${root}/tickets/${encodeURIComponent(id)}/avatar`, {
+      ...silentFeedbackConfig,
+      params: { kind },
+      responseType: "blob",
+      signal,
+    });
+    return response.status === 200 && response.data.size ? response.data : null;
+  },
   summary: async () =>
     (await api.get<SupportBotView[]>(`${root}/summary`)).data,
   list: async (closed: boolean, product?: SupportProduct, cursor?: string) =>
@@ -27,20 +41,27 @@ export const telegramSupportApi = {
     ).data,
   thread: async (id: string, cursor?: string) =>
     (
-      await api.get<Page<SupportMessage>>(`${root}/tickets/${id}/messages`, {
+      await api.get<SupportThreadPage>(`${root}/tickets/${id}/messages`, {
         params: { cursor },
       })
     ).data,
   close: async (id: string) => {
     await api.patch(`${root}/tickets/${id}/close`);
   },
-  reply: async (id: string, replyId: string, text: string) =>
+  reopen: async (id: string) => (await api.patch<{ id: string }>(`${root}/tickets/${id}/reopen`)).data,
+  reply: async (id: string, replyId: string, text: string, targetId?: string) =>
     (
       await api.post<SupportMessage>(`${root}/tickets/${id}/reply`, {
         replyId,
         text,
-      })
+        formatted: true,
+        targetId,
+      }, silentFeedbackConfig)
     ).data,
+  editMessage: async (id: string, messageId: string, text: string) =>
+    (await api.patch<SupportMessage>(`${root}/tickets/${id}/messages/${messageId}`, { text }, silentFeedbackConfig)).data,
+  deleteMessage: async (id: string, messageId: string) =>
+    (await api.delete<SupportMessage>(`${root}/tickets/${id}/messages/${messageId}`, silentFeedbackConfig)).data,
 };
 
 export async function watchSupport(signal: AbortSignal, changed: () => void) {

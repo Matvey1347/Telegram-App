@@ -79,11 +79,13 @@ export class AdCampaignInviteLinkRead {
         throw abortError;
       }
       try {
-        await this.inviteLinkRegistration.register(
+        const observed = await this.inviteLinkRegistration.register(
           userId,
           link.telegramChannelId,
           link.url,
         );
+        if (observed.currentJoinedCount == null || observed.currentRequestedCount == null)
+          throw new Error('Telegram did not confirm both invite-link counters.');
         refreshedLinks += 1;
         onProgress?.(
           {

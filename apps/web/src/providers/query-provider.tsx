@@ -73,6 +73,7 @@ const workspaceScopedQueryKeys = new Set<string>([
   "currency-rates",
   "currency-rates-latest",
   "accounts",
+  "investments",
   "transactions",
   "transfers",
   "transaction-categories",
@@ -92,6 +93,7 @@ const workspaceScopedQueryKeys = new Set<string>([
   "channel-invite-links-select",
   "telegram-bots",
   "telegram-support",
+  "telegram-support-avatar",
   "telegram-system-bot",
   "telegram-source-channels",
   "telegram-user-accounts",
@@ -284,9 +286,8 @@ export function createAppQueryClient() {
   client.setQueryDefaults(["telegram-bots", "configured"], {
     staleTime: 15 * 60_000,
   });
-  // Currency preferences change only through the Currencies screen, where
-  // both keys are invalidated after a successful save. Exchange rates update
-  // independently, so keep their reuse window shorter.
+  // The workspace currency catalog is stable. The sidebar display choice is
+  // browser-local. Exchange rates update independently on a shorter window.
   client.setQueryDefaults(["currency-settings"], {
     staleTime: dailyReadStaleTime,
   });

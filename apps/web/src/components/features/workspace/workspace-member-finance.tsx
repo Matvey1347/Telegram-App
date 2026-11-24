@@ -5,11 +5,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Banknote, Landmark, TrendingUp } from "lucide-react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { FinanceTransactionRow } from "@/components/features/finance/internal/finance-overview-list-rows";
-import { CurrencyAmount } from "@/components/features/finance/internal/finance-format";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { accountsApi, memberFinanceApi, workspaceMembersApi } from "@/lib/api";
 import type { MemberFinanceSummary } from "@/lib/api-types";
 import { formatDate } from "@/lib/date-format";
-import { formatMoney } from "@/lib/features/finance/money";
+import { formatFinanceAmount } from "@/lib/features/finance/money";
 import {
   Button,
   CustomSelect,
@@ -80,6 +80,7 @@ export function WorkspaceMemberFinance({
         queryClient.invalidateQueries({ queryKey: workspaceKeys.members() }),
         queryClient.invalidateQueries({ queryKey: accountKeys.accounts() }),
         queryClient.invalidateQueries({ queryKey: dashboardKeys.summary() }),
+        queryClient.invalidateQueries({ queryKey: accountKeys.investments() }),
       ]);
     },
   });
@@ -117,7 +118,7 @@ export function WorkspaceMemberFinance({
               payable
             </span>
             <strong className="tabular-nums text-emerald-300">
-              {formatMoney(maximum, currency)}
+              <CurrencyAmount amount={maximum} currency={currency} className="" />
             </strong>
           </div>
         ) : null}
@@ -125,9 +126,9 @@ export function WorkspaceMemberFinance({
           <div
             className={`${hasPayableCommission ? "mt-3" : ""} grid grid-cols-2 gap-2 text-[11px] text-neutral-500`}
           >
-            <span>Invested {formatMoney(principal, currency)}</span>
+            <span>Invested <CurrencyAmount amount={principal} currency={currency} className="" /></span>
             <span className="text-right">
-              Reinvested {formatMoney(reinvested, currency)}
+              Reinvested <CurrencyAmount amount={reinvested} currency={currency} className="" />
             </span>
           </div>
         ) : null}
@@ -279,7 +280,7 @@ export function WorkspaceMemberFinance({
         }
       >
         <p className="text-sm text-neutral-400">
-          Available commission: {formatMoney(maximum, currency)}
+          Available commission: {formatFinanceAmount(maximum, currency)}
         </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <FormField label={`Amount, ${currency}`}>
@@ -433,7 +434,7 @@ function Metric({
     <div className="rounded-xl bg-neutral-950 p-2.5">
       <div className="text-[11px] text-neutral-500">{label}</div>
       <div className="mt-1 text-sm font-semibold tabular-nums text-white">
-        {formatMoney(value, currency)}
+        <CurrencyAmount amount={value} currency={currency} />
       </div>
     </div>
   );

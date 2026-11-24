@@ -95,6 +95,7 @@ export class AiGateway {
         request.audio,
         request.chatPlan,
         request.revisionDraft,
+        ...(request.postingImageSearch ? [request.postingImageSearch] as const : []),
       );
       let operation: AiOperation;
       try {

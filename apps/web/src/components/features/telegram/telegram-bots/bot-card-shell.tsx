@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type {
+  SupportBotView,
   TelegramBotApplicationType,
   TelegramBotRuntimeEnvironment,
   TelegramBotRuntimeSummary,
@@ -30,6 +31,8 @@ import {
 import { runtimeAppPresentation } from "./runtime-app-presentation";
 import { BotRuntimeAvatar } from "./bot-runtime-avatar";
 import { BotRuntimeEnvironmentTabs } from "./bot-runtime-environment-tabs";
+import { BotSupportPanel } from "./telegram-support-inbox";
+import { SupportBotIdentity } from "./support-bot-identity";
 
 export function BotCardShell({
   bot,
@@ -39,6 +42,7 @@ export function BotCardShell({
   onSwitch,
   onConfigureRuntime,
   onEditProfile,
+  support,
   children,
 }: {
   bot: TelegramBot;
@@ -48,147 +52,171 @@ export function BotCardShell({
   onSwitch: () => void;
   onConfigureRuntime: (environment: TelegramBotRuntimeEnvironment) => void;
   onEditProfile?: (environment: TelegramBotRuntimeEnvironment) => void;
-  children:
-    | ReactNode
-    | ((environment: TelegramBotRuntimeEnvironment) => ReactNode);
+  support?: SupportBotView;
+  children: ReactNode;
 }) {
   const hasSingleRuntime = bot.runtimes.length === 1;
   const [environment, setEnvironment] = useState<TelegramBotRuntimeEnvironment>(
     () => bot.runtimes[0]?.environment ?? "PRODUCTION",
   );
   const runtime = bot.runtimes.find((item) => item.environment === environment);
+  const [supportSelected, setSupportSelected] = useState(false);
+  const showSupport = supportSelected && bot.applicationType === "FINANCE";
   const additionalEnvironment =
     environment === "LOCAL" ? "PRODUCTION" : "LOCAL";
   const appType = bot.applicationType;
   const currentApp = bot.applications.find((option) => option.type === appType);
   const configureHref =
-    appType === "FINANCE" ? `/telegram-bots/${bot.id}/finance` : null;
+    appType === "FINANCE" ? `/telegram-bots/${bot.id}/finance?environment=${environment}` : null;
 
   return (
     <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-3 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <BotRuntimeAvatar
-            type={appType}
-            avatarUrl={
-              appType === "FINANCE"
-                ? environment === "LOCAL"
-                  ? "/brand/groshly-dev-icon.png"
-                  : "/brand/groshly-icon.png"
-                : runtime?.avatarUrl
-            }
-          />
-          <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold text-white">
-              {runtime?.firstName || bot.label}
-            </h3>
-            <p className="truncate text-sm text-neutral-400">
-              {runtime?.username
-                ? `@${runtime.username.replace(/^@/, "")}`
-                : runtime
-                  ? "No public username"
-                  : "Local test bot is not configured"}
-            </p>
-          </div>
-        </div>
-        <TelegramCardActionsMenu
-          label={`Actions for ${runtime?.firstName || bot.label}`}
-        >
-          {configureHref ? (
-            <TelegramCardMenuLink
-              href={configureHref}
-              label={
+      {showSupport ? (
+        <SupportBotIdentity product="GROSHLY" bot={support} />
+      ) : (
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <BotRuntimeAvatar
+              type={appType}
+              avatarUrl={
                 appType === "FINANCE"
-                  ? "Dashboard"
-                  : `View ${currentApp?.label || applicationLabel(appType)}`
-              }
-              icon={
-                appType === "FINANCE" ? (
-                  <ChartNoAxesCombined
-                    data-testid="configure-bot-app-icon"
-                    size={17}
-                  />
-                ) : (
-                  <Settings data-testid="configure-bot-app-icon" size={17} />
-                )
+                  ? environment === "LOCAL"
+                    ? "/brand/groshly-dev-icon.png"
+                    : "/brand/groshly-icon.png"
+                  : runtime?.avatarUrl
               }
             />
-          ) : null}
-          {appType !== "FINANCE" && (
-            <>
-              <TelegramCardMenuAction
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-semibold text-white">
+                {runtime?.firstName || bot.label}
+              </h3>
+              <p className="truncate text-sm text-neutral-400">
+                {runtime?.username
+                  ? `@${runtime.username.replace(/^@/, "")}`
+                  : runtime
+                    ? "No public username"
+                    : "Local test bot is not configured"}
+              </p>
+            </div>
+          </div>
+          <TelegramCardActionsMenu
+            label={`Actions for ${runtime?.firstName || bot.label}`}
+          >
+            {configureHref ? (
+              <TelegramCardMenuLink
+                href={configureHref}
                 label={
-                  checkingEnvironment === environment ? "Refreshing" : "Refresh"
+                  appType === "FINANCE"
+                    ? "Dashboard"
+                    : `View ${currentApp?.label || applicationLabel(appType)}`
                 }
                 icon={
-                  checkingEnvironment === environment ? (
-                    <LoaderCircle className="animate-spin" size={17} />
+                  appType === "FINANCE" ? (
+                    <ChartNoAxesCombined
+                      data-testid="configure-bot-app-icon"
+                      size={17}
+                    />
                   ) : (
-                    <RefreshCw size={17} />
+                    <Settings data-testid="configure-bot-app-icon" size={17} />
                   )
                 }
-                disabled={!runtime || checkingEnvironment === environment}
-                onClick={() => onCheck(environment)}
               />
-              <TelegramCardMenuAction
-                label={runtime ? "Edit token" : "Add token"}
-                icon={<Pencil size={17} />}
-                onClick={() => onConfigureRuntime(environment)}
-              />
-              {hasSingleRuntime ? (
+            ) : null}
+            {appType !== "FINANCE" && (
+              <>
                 <TelegramCardMenuAction
-                  label={`Add ${additionalEnvironment === "LOCAL" ? "local" : "production"} version`}
-                  icon={<Server size={17} />}
-                  onClick={() => onConfigureRuntime(additionalEnvironment)}
+                  label={
+                    checkingEnvironment === environment ? "Refreshing" : "Refresh"
+                  }
+                  icon={
+                    checkingEnvironment === environment ? (
+                      <LoaderCircle className="animate-spin" size={17} />
+                    ) : (
+                      <RefreshCw size={17} />
+                    )
+                  }
+                  disabled={!runtime || checkingEnvironment === environment}
+                  onClick={() => onCheck(environment)}
                 />
-              ) : null}
-              <TelegramCardMenuAction
-                label="Edit bot"
-                icon={<UserRoundPen size={17} />}
-                disabled={!runtime}
-                onClick={() => onEditProfile?.(environment)}
-              />
-              <TelegramCardMenuAction
-                label="Change app"
-                icon={
-                  <ArrowLeftRight data-testid="change-bot-app-icon" size={17} />
-                }
-                onClick={onSwitch}
-              />
-              <div className="my-1 border-t border-neutral-800" />
-              <TelegramCardMenuAction
-                label="Delete bot"
-                icon={<Trash2 size={17} />}
-                danger
-                onClick={() => onRequestDelete(environment)}
-              />
-            </>
-          )}
-        </TelegramCardActionsMenu>
-      </div>
+                <TelegramCardMenuAction
+                  label={runtime ? "Edit token" : "Add token"}
+                  icon={<Pencil size={17} />}
+                  onClick={() => onConfigureRuntime(environment)}
+                />
+                {hasSingleRuntime ? (
+                  <TelegramCardMenuAction
+                    label={`Add ${additionalEnvironment === "LOCAL" ? "local" : "production"} version`}
+                    icon={<Server size={17} />}
+                    onClick={() => onConfigureRuntime(additionalEnvironment)}
+                  />
+                ) : null}
+                <TelegramCardMenuAction
+                  label="Edit bot"
+                  icon={<UserRoundPen size={17} />}
+                  disabled={!runtime}
+                  onClick={() => onEditProfile?.(environment)}
+                />
+                <TelegramCardMenuAction
+                  label="Change app"
+                  icon={
+                    <ArrowLeftRight data-testid="change-bot-app-icon" size={17} />
+                  }
+                  onClick={onSwitch}
+                />
+                <div className="my-1 border-t border-neutral-800" />
+                <TelegramCardMenuAction
+                  label="Delete bot"
+                  icon={<Trash2 size={17} />}
+                  danger
+                  onClick={() => onRequestDelete(environment)}
+                />
+              </>
+            )}
+          </TelegramCardActionsMenu>
+        </div>
+      )}
       <BotRuntimeEnvironmentTabs
         environment={environment}
         availableEnvironments={bot.runtimes.map((item) => item.environment)}
-        onChange={setEnvironment}
+        onChange={(next) => {
+          setEnvironment(next);
+          setSupportSelected(false);
+        }}
+        support={
+          appType === "FINANCE"
+            ? {
+                selected: supportSelected,
+                open: support?.open,
+                needsReply: support?.needsReply,
+                onSelect: () => setSupportSelected(true),
+              }
+            : undefined
+        }
       />
-      {runtime ? (
-        <RuntimeDetails
-          runtime={runtime}
-          appType={appType}
-          botId={bot.id}
-          hideEnvironmentLabel={hasSingleRuntime}
-        />
+      {showSupport ? (
+        <BotSupportPanel bot={support} />
       ) : (
-        <RuntimeSetupState
-          environment={environment}
-          onConfigure={() => onConfigureRuntime(environment)}
-        />
+        <>
+          {runtime ? (
+            <RuntimeDetails
+              runtime={runtime}
+              appType={appType}
+              botId={bot.id}
+              hideEnvironmentLabel={hasSingleRuntime}
+            />
+          ) : (
+            <RuntimeSetupState
+              environment={environment}
+              onConfigure={() => onConfigureRuntime(environment)}
+            />
+          )}
+          {runtime || appType === "FINANCE" ? (
+            <div className="mt-2 border-t border-neutral-800 pt-2">
+              {children}
+            </div>
+          ) : null}
+        </>
       )}
-      {runtime ? (
-        <div className="mt-2 border-t border-neutral-800 pt-2">
-          {typeof children === "function" ? children(environment) : children}
-        </div>
-      ) : null}
     </article>
   );
 }

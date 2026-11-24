@@ -9,6 +9,7 @@ export type CampaignValues = {
   botInviteLinkIds: string[];
   trackingLinkKind: string;
   trackingChannelIds: string[];
+  trackingAllChannels?: boolean;
   trackCrossChannelRequests: boolean;
   advertisingChannelIds: string[];
   price?: number;
@@ -65,6 +66,7 @@ export function normalizeCampaignDraft(value: unknown): CampaignValues | null {
     trackingChannelIds: Array.isArray(draft.trackingChannelIds)
       ? draft.trackingChannelIds.filter((id): id is string => typeof id === "string")
       : [],
+    ...(typeof draft.trackingAllChannels === "boolean" ? { trackingAllChannels: draft.trackingAllChannels } : {}),
     trackCrossChannelRequests:
       draft.trackCrossChannelRequests === true ||
       (Array.isArray(draft.trackingChannelIds) && draft.trackingChannelIds.length > 0) ||

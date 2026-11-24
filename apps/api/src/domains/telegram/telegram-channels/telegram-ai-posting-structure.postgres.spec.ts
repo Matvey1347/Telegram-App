@@ -235,8 +235,9 @@ const isDisposableLocalDatabase = (() => {
         title: 'Title',
         text: 'Text',
         imagePrompt: '',
-        imageUrl: null,
+        imageUrl: 'https://media.example.test/ready-image.jpg',
         imageSourceId: null,
+        mediaReadiness: 'READY',
         editorialMetadata: {
           sphere: { id: sphere.id },
           rubric: { id: rubric.id },

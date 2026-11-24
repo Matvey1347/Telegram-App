@@ -1,3 +1,4 @@
+import { currencyPresentation } from "@telegram-system/shared";
 import type {
   CurrencyDisplayMode,
   CurrencySettings,
@@ -84,7 +85,7 @@ export function getExchangeRate(
     const direct = rates?.find(
       (rate) => rate.baseCurrency === base && rate.targetCurrency === target,
     );
-    if (direct) return Number(direct.rate);
+    if (direct && Number(direct.rate) > 0) return Number(direct.rate);
     const reverse = rates?.find(
       (rate) => rate.baseCurrency === target && rate.targetCurrency === base,
     );
@@ -282,4 +283,41 @@ export function formatMoneyPreview(
       : tertiary.label
     : "";
   return secondLine ? `${firstLine}\n${secondLine}` : firstLine;
+}
+
+export function amountInDisplayCurrency(
+  amount: number | string | null | undefined,
+  source: string | null | undefined,
+  target: string,
+  rates?: ExchangeRate[],
+): number | null {
+  if (amount == null || !source) return null;
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return null;
+  if (value === 0) return 0;
+  const converted = convertMoney(value, source, target, rates);
+  return converted != null && Number.isFinite(converted) ? converted : null;
+}
+
+export function sumDisplayBalances(
+  balances: ReadonlyArray<{ balance: number; currency: string }>,
+  target: string,
+  rates?: ExchangeRate[],
+): number | null {
+  let total = 0;
+  for (const { balance, currency } of balances) {
+    const value = amountInDisplayCurrency(balance, currency, target, rates);
+    if (value === null) return null;
+    total += value;
+  }
+  return total;
+}
+
+export function formatFinanceAmount(value: number, currency: string) {
+  const number = new Intl.NumberFormat(undefined, { style: "currency", currency })
+    .formatToParts(value)
+    .filter((part) => part.type !== "currency" && part.type !== "literal")
+    .map((part) => part.value)
+    .join("");
+  return `${number} ${currencyPresentation(currency).symbol}`;
 }

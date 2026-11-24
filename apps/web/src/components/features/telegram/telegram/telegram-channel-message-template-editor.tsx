@@ -167,7 +167,7 @@ export function TelegramChannelMessageTemplateEditor({
       sourceForm.priceRounding ?? "NONE",
     );
   const [priceCurrency, setPriceCurrency] = useState(
-    sourceForm.priceCurrency?.trim() || "UAH",
+    sourceForm.priceCurrency || "UAH",
   );
   const [targetTotal, setTargetTotal] = useState(sourceForm.targetTotal ?? "");
   const [productNameOverrides, setProductNameOverrides] = useState(

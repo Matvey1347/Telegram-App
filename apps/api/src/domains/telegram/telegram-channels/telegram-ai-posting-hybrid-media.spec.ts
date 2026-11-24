@@ -21,12 +21,12 @@ describe('AI Posting hybrid allocation', () => {
     }
   });
 
-  it('distributes a 70% share across two differently sized batches', () => {
+  it('distributes the default 80% share across two differently sized batches', () => {
     const countSearch = (count: number, offset: number) =>
       Array.from({ length: count }, (_, index) =>
         telegramAiPostingHybridMediaMode(offset + index),
       ).filter((mode) => mode === 'found').length;
     expect(countSearch(4, 0)).toBe(3);
-    expect(countSearch(3, 4) + countSearch(3, 7)).toBe(4);
+    expect(countSearch(3, 4) + countSearch(3, 7)).toBe(5);
   });
 });

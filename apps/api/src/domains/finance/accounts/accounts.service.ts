@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import type { FinanceAccountBalances } from '@telegram-system/shared';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
 import {
   createPaginatedResponse,
@@ -56,65 +57,11 @@ export class AccountsService {
       where: { id: workspaceId },
       select: { primaryCurrency: true, secondaryCurrency: true },
     });
-    const [transactions, outgoingTransfers, incomingTransfers] =
-      await Promise.all([
-        this.prisma.transaction.groupBy({
-          by: ['accountId', 'type'],
-          where: {
-            workspaceId,
-            deletedAt: null,
-            accountId: { in: accounts.map((a) => a.id) },
-          },
-          _sum: { amount: true },
-          _count: { _all: true },
-        }),
-        this.prisma.transfer.groupBy({
-          by: ['fromAccountId'],
-          where: {
-            workspaceId,
-            deletedAt: null,
-            fromAccountId: { in: accounts.map((a) => a.id) },
-          },
-          _sum: { fromAmount: true },
-        }),
-        this.prisma.transfer.groupBy({
-          by: ['toAccountId'],
-          where: {
-            workspaceId,
-            deletedAt: null,
-            toAccountId: { in: accounts.map((a) => a.id) },
-          },
-          _sum: { toAmount: true },
-        }),
-      ]);
+    const ledger = await this.readLedger(workspaceId, accounts.map(({ id }) => id));
 
     return Promise.all(
       accounts.map(async (account) => {
-        const incomes = transactions
-          .filter((t) => t.accountId === account.id && t.type === 'income')
-          .reduce((acc, row) => acc + dec(row._sum.amount), 0);
-        const expenses = transactions
-          .filter((t) => t.accountId === account.id && t.type === 'expense')
-          .reduce((acc, row) => acc + dec(row._sum.amount), 0);
-        const incomeCount = transactions
-          .filter((t) => t.accountId === account.id && t.type === 'income')
-          .reduce((acc, row) => acc + row._count._all, 0);
-        const expenseCount = transactions
-          .filter((t) => t.accountId === account.id && t.type === 'expense')
-          .reduce((acc, row) => acc + row._count._all, 0);
-        const outgoing = outgoingTransfers
-          .filter((t) => t.fromAccountId === account.id)
-          .reduce((acc, row) => acc + dec(row._sum.fromAmount), 0);
-        const incoming = incomingTransfers
-          .filter((t) => t.toAccountId === account.id)
-          .reduce((acc, row) => acc + dec(row._sum.toAmount), 0);
-
-        const balance =
-          dec(account.initialBalance) +
-          incomes -
-          expenses -
-          outgoing +
-          incoming;
+        const { balance, transactionStats } = ledger(account);
         const convertedCurrency =
           account.currency !== workspace.primaryCurrency
             ? workspace.primaryCurrency
@@ -141,22 +88,71 @@ export class AccountsService {
           calculatedBalance: balance,
           convertedBalance,
           convertedCurrency,
-          transactionStats: {
-            count: incomeCount + expenseCount,
-            incomeCount,
-            expenseCount,
-            received: incomes,
-            spent: expenses,
-            transferredIn: incoming,
-            transferredOut: outgoing,
-            delta: incomes - expenses + incoming - outgoing,
-          },
+          transactionStats,
         };
       }),
     );
   }
 
-  async findAll(userId: string, query: AccountQueryDto = {}) {
+  private async readLedger(workspaceId: string, accountIds: string[]) {
+    const [transactions, outgoingTransfers, incomingTransfers] =
+      await Promise.all([
+        this.prisma.transaction.groupBy({
+          by: ['accountId', 'type'],
+          where: {
+            workspaceId,
+            deletedAt: null,
+            accountId: { in: accountIds },
+          },
+          _sum: { amount: true },
+          _count: { _all: true },
+        }),
+        this.prisma.transfer.groupBy({
+          by: ['fromAccountId'],
+          where: {
+            workspaceId,
+            deletedAt: null,
+            fromAccountId: { in: accountIds },
+          },
+          _sum: { fromAmount: true },
+        }),
+        this.prisma.transfer.groupBy({
+          by: ['toAccountId'],
+          where: {
+            workspaceId,
+            deletedAt: null,
+            toAccountId: { in: accountIds },
+          },
+          _sum: { toAmount: true },
+        }),
+      ]);
+
+
+    const byType = new Map(transactions.map((row) => [`${row.accountId}:${row.type}`, row]));
+    const outgoing = new Map(outgoingTransfers.map((row) => [row.fromAccountId, dec(row._sum.fromAmount)]));
+    const incoming = new Map(incomingTransfers.map((row) => [row.toAccountId, dec(row._sum.toAmount)]));
+    return (account: { id: string; initialBalance: unknown }) => {
+      const income = byType.get(`${account.id}:income`);
+      const expense = byType.get(`${account.id}:expense`);
+      const incomes = dec(income?._sum.amount);
+      const expenses = dec(expense?._sum.amount);
+      const incomeCount = income?._count._all ?? 0;
+      const expenseCount = expense?._count._all ?? 0;
+      const transferredOut = outgoing.get(account.id) ?? 0;
+      const transferredIn = incoming.get(account.id) ?? 0;
+      const delta = incomes - expenses - transferredOut + transferredIn;
+      return {
+        balance: dec(account.initialBalance) + delta,
+        transactionStats: {
+          count: incomeCount + expenseCount,
+          incomeCount, expenseCount, received: incomes, spent: expenses,
+          transferredIn, transferredOut, delta,
+        },
+      };
+    };
+  }
+
+  private async accountScope(userId: string, query: AccountQueryDto) {
     const access = await this.authorization.require(userId, 'finance.view');
     const workspaceId = access.workspaceId;
     const ownOnly =
@@ -175,6 +171,25 @@ export class AccountsService {
       ...(scope === 'system' ? { isSystem: true, assignedMemberId: null } : {}),
       OR: [{ assignedMemberId: null }, { assignedMember: { isHidden: false } }],
     };
+    return { workspaceId, where };
+  }
+
+  async balances(userId: string, query: AccountQueryDto): Promise<FinanceAccountBalances> {
+    const { workspaceId, where } = await this.accountScope(userId, query);
+    const accounts = await this.prisma.account.findMany({
+      where, select: { id: true, currency: true, initialBalance: true },
+    });
+    if (!accounts.length) return [];
+    const ledger = await this.readLedger(workspaceId, accounts.map(({ id }) => id));
+    const totals = new Map<string, number>();
+    for (const account of accounts) {
+      totals.set(account.currency, (totals.get(account.currency) ?? 0) + ledger(account).balance);
+    }
+    return [...totals].map(([currency, balance]) => ({ currency, balance }));
+  }
+
+  async findAll(userId: string, query: AccountQueryDto = {}) {
+    const { workspaceId, where } = await this.accountScope(userId, query);
     const pagination = normalizePagination(query);
     const [accounts, totalItems] = await this.prisma.$transaction([
       this.prisma.account.findMany({

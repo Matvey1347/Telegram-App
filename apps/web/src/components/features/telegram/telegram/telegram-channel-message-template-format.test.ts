@@ -59,11 +59,11 @@ describe("renderTelegramChannelMessageTemplate", () => {
       [channel("one", "One"), channel("two", "Two")],
     );
     expect(rendered).toContain(
-      "💼 [One](https://t.me/+one) - [TgStat](https://tgstat.com/one) — **75 UAH**",
+      "💼 [One](https://t.me/+one) - [TgStat](https://tgstat.com/one) — **75UAH**",
     );
-    expect(rendered).not.toContain("1/24 — **75 UAH**");
-    expect(rendered).toContain("**75 UAH**\n💼 [Two]");
-    expect(rendered).not.toContain("**75 UAH**\n\n💼 [Two]");
+    expect(rendered).not.toContain("1/24 — **75UAH**");
+    expect(rendered).toContain("**75UAH**\n💼 [Two]");
+    expect(rendered).not.toContain("**75UAH**\n\n💼 [Two]");
     expect(rendered.endsWith("\n")).toBe(false);
   });
 
@@ -178,8 +178,8 @@ describe("renderTelegramChannelMessageTemplate", () => {
       },
     );
 
-    expect(rendered).toContain("**265 UAH**");
-    expect(rendered).not.toContain("1/24 — **265 UAH**");
+    expect(rendered).toContain("**265UAH**");
+    expect(rendered).not.toContain("1/24 — **265UAH**");
     expect(rendered).not.toContain("3/72");
   });
 
@@ -233,7 +233,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
 
     const rendered = renderTelegramChannelMessageTemplate(template, [source]);
 
-    expect(rendered).toContain("**75 UAH** · 👁 1,000");
+    expect(rendered).toContain("**75UAH** · 👁 1,000");
     expect(rendered).toContain("👁 Total views:\n1/24 — 1,000");
     expect(rendered).toContain("A concise channel description");
     expect(rendered).not.toContain("TgStat");
@@ -360,6 +360,31 @@ describe("renderTelegramChannelMessageTemplate", () => {
     expect(template).not.toContain("{{/products}}\n\n{{/channels}}");
   });
 
+  it("preserves the exact spacing before display currency in both price modes", () => {
+    const source = channel("currency", "Currency");
+    const publicTemplate = DEFAULT_CHANNEL_MESSAGE_TEMPLATE;
+    const internalTemplate = rewriteTelegramChannelMessageTemplatePriceMode(
+      publicTemplate,
+      "INTERNAL_CPM",
+    );
+
+    for (const [template, price] of [
+      [publicTemplate, "75"],
+      [internalTemplate, "50"],
+    ] as const) {
+      expect(
+        renderTelegramChannelMessageTemplate(template, [source], {
+          priceCurrency: "грн",
+        }),
+      ).toContain(`${price}грн`);
+      expect(
+        renderTelegramChannelMessageTemplate(template, [source], {
+          priceCurrency: " грн",
+        }),
+      ).toContain(`${price} грн`);
+    }
+  });
+
   it("renders internal CPM calculations and keeps missing internal prices explicit", () => {
     const source = channel("one", "One");
     source.description = "Short description from channel settings";
@@ -387,7 +412,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
     expect(internalTemplate).toContain("{{product_price}} outside");
     expect(
       renderTelegramChannelMessageTemplate(templateWithMetrics, [source]),
-    ).toContain("**— UAH · 1,500 views · CPM 32.5**");
+    ).toContain("**—UAH · 1,500 views · CPM 32.5**");
   });
 
   it("renames a format and appends a configurable discounted package", () => {
@@ -451,7 +476,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
       },
     );
 
-    expect(rendered).toContain("Без видалення - **165 UAH**");
+    expect(rendered).toContain("Без видалення - **165UAH**");
     expect(rendered).toContain(
       "🔥 При розміщенні одразу у всіх 2 каналах — знижка 10%:",
     );
@@ -475,7 +500,7 @@ describe("renderTelegramChannelMessageTemplate", () => {
         productNameOverrides: { "No auto-delete": "Без видалення" },
       },
     );
-    expect(internalRendered).toContain("1/24 - **100 UAH**");
+    expect(internalRendered).toContain("1/24 - **100UAH**");
     expect(internalRendered).toContain(
       "• 1/24 у всіх каналах: ~~200 UAH~~ → **180 UAH**",
     );

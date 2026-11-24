@@ -1,3 +1,4 @@
+import { savedTrackingScope } from './ad-campaign-link-selection';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { campaignInviteWindowMetrics } from './ad-campaign-invite-window-metrics';
@@ -35,6 +36,7 @@ const CAMPAIGN_LIST_SELECT = {
   placementDate: true,
   startedAt: true,
   endedAt: true,
+  trackingScope: true,
   joinedCount: true,
   leftCount: true,
   netGrowthCount: true,
@@ -116,6 +118,8 @@ const CAMPAIGN_LIST_SELECT = {
           url: true,
           joinedCount: true,
           requestedCount: true,
+          joinedObservedAt: true,
+          requestedObservedAt: true,
           telegramChannel: {
             select: { id: true, title: true, photoUrl: true },
           },
@@ -168,6 +172,7 @@ type LegacySource =
 type BotRequestPerformance = {
   total: number;
   estimated: boolean;
+  confirmed: boolean;
   points: BotRequestTrendPoint[];
   channels: Array<{
     telegramChannelId: string;
@@ -398,6 +403,8 @@ export class AdCampaignListReadService {
           baselineRequested: Number(link.baselineRequestedCount ?? 0),
           currentJoined: Number(inviteLink.joinedCount ?? 0),
           currentRequested: Number(inviteLink.requestedCount ?? 0),
+          joinedObservedAt: inviteLink.joinedObservedAt,
+          requestedObservedAt: inviteLink.requestedObservedAt,
         };
       }),
     );
@@ -445,6 +452,7 @@ export class AdCampaignListReadService {
       );
       if (!entries.length) continue;
       let estimated = false;
+      let confirmed = false;
       const channels = new Map<
         string,
         {
@@ -453,14 +461,19 @@ export class AdCampaignListReadService {
           photoUrl: string | null;
           points: Map<
             string,
-            { syncedAt: string; joinedCount: number; requestedCount: number }
+            Map<string, { joinedCount: number; requestedCount: number }>
           >;
         }
       >();
       for (const entry of entries) {
         const snapshotsForEntry = snapshotsByLink.get(entry.inviteLinkId) ?? [];
         const windows = windowsByLink.get(entry.inviteLinkId) ?? [];
-        let previousAt = entry.startsAt, previousJoined = entry.baselineJoined, previousRequested = entry.baselineRequested, allocatedJoined = 0, allocatedRequested = 0;
+        const opening = snapshotsForEntry.findLast((point) => point.syncedAt <= entry.startsAt &&
+          point.joinedCount != null && point.requestedCount != null);
+        const baselineJoined = opening?.joinedCount ?? entry.baselineJoined;
+        const baselineRequested = opening?.requestedCount ?? entry.baselineRequested;
+        const endsAt = savedTrackingScope(campaign.trackingScope) ? campaign.endedAt : null;
+        let previousAt = entry.startsAt, previousJoined = baselineJoined, previousRequested = baselineRequested, allocatedJoined = 0, allocatedRequested = 0;
         const current = channels.get(entry.channelId) ?? {
           telegramChannelId: entry.channelId,
           title: entry.channelTitle,
@@ -473,42 +486,55 @@ export class AdCampaignListReadService {
           requestedCount: number,
         ) => {
           const key = at.toISOString();
-          const point = current.points.get(key) ?? {
-            syncedAt: key,
-            joinedCount: 0,
-            requestedCount: 0,
-          };
+          const pointsAt = current.points.get(key) ?? new Map();
           const share = overlapShare(previousAt, at, entry.campaignId, windows);
           estimated ||= share < 1;
-          allocatedJoined = Math.max(0, allocatedJoined + (Math.max(0, joinedCount - entry.baselineJoined) - Math.max(0, previousJoined - entry.baselineJoined)) * share);
-          allocatedRequested = Math.max(0, allocatedRequested + (Math.max(0, requestedCount - entry.baselineRequested) - Math.max(0, previousRequested - entry.baselineRequested)) * share);
+          allocatedJoined = Math.max(0, allocatedJoined + (Math.max(0, joinedCount - baselineJoined) - Math.max(0, previousJoined - baselineJoined)) * share);
+          allocatedRequested = Math.max(0, allocatedRequested + (Math.max(0, requestedCount - baselineRequested) - Math.max(0, previousRequested - baselineRequested)) * share);
           previousAt = at; previousJoined = joinedCount; previousRequested = requestedCount;
-          point.joinedCount += allocatedJoined;
-          point.requestedCount += allocatedRequested;
-          current.points.set(key, point);
+          pointsAt.set(entry.inviteLinkId, { joinedCount: allocatedJoined, requestedCount: allocatedRequested });
+          current.points.set(key, pointsAt);
         };
-        addPoint(entry.startsAt, entry.baselineJoined, entry.baselineRequested);
+        addPoint(entry.startsAt, baselineJoined, baselineRequested);
         for (const snapshot of snapshotsForEntry) {
-          if (snapshot.syncedAt > entry.startsAt && snapshot.joinedCount != null && snapshot.requestedCount != null) {
+          if (snapshot.syncedAt > entry.startsAt && (!endsAt || snapshot.syncedAt <= endsAt) &&
+            (snapshot.joinedCount != null || snapshot.requestedCount != null)) {
+            confirmed = true;
             addPoint(
               snapshot.syncedAt,
-              snapshot.joinedCount,
-              snapshot.requestedCount,
+              snapshot.joinedCount ?? previousJoined,
+              snapshot.requestedCount ?? previousRequested,
             );
           }
         }
         // Some links are only synced intermittently. Always add their live
         // counters so every linked channel contributes to the current total.
-        addPoint(latest, entry.currentJoined, entry.currentRequested);
+        if (!endsAt) {
+          const hasJoined = Boolean(entry.joinedObservedAt && entry.joinedObservedAt >= entry.startsAt);
+          const hasRequested = Boolean(entry.requestedObservedAt && entry.requestedObservedAt >= entry.startsAt);
+          if (hasJoined || hasRequested) {
+            confirmed = true;
+            const observedAt = new Date(Math.max(
+              hasJoined ? entry.joinedObservedAt!.getTime() : 0,
+              hasRequested ? entry.requestedObservedAt!.getTime() : 0,
+            ));
+            if (observedAt >= previousAt)
+              addPoint(observedAt, hasJoined ? entry.currentJoined : previousJoined, hasRequested ? entry.currentRequested : previousRequested);
+          }
+        }
         channels.set(entry.channelId, current);
       }
       const channelRows = [...channels.values()].map((channel) => {
-        const rawPoints = [...channel.points.values()]
-          .map((point) => ({
-            ...point,
-            totalAttributed: point.joinedCount + point.requestedCount,
-          }))
-          .sort((left, right) => left.syncedAt.localeCompare(right.syncedAt));
+        const latestByLink = new Map<string, { joinedCount: number; requestedCount: number }>();
+        const rawPoints = [...channel.points.entries()].sort(([left], [right]) => left.localeCompare(right))
+          .map(([syncedAt, updates]) => {
+            updates.forEach((point, linkId) => latestByLink.set(linkId, point));
+            const totals = [...latestByLink.values()].reduce((sum, point) => ({
+              joinedCount: sum.joinedCount + point.joinedCount,
+              requestedCount: sum.requestedCount + point.requestedCount,
+            }), { joinedCount: 0, requestedCount: 0 });
+            return { syncedAt, ...totals, totalAttributed: totals.joinedCount + totals.requestedCount };
+          });
         let peak = 0;
         let peakJoined = 0;
         const points = rawPoints.map((point) => {
@@ -539,6 +565,7 @@ export class AdCampaignListReadService {
       result.set(campaign.id, {
         total: points.at(-1)?.totalAttributed ?? 0,
         estimated,
+        confirmed,
         points,
         channels: channelRows.sort((a, b) => b.requests - a.requests),
         startsAt: (
@@ -608,8 +635,9 @@ export class AdCampaignListReadService {
         null,
       inviteLinkIds: row.inviteLinks.map((link) => link.id),
       botInviteLinkIds: row.botInviteLinks.map((link) => link.inviteLink.id),
-      trackingLinkKind: row.botInviteLinks[0]?.kind ?? 'BOT',
-      trackingChannelIds: [
+      trackingAllChannels: row.trackingScope == null ? undefined : savedTrackingScope(row.trackingScope)?.channelIds === null,
+      trackingLinkKind: savedTrackingScope(row.trackingScope)?.kind ?? row.botInviteLinks[0]?.kind ?? 'BOT',
+      trackingChannelIds: savedTrackingScope(row.trackingScope)?.channelIds ?? [
         ...new Set(
           row.botInviteLinks.map((link) => link.inviteLink.telegramChannelId),
         ),

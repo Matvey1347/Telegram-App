@@ -104,11 +104,11 @@ describe("AiPostingImagesSection", () => {
     const change = vi.fn();
     renderSection({ mode: "hybrid", onHybridSearchPercent: change });
     const slider = screen.getByRole("slider", { name: "Поиск изображений" });
-    expect(slider).toHaveAttribute("aria-valuenow", "70");
-    expect(screen.getByText("AI-генерация 30%")).toBeInTheDocument();
+    expect(slider).toHaveAttribute("aria-valuenow", "80");
+    expect(screen.getByText("AI-генерация 20%")).toBeInTheDocument();
     slider.focus();
     await user.keyboard("{ArrowRight}");
-    expect(change).toHaveBeenCalledWith(71);
+    expect(change).toHaveBeenCalledWith(81);
   });
 
   it("adds a named preference with the shared emoji picker", async () => {

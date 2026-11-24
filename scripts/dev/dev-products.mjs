@@ -7,6 +7,8 @@ import { createRequire } from "node:module";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { assertPortAvailable } from "./dev-port-availability.mjs";
+import { stopLocalDevProcesses } from "./stop-local-dev.mjs";
+import { registerDevLauncher } from "./dev-launcher-ownership.mjs";
 import { terminateDevChildren } from "./dev-process-termination.mjs";
 import { waitForHttpReady } from "./dev-service-readiness.mjs";
 import { extractCloudflareQuickTunnelUrl } from "./dev-cloudflare-tunnel.mjs";
@@ -227,6 +229,7 @@ export function financeApiEnvironment(
   const runtime = profile.FINANCE_BOT_RUNTIME_ENVIRONMENT?.toUpperCase();
   const username = profile.FINANCE_BOT_LOCAL_USERNAME;
   return {
+    ...financeProfileEnvironment(profilePath, FINANCE_SUPPORT_KEYS),
     TELEGRAM_BOT_RUNTIME_ENVIRONMENT: "LOCAL",
     // Match the selected LOCAL profile to the existing database runtime.
     // Tokens are passed only to the local API.
@@ -263,6 +266,15 @@ export function selectedProducts(mode) {
   if (mode === "nexeloq" || mode === "finance") return [mode];
   if (mode === "all") return ["nexeloq", "finance"];
   throw new Error("Usage: node scripts/dev/dev-products.mjs <nexeloq|finance|all>");
+}
+
+export async function prepareProductPorts(
+  products,
+  { replace = false, stopListeners = stopLocalDevProcesses, checkPort = assertPortAvailable } = {},
+) {
+  const ports = products.flatMap((product) => LOCAL_PRODUCTS[product].ports);
+  if (replace) await stopListeners({ ports: ports.map(([port]) => port) });
+  await Promise.all(ports.map(([port, name]) => checkPort(port, name)));
 }
 
 export function localSystemBotEnvironment({ optedIn, tunnel, tokenVerified }) {
@@ -388,6 +400,7 @@ function start(product, definition) {
     cwd: process.cwd(),
     env: {
       ...process.env,
+      TELEGRAM_DEV_MANAGED_LAUNCH: "1",
       ...financeWebEnvironmentVariables,
       ...env,
       ...financeApiEnvironmentVariables,
@@ -635,13 +648,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     products = selectedProducts(mode);
     await useLocalDatabase();
-    await Promise.all(
-      products.flatMap((product) =>
-        LOCAL_PRODUCTS[product].ports.map(([port, name]) =>
-          assertPortAvailable(port, name),
-        ),
-      ),
-    );
+    await prepareProductPorts(products, {
+      replace: withCloudflare && process.platform !== "win32",
+    });
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
@@ -654,6 +663,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   ]) {
     process.on(signal, () => void stop());
   }
+  registerDevLauncher(products.flatMap((product) => LOCAL_PRODUCTS[product].ports.map(([port]) => port)));
 
   dashboard = createDevTerminalDashboard({
     title: "Local development",

@@ -40,10 +40,6 @@
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
     padding-left: max(1rem, env(safe-area-inset-left));
   }
-
-  .sidebarClose {
-    top: calc(0.75rem + env(safe-area-inset-top));
-  }
 }
 
 @media (min-width: 640px) and (max-width: 1023px) {
@@ -55,10 +51,19 @@
 }
 
 @media (min-width: 1024px) {
+  .sidebar,
   .content {
-    width: calc(100% - 16rem);
+    --desktop-sidebar-width: 21rem;
+  }
+
+  .sidebar {
+    width: var(--desktop-sidebar-width);
+  }
+
+  .content {
+    width: calc(100% - var(--desktop-sidebar-width));
     min-height: 100vh;
-    margin-left: 16rem;
+    margin-left: var(--desktop-sidebar-width);
     padding: 1.25rem;
   }
 }

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type {
   ConsumerFinanceAnalytics,
+  ConsumerFinanceAssistantChatMode,
   ConsumerFinanceAssistantMessageResult,
 } from '@telegram-system/shared';
 import { PrismaService } from '@api/prisma/prisma.service';
@@ -13,6 +14,7 @@ import { FinanceEntitlementService } from '@consumer-finance/api/billing/finance
 import { AI_MODEL_POLICY } from '@api/domains/telegram/telegram-bots/core/ai-usage-cost';
 import { FinanceLedgerService } from '@consumer-finance/api/ledger/finance-ledger.service';
 import { FinanceProposalService } from '@consumer-finance/api/chat-flows/finance-proposal.service';
+import { financeAssistantProfileFacts, isAssistantGreeting, assistantAnalyticsPeriod } from '@consumer-finance/api/ultimate/finance-assistant-context';
 import { FinanceAssistantEntryService, explicitCategoryHint, stripExplicitCategoryLabel } from '@consumer-finance/api/ultimate/finance-assistant-entry.service';
 
 /** On-demand AI interpretation over the canonical bounded Analytics read model. */
@@ -42,12 +44,13 @@ export class FinanceUltimateService {
       onTiming?: (timing: { totalMs: number; contextMs: number | null; modelMs: number | null; firstDeltaMs: number | null; proposalMs: number | null }) => void;
       signal?: AbortSignal;
     },
+    mode?: ConsumerFinanceAssistantChatMode,
   ): Promise<ConsumerFinanceAssistantMessageResult> {
     const startedAt = Date.now();
     // A plain payment note does not need the expensive conversational router.
     // Send it through the canonical extractor once; questions still use the
     // richer analytics-aware route below.
-    if (this.entries && isLikelyFinanceEntry(dto.text)) {
+    if (mode !== 'ADVICE' && this.entries && !dto.replyTo && !dto.history?.length && isLikelyFinanceEntry(dto.text)) {
       const proposal = await this.entries.fromText(input, dto.text, (completed, stage) => stream?.onProgress?.(stage, completed, 3), stream?.signal);
       stream?.onTiming?.({ totalMs: Date.now() - startedAt, contextMs: null, modelMs: null, firstDeltaMs: null, proposalMs: null });
       return {
@@ -65,17 +68,23 @@ export class FinanceUltimateService {
     let providerCalled = false;
     try {
       stream?.onProgress?.('UNDERSTANDING', 1, 4);
+      const greeting = !dto.replyTo && isAssistantGreeting(dto.text);
       const profile = await this.prisma.financeProfile.findUnique({
-        where: { id: input.profileId },
+        where: {
+          id: input.profileId,
+          botIntegrationId: input.botIntegrationId,
+          telegramBotUserId: input.telegramBotUserId,
+        },
         select: {
           defaultCurrency: true,
           timezone: true,
           locale: true,
-          telegramUser: { select: { languageCode: true } },
+          telegramUser: { select: { languageCode: true, runtimeInstanceId: true } },
+          ...(!greeting && financeAssistantProfileFacts),
         },
       });
       if (!profile) throw new BadRequestException('Finance profile not found');
-      const [analytics, accounts, recent] = await Promise.all([
+      const [analytics, accounts, recent] = greeting ? [null, [], []] as const : await Promise.all([
         this.analytics.analytics(
           {
             id: input.profileId,
@@ -83,7 +92,7 @@ export class FinanceUltimateService {
             timezone: profile.timezone,
             workspaceId: input.workspaceId,
           },
-          { period: 'CURRENT_MONTH' },
+          { period: assistantAnalyticsPeriod(dto.text) },
         ),
         this.requireLedger().accounts(
           input.profileId,
@@ -121,10 +130,22 @@ export class FinanceUltimateService {
           profileId: input.profileId,
           botIntegrationId: input.botIntegrationId,
           locale,
+          mode,
           text: dto.text,
           history: dto.history || [],
+          replyTo: dto.replyTo,
           facts: {
-            ...compactAnalyticsFacts(analytics),
+            ...(analytics && compactAnalyticsFacts(analytics)),
+            ...(greeting ? {} : {
+              categories: profile.categories,
+              debts: profile.debts,
+              recurringPayments: profile.recurringPayments,
+              savingsGoals: profile.savingsGoals,
+              investments: profile.investments,
+              limits: profile.limits,
+              reminders: profile.reminders,
+              recentTransfers: profile.transfers,
+            }),
             accountBalances: accounts.slice(0, 100).map((account) => ({
               name: account.name,
               type: account.type,
@@ -149,6 +170,7 @@ export class FinanceUltimateService {
           usageContext: {
             workspaceId: input.workspaceId,
             telegramBotUserId: input.telegramBotUserId,
+            runtimeInstanceId: profile.telegramUser?.runtimeInstanceId,
           },
           onMessageDelta: stream?.onMessageDelta ? (delta) => {
             firstDeltaMs ??= Date.now() - startedAt;
@@ -165,6 +187,8 @@ export class FinanceUltimateService {
           recommendedScreen: route.recommendedScreen,
         };
       }
+      if (mode === 'ADVICE') throw new BadRequestException('Advice chats cannot prepare transactions');
+      stream?.signal?.throwIfAborted();
       stream?.onProgress?.('CHECKING', 4, 4);
       const categoryHint = explicitCategoryHint(dto.text);
       const created = await this.requireProposals().createBatch({

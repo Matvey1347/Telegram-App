@@ -50,6 +50,8 @@ import { FinanceBrowserContextController } from '@consumer-finance/api/http/fina
 import { FinanceLocalDevelopmentController } from '@consumer-finance/api/http/finance-local-development.controller';
 import { FinanceBrowserContextService } from '@consumer-finance/api/http/finance-browser-context.service';
 import { FinanceLocalDevelopmentService } from '@consumer-finance/api/http/finance-local-development.service';
+import { FinanceAssistantChatsController } from '@consumer-finance/api/ultimate/finance-assistant-chats.controller';
+import { FinanceAssistantChatsService } from '@consumer-finance/api/ultimate/finance-assistant-chats.service';
 import { FinanceUltimateController } from '@consumer-finance/api/ultimate/finance-ultimate.controller';
 import { FinanceUltimateService } from '@consumer-finance/api/ultimate/finance-ultimate.service';
 import { FinanceAssistantEntryService } from '@consumer-finance/api/ultimate/finance-assistant-entry.service';
@@ -121,6 +123,7 @@ import { SystemBotBrandingStartupService } from './core/system-bot-branding-star
     FinanceDebtController,
     FinanceRegularPaymentController,
     FinanceUltimateController,
+    FinanceAssistantChatsController,
     FinanceBillingAdminController,
     FinanceAiConfigController,
     FinanceConsumerBillingController,
@@ -184,6 +187,7 @@ import { SystemBotBrandingStartupService } from './core/system-bot-branding-star
     FinanceAiConfigService,
     FinanceTransferService,
     FinanceUltimateService,
+    FinanceAssistantChatsService,
     FinanceAssistantEntryService,
     FinanceProposalService,
     FinanceAiProviderService,

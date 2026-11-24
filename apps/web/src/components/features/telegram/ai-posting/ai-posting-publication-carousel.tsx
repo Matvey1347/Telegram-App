@@ -51,6 +51,8 @@ export function AiPostingPublicationCarousel({
   historyNavigation,
   channelId,
   channelTitle,
+  captionLengthMax,
+  messageLengthMax,
   channelPhotoUrl,
   watermarkPreview,
   customEmojiPacks,
@@ -77,6 +79,8 @@ export function AiPostingPublicationCarousel({
   historyNavigation?: { slotIndex: number; index: number; count: number; onChange: (index: number) => void };
   channelId?: string;
   channelTitle: string;
+  captionLengthMax?: number;
+  messageLengthMax?: number;
   channelPhotoUrl?: string | null;
   watermarkPreview?: AiPostingWatermarkPreviewSettings;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
@@ -210,6 +214,8 @@ export function AiPostingPublicationCarousel({
           <div className="mx-auto w-full max-w-[346px] font-[system-ui] [&_.telegram-preview-text]:text-[13px] [&_.telegram-preview-text]:leading-4">
             <TelegramPostPreview
               channelTitle={channelTitle}
+              captionLengthMax={captionLengthMax}
+              messageLengthMax={messageLengthMax}
               channelPhotoUrl={channelPhotoUrl}
               customEmojiPacks={customEmojiPacks}
               text={edits[key] ?? post.text}

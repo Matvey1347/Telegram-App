@@ -1,3 +1,4 @@
+import type { FinanceInvestmentListItem } from '@telegram-system/shared';
 import {
   BadRequestException,
   Injectable,
@@ -59,16 +60,15 @@ export class InvestmentsService {
     const [items, totalItems] = await this.prisma.$transaction([
       this.prisma.investment.findMany({
         where,
-        include: {
-          workspaceMember: {
-            include: {
-              user: { select: { id: true, name: true, email: true } },
-            },
-          },
-          account: true,
-          transaction: true,
-          assignedMember: WorkspaceService.assignedMemberInclude,
-          createdByUser: WorkspaceService.createdByUserInclude,
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          date: true,
+          notes: true,
+          movementType: true,
+          workspaceMember: { select: { user: { select: { name: true } } } },
+          account: { select: { name: true } },
         },
         orderBy: [{ date: 'desc' }, { id: 'desc' }],
         skip: pagination.skip,
@@ -76,7 +76,10 @@ export class InvestmentsService {
       }),
       this.prisma.investment.count({ where }),
     ]);
-    return createPaginatedResponse(items, totalItems, pagination);
+    const rows: FinanceInvestmentListItem[] = items.map(({ amount, date, ...item }) => ({
+      ...item, amount: amount.toString(), date: date.toISOString(),
+    }));
+    return createPaginatedResponse(rows, totalItems, pagination);
   }
 
   async findOne(userId: string, id: string) {

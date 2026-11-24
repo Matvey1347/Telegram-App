@@ -1,6 +1,19 @@
+import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
+import { Prisma } from '@prisma/client';
+import type { AdCampaignTrackingScope } from '@telegram-system/shared';
 import { BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { normalizeSelectionIds } from './ad-campaign-advertising-sources';
+
+const trackingDefinitions = [
+    ['MAIN', 'Main', 'Default'],
+    ['PUBLIC', 'Public', 'Public'],
+    ['VP', 'VP', 'VP'],
+    ['BOT', 'Bot', 'Bot'],
+    ['TRANSFER', 'Transfer', 'Transfer'],
+    ['NEWSLETTER', 'Newsletter', 'Newsletter'],
+    ['FOLDERS', 'Folders', 'Folders'],
+  ] as const;
 
 export function selectedPromoIds(dto: {
   promoId?: string | null;
@@ -53,12 +66,12 @@ export async function replaceCampaignInviteLinks(
       adCampaignId: campaignId,
       id: { notIn: inviteLinkIds.length ? inviteLinkIds : [''] },
     },
-    data: { adCampaignId: null, lastSyncedAt: new Date() },
+    data: { adCampaignId: null },
   });
   if (!inviteLinkIds.length) return;
   await tx.telegramInviteLink.updateMany({
     where: { workspaceId, id: { in: inviteLinkIds } },
-    data: { adCampaignId: campaignId, lastSyncedAt: new Date() },
+    data: { adCampaignId: campaignId },
   });
 }
 
@@ -88,39 +101,36 @@ export async function replaceCampaignTrackingInviteLinks(
     where: { adCampaignId: campaignId },
     select: {
       inviteLinkId: true,
+      kind: true,
       baselineJoinedCount: true,
       baselineRequestedCount: true,
     },
   });
-  const baselineByLink = new Map<
-    string,
-    { baselineJoinedCount: number; baselineRequestedCount: number }
-  >(existing.map((link: any) => [link.inviteLinkId, link]));
-  await tx.adCampaignBotInviteLink.deleteMany({
-    where: { adCampaignId: campaignId },
+  const existingIds = new Set(existing.map((row: { inviteLinkId: string }) => row.inviteLinkId));
+  const nextIds = new Set(links.map((link: { id: string }) => link.id));
+  const removedIds = existing.filter((row: { inviteLinkId: string }) => !nextIds.has(row.inviteLinkId))
+    .map((row: { inviteLinkId: string }) => row.inviteLinkId);
+  if (removedIds.length) await tx.adCampaignBotInviteLink.deleteMany({
+    where: { adCampaignId: campaignId, inviteLinkId: { in: removedIds } },
   });
-  if (links.length) {
+  const newLinks = links.filter((link: { id: string }) => !existingIds.has(link.id));
+  if (newLinks.length) {
     await tx.adCampaignBotInviteLink.createMany({
-      data: links.map(
-        (link: { id: string; joinedCount: number; requestedCount: number }) => {
-          const baseline = baselineByLink.get(link.id);
-          return {
-            adCampaignId: campaignId,
-            inviteLinkId: link.id,
-            kind,
-            baselineJoinedCount:
-              baseline?.baselineJoinedCount ?? link.joinedCount,
-            baselineRequestedCount:
-              baseline?.baselineRequestedCount ?? link.requestedCount,
-          };
-        },
-      ),
+      data: newLinks.map((link: { id: string; joinedCount: number; requestedCount: number }) => ({
+        adCampaignId: campaignId, inviteLinkId: link.id, kind,
+        baselineJoinedCount: link.joinedCount, baselineRequestedCount: link.requestedCount,
+      })),
       skipDuplicates: true,
     });
   }
+  const changedKind = existing.filter((row: { inviteLinkId: string; kind: string }) => nextIds.has(row.inviteLinkId) && row.kind !== kind)
+    .map((row: { inviteLinkId: string }) => row.inviteLinkId);
+  if (changedKind.length) await tx.adCampaignBotInviteLink.updateMany({
+    where: { adCampaignId: campaignId, inviteLinkId: { in: changedKind } }, data: { kind },
+  });
 }
 
-function trackingInviteLinkIds(channel: any, kind: string) {
+export function trackingInviteLinkIds(channel: any, kind: string) {
   const ids = {
     MAIN: [channel.defaultInviteLinkId],
     PUBLIC: [channel.publicInviteLinkId],
@@ -130,20 +140,21 @@ function trackingInviteLinkIds(channel: any, kind: string) {
     NEWSLETTER: [channel.broadcastInviteLinkId],
     FOLDERS: channel.folderDefaultInviteLinkIds,
   }[kind];
-  if (!ids) throw new BadRequestException('Unknown system link kind');
+  if (!Array.isArray(ids)) throw new BadRequestException('Unknown system link kind');
   return normalizeSelectionIds(ids);
 }
 
 export async function resolveTrackingInviteLinks(
   tx: any,
   workspaceId: string,
-  channelIds: string[],
+  channelIds: string[] | null,
   kind: string,
   excludedChannelId?: string,
+  includeUnconfigured = false,
 ) {
-  const ids = normalizeSelectionIds(channelIds);
-  if (!ids.length) return [];
-  if (excludedChannelId && ids.includes(excludedChannelId)) {
+  const ids = channelIds === null ? null : normalizeSelectionIds(channelIds);
+  if (ids?.length === 0) return [];
+  if (excludedChannelId && ids?.includes(excludedChannelId)) {
     throw new BadRequestException(
       'The campaign channel cannot be a cross-channel destination',
     );
@@ -151,7 +162,7 @@ export async function resolveTrackingInviteLinks(
   const channels = await tx.telegramChannel.findMany({
     where: {
       workspaceId,
-      id: { in: ids },
+      ...(ids ? { id: { in: ids } } : excludedChannelId ? { id: { not: excludedChannelId } } : {}),
       isActive: true,
       archivedAt: null,
       adminLinks: { some: {} },
@@ -167,7 +178,7 @@ export async function resolveTrackingInviteLinks(
       mutualPromotionInviteLinkIds: true,
     },
   });
-  if (channels.length !== ids.length) {
+  if (ids && channels.length !== ids.length) {
     throw new BadRequestException(
       'Destination channels must be owned active channels',
     );
@@ -175,12 +186,42 @@ export async function resolveTrackingInviteLinks(
   const inviteLinkIds = channels.flatMap((channel: any) =>
     trackingInviteLinkIds(channel, kind),
   );
-  if (!inviteLinkIds.length || inviteLinkIds.length < channels.length) {
+  if (!includeUnconfigured && channels.some((channel: any) => !trackingInviteLinkIds(channel, kind).length)) {
     throw new BadRequestException(
       'Every destination channel must have the selected system link',
     );
   }
   return normalizeSelectionIds(inviteLinkIds);
+}
+
+export function savedTrackingScope(value?: Prisma.JsonValue | null): AdCampaignTrackingScope | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || typeof value.kind !== 'string' || !trackingDefinitions.some(([kind]) => kind === value.kind)) return null;
+  if (value.channelIds === null) return { kind: value.kind, channelIds: null };
+  if (!Array.isArray(value.channelIds) || !value.channelIds.every((id) => typeof id === 'string')) return null;
+  return { kind: value.kind, channelIds: value.channelIds as string[] };
+}
+
+export async function updateCampaignTrackingSelection(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  campaignId: string,
+  channelId: string,
+  input: { trackingAllChannels?: boolean; trackingChannelIds?: string[]; trackingLinkKind?: string; botInviteLinkIds?: string[] },
+) {
+  const kind = input.trackingLinkKind || 'BOT';
+  if (!trackingDefinitions.some(([valid]) => valid === kind)) throw new BadRequestException('Unknown system link kind');
+  if (input.trackingAllChannels !== undefined)
+    await acquirePostgresTransactionLock(tx, `campaign-tracking:${workspaceId}`);
+  const channels = input.trackingAllChannels ? null : input.trackingChannelIds;
+  const links = channels !== undefined
+    ? await resolveTrackingInviteLinks(tx, workspaceId, channels, kind, channelId, input.trackingAllChannels !== undefined)
+    : normalizeSelectionIds(input.botInviteLinkIds || []);
+  await replaceCampaignTrackingInviteLinks(tx, workspaceId, campaignId, links, kind);
+  if (input.trackingAllChannels !== undefined)
+    await tx.adCampaign.update({
+      where: { id: campaignId, workspaceId },
+      data: { trackingScope: channels === null || channels?.length ? { kind, channelIds: channels } : Prisma.DbNull },
+    });
 }
 
 export async function trackingInviteLinks(
@@ -208,27 +249,18 @@ export async function trackingInviteLinks(
     },
     orderBy: { title: 'asc' },
   });
-  const definitions = [
-    ['MAIN', 'Main', 'Default'],
-    ['PUBLIC', 'Public', 'Public'],
-    ['VP', 'VP', 'VP'],
-    ['BOT', 'Bot', 'Bot'],
-    ['TRANSFER', 'Transfer', 'Transfer'],
-    ['NEWSLETTER', 'Newsletter', 'Newsletter'],
-    ['FOLDERS', 'Folders', 'Folders'],
-  ] as const;
   return {
-    kinds: definitions
+    kinds: trackingDefinitions
       .map(([kind, label, tag]) => ({
         kind,
         label,
         tag,
         channels: channels
-          .filter((channel) => trackingInviteLinkIds(channel, kind).length > 0)
           .map((channel) => ({
             id: channel.id,
             title: channel.title,
             photoUrl: channel.photoUrl,
+            hasSystemLink: trackingInviteLinkIds(channel, kind).length > 0,
           })),
       }))
       .filter((kind) => kind.channels.length),

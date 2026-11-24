@@ -21,14 +21,16 @@ import {
   TelegramCardMenuAction,
 } from "../telegram/telegram-card-actions-menu";
 
-import { SupportCardLink } from "./telegram-support-inbox";
+import { BotSupportPanel } from "./telegram-support-inbox";
+import { BotAudienceMetrics } from "./bot-audience-metrics";
+import { SupportBotIdentity } from "./support-bot-identity";
 
 export function ConfiguredBotCards({
   support,
-  onSupport,
+  children,
 }: {
   support?: SupportBotView;
-  onSupport?: () => void;
+  children?: ReactNode;
 }) {
   const qc = useQueryClient();
   const { pushToast } = useAppToast();
@@ -52,57 +54,49 @@ export function ConfiguredBotCards({
     },
     onError: () => pushToast("Could not update the system bot.", "error"),
   });
-  if (overview.isLoading) return null;
-  if (overview.isError) {
-    return (
-      <Card className="border-rose-900/70 bg-rose-950/20">
-        <p className="text-sm text-rose-200">
-          Could not load environment-managed bot analytics.
-        </p>
-        <Button
-          className="mt-3"
-          variant="secondary"
-          onClick={() => void overview.refetch()}
-        >
-          Retry
-        </Button>
-      </Card>
-    );
-  }
-  if (!overview.data?.systemBot?.runtimes.length) return null;
+  const systemBot = overview.data?.systemBot;
+  if (!children && !overview.isError && !systemBot?.runtimes.length)
+    return null;
   const refresh = async () => {
     await configuredBotsApi.refreshSystemAvatars();
     await overview.refetch();
   };
   return (
     <section aria-label="Environment-managed bots" className="space-y-3">
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-lg font-semibold text-white">
-              Environment-managed bots
-            </h2>
-          </div>
-        </div>
-      </div>
-      <div className="grid gap-4 xl:grid-cols-2">
-        {overview.data.systemBot ? (
+      <h2 className="text-lg font-semibold text-white">
+        Environment-managed bots
+      </h2>
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        {systemBot?.runtimes.length ? (
           <SystemBotCard
-            data={overview.data.systemBot}
+            data={systemBot}
             avatarRefreshKey={overview.dataUpdatedAt}
             onRefresh={refresh}
             onEdit={setEditingEnvironment}
             support={support}
-            onSupport={onSupport}
           />
+        ) : overview.isError ? (
+          <Card className="border-rose-900/70 bg-rose-950/20">
+            <p className="text-sm text-rose-200">
+              Could not load system bot analytics.
+            </p>
+            <Button
+              className="mt-3"
+              variant="secondary"
+              onClick={() => void overview.refetch()}
+            >
+              Retry
+            </Button>
+          </Card>
         ) : null}
+        {children}
       </div>
       {editingEnvironment ? (
         <ConfiguredSystemBotProfileModal
           key={editingEnvironment}
           open
           applicationType="NONE"
-          runtimes={overview.data.systemBot?.runtimes ?? []}
+          runtimes={systemBot?.runtimes ?? []}
           environment={editingEnvironment}
           saving={updateProfile.isPending}
           onClose={() => setEditingEnvironment(null)}
@@ -124,7 +118,6 @@ function SystemBotCard({
   onRefresh,
   onEdit,
   support,
-  onSupport,
 }: {
   data: NonNullable<
     Awaited<ReturnType<typeof configuredBotsApi.overview>>["systemBot"]
@@ -132,7 +125,6 @@ function SystemBotCard({
   avatarRefreshKey: number;
   onRefresh: () => Promise<void>;
   support?: SupportBotView;
-  onSupport?: () => void;
   onEdit: (environment: "LOCAL" | "PRODUCTION") => void;
 }) {
   const [environment, setEnvironment] = useState<"LOCAL" | "PRODUCTION">(
@@ -151,6 +143,7 @@ function SystemBotCard({
       environment={environment}
       onEnvironmentChange={setEnvironment}
       avatarRefreshKey={avatarRefreshKey}
+      support={support}
       actions={
         <TelegramCardActionsMenu label="System bot actions">
           <TelegramCardMenuAction
@@ -166,9 +159,11 @@ function SystemBotCard({
         </TelegramCardActionsMenu>
       }
     >
-      <Metric label="Registered" value={data.analytics.registeredUsers} />
-      <Metric label="Active · 30 days" value={data.analytics.activeUsers} />
-      {onSupport && <SupportCardLink bot={support} onOpen={onSupport} />}
+      <BotAudienceMetrics
+        label="System bot audience"
+        registered={data.analytics.registeredUsers}
+        active={data.analytics.activeUsers}
+      />
     </BotAnalyticsCard>
   );
 }
@@ -181,6 +176,7 @@ function BotAnalyticsCard({
   onEnvironmentChange,
   avatarRefreshKey,
   actions,
+  support,
   children,
 }: {
   title: string;
@@ -198,57 +194,66 @@ function BotAnalyticsCard({
   onEnvironmentChange: (environment: TelegramBotRuntimeEnvironment) => void;
   avatarRefreshKey: number;
   actions?: ReactNode;
+  support?: SupportBotView;
   children: ReactNode;
 }) {
   const runtime = runtimes.find((item) => item.environment === environment);
+  const [supportSelected, setSupportSelected] = useState(false);
+  const showSupport = supportSelected;
   return (
     <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-3 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <BotRuntimeAvatar
-            type={appType}
-            avatarUrl={runtime?.avatarUrl}
-            refreshKey={avatarRefreshKey}
-          />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-semibold text-white">{title}</h3>
-              <span
-                className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
-                  appType === "FINANCE"
-                    ? "border-emerald-800 bg-emerald-950/50 text-emerald-300"
-                    : "border-sky-800 bg-sky-950/50 text-sky-300"
-                }`}
-              >
-                {appType === "FINANCE" ? "Finance bot" : "System bot"}
-              </span>
+      {showSupport ? (
+        <SupportBotIdentity product="NEXELOQ" bot={support} />
+      ) : (
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <BotRuntimeAvatar
+              type={appType}
+              avatarUrl={runtime?.avatarUrl}
+              refreshKey={avatarRefreshKey}
+            />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-semibold text-white">{title}</h3>
+                <span
+                  className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                    appType === "FINANCE"
+                      ? "border-emerald-800 bg-emerald-950/50 text-emerald-300"
+                      : "border-sky-800 bg-sky-950/50 text-sky-300"
+                  }`}
+                >
+                  {appType === "FINANCE" ? "Finance bot" : "System bot"}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-neutral-500">
+                {runtime?.username
+                  ? `@${runtime.username.replace(/^@/, "")}`
+                  : "Not configured"}
+              </p>
             </div>
-            <p className="mt-0.5 text-xs text-neutral-500">
-              {runtime?.username
-                ? `@${runtime.username.replace(/^@/, "")}`
-                : "Not configured"}
-            </p>
           </div>
+          {actions}
         </div>
-        {actions}
-      </div>
+      )}
       <BotRuntimeEnvironmentTabs
         environment={environment}
         availableEnvironments={runtimes.map((item) => item.environment)}
-        onChange={onEnvironmentChange}
+        onChange={(next) => {
+          onEnvironmentChange(next);
+          setSupportSelected(false);
+        }}
+        support={{
+          selected: supportSelected,
+          open: support?.open,
+          needsReply: support?.needsReply,
+          onSelect: () => setSupportSelected(true),
+        }}
       />
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">{children}</div>
+      {showSupport ? (
+        <BotSupportPanel bot={support} />
+      ) : (
+        <div className="mt-3">{children}</div>
+      )}
     </article>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className="mt-1 font-semibold tabular-nums text-white">
-        {value.toLocaleString()}
-      </p>
-    </div>
   );
 }

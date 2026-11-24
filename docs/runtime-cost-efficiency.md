@@ -69,6 +69,14 @@ a recurring database query that merely asks whether work appeared is not.
 Job output is one aggregate summary (considered, skipped, processed, changed,
 failures, duration), not an INFO record per item.
 
+### AI Posting Autopilot activity
+
+The channel's Autopilot status response reads up to ten recent runs, with up to
+eight recorded stages per run, from the existing workspace and channel index.
+The same read serves page entry, return to the tab and the refresh action.
+The journal reuses stored run and stage records. Opening it for one channel
+does the same amount of work whether the workspace has two channels or 100.
+
 ## Database, logging and retention
 
 **Unchanged state means no write.** This applies to metrics, sync results,
@@ -188,3 +196,14 @@ Cost-sensitive handoffs include: idle behavior; recurring jobs; estimated DB
 queries/writes and external requests; 100-channel estimate; table/retention
 impact; Railway CPU/RAM/network impact; cost reductions made; and any remaining
 correctness-over-cost tradeoff.
+
+### Ad campaign request tracking
+
+Cross-channel tracking keeps its scope and opening counters separately from the
+campaign's acquisition links. The scheduled workspace channel sync attaches
+newly available destinations in one batch and forces an invite refresh only for
+channels with tracked links. The existing sync reads up to 12 tracked links per
+channel that were missing from the catalog or had incomplete counters. Each
+fallback requests a one-row importer page when Telegram omits an aggregate.
+There is no additional timer or idle poll. Existing invite snapshots are reused
+for attribution and completed tracking windows keep their historical counters.

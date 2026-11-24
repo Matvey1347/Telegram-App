@@ -17,9 +17,9 @@ Configure these values in the normal local or deployment environment (never comm
 | `WEB_PUSH_VAPID_SUBJECT`, `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY` | PWA Push | Optional unless push delivery is selected. |
 | `TELEGRAM_SYSTEM_BOT_ENVIRONMENT`, `TELEGRAM_SYSTEM_BOT_LOCAL_USERNAME`, `TELEGRAM_SYSTEM_BOT_LOCAL_TOKEN`, `TELEGRAM_SYSTEM_BOT_LOCAL_WEBHOOK_SECRET` | Local System Bot notifications | Select the environment and configure its matching credentials. Production variants use the corresponding `_PRODUCTION_` names. |
 
-The OpenAI key is consumed only by the existing AI Gateway. It is used for both text and image requests; there is no separate image-provider key in this integration. Workspace and category enablement, provider/model selection, and workspace/category budget limits are configured in Operations > AI. AI Posting additionally accepts per-channel daily and monthly USD budgets; blank values leave the channel-specific cap unset while existing workspace/category caps continue to apply. An administrator can explicitly enable “AI Posting без денежных лимитов” in Operations > AI for a workspace. This removes workspace, category, and channel monetary admission caps for AI Posting only, for both manual and enabled automatic work; other AI categories retain their caps. Usage and reservations remain recorded, and provider, concurrency, authorization, and automatic enablement checks still apply. Disabling the option restores the saved limits. AI Posting consumption continues to count in workspace spending totals.
+The OpenAI key is consumed only by the existing AI Gateway. It is used for both text and image requests; there is no separate image-provider key in this integration. Workspace and category enablement, provider/model selection, and workspace/category budget limits are configured in Operations > AI. AI Posting additionally accepts per-channel daily and monthly USD budgets; blank values leave the channel-specific cap unset while existing workspace/category caps continue to apply. An administrator can explicitly enable “AI Posting без денежных лимитов” in Operations > AI for a workspace. This removes workspace and category monetary admission caps for AI Posting only. Manual test runs can also bypass the channel cap. Autopilot also enforces the channel budget when one was configured. Usage and reservations remain recorded, and provider, concurrency, authorization, and automatic enablement checks still apply. Disabling the option restores the saved limits. AI Posting consumption continues to count in workspace spending totals.
 
-Image behavior is selected per channel in AI Posting settings. **Search first** searches enabled sources and open catalogs before requesting a generated image. **AI generation** generates through the existing `TELEGRAM_POSTING_IMAGE` Gateway category. **Hybrid** assigns search and AI slots according to the configured percentage. A search slot may fall back to AI generation. In a multi-post batch that prioritizes search, reserved AI slots and fallbacks together use at most half the batch. Text is retained when the quota is exhausted. Broken external URLs are not saved to a post. B2 credentials are needed to persist generated/downloaded assets. The chosen media preference is stored with each new preview. For a preference with references, hybrid mode generates with its bounded reference sheet (up to eight images, each at most 2 MB) instead of choosing an unrelated stock image; media retries use the same preference. When the channel-avatar option is enabled, the stored avatar is applied as a watermark; a missing or unreadable avatar is reported rather than silently omitted. Historical previews without a saved preference are marked as unknown until media is regenerated.
+Image behavior is selected per channel in AI Posting settings. Hybrid starts 80% of slots with search by default. Search tests multiple English descriptions and checks relevance, resolution and visible watermarks, as well as duplicates against nearby runs and the current batch. When a configured source has no match, search can use the open catalog. If no candidate passes, image generation provides a topic-specific illustration. Images that repeat or fail local quality checks get one alternative generation attempt, subject to shared provider admission. Failed slots stay incomplete in the test history and cannot be approved, saved or sent.
 
 ### PWA Push setup
 
@@ -57,27 +57,27 @@ pnpm dev:nexeloq
 
 ## Runtime behavior
 
-Autopilot creates and schedules ordinary `TelegramManagedPost` records through the existing planner and publication pipeline. It does not bypass the existing publication mechanism. Stop Autopilot to prevent further replenishment; existing drafts and scheduled posts remain intact. Daily/monthly AI limits block new paid generation after the applicable budget is exhausted, while already generated drafts and scheduled publications continue through the normal publishing path.
+Open AI Posting → Autopilot and review the assigned publication plan. Activation requires saved audience and editorial settings and active CONTENT slots. Autopilot schedules ready drafts even if automatic AI generation is disabled in Operations → AI. The AI gateway applies existing workspace, category and configured channel limits when automatic generation is available.
+
+The reserve is approximately 50 days at the midpoint of the assigned plan minimum and maximum, capped at 150 ready drafts. Required slots are used daily, and optional slots every second local day. Complete editor drafts with text and images are eligible alongside approved AI drafts. Autopilot fills empty CONTENT slots when the next 10 days contain a gap, with a persistent refill horizon of up to 20 days ahead. The canonical slot reservation and publication path keeps existing ads, mutual promotions and occupied slots intact. Each due run starts at most 10 new posts and attempts at most 40 slot assignments for one channel. While replenishing, another run can start after two hours. Fully stocked channels are checked daily and failed work backs off. Stop prevents new work once the active operation returns. Drafts and accepted schedules stay in place.
+
+The worker weights underrepresented editorial categories using up to 300 recent reviewed drafts and published/scheduled posts. It uses normalized engagement from comparable organic posts when a rubric has enough observations. Performance can move a rubric up or down one place in the usage counts. Unsubscribes are not attributed to individual posts. The group report identifies the channel, created and scheduled counts, latest filled slot, covered days, rubrics, spheres and the confirmed cost by stage. Search cost covers paid search calls, model tokens and the visual review based on the existing AI ledger. The report marks operations with unknown pricing separately. A workspace can enable multiple channels, each with its own report.
+
+The existing due scheduler stays idle when there is no enabled work or pending notification delivery. For 100 active channels, each due occurrence handles one channel, reads bounded slot and editorial data, and uses the global AI and publishing admission paths. Report receipts are retained for 90 days. No browser polling or new timer is required.
 
 Analytics use the detailed `AiOperation` ledger, filtered by workspace, channel, date, mode, and AI category. The selectable range is limited to 90 days, matching the detailed-operation retention policy. Planning cost is allocated across the preview publications for per-post display while the underlying planning operation is counted once in aggregate ledger spend. Failed and retried operations remain part of spend when the provider reports a charge.
 
 ### Media preferences and image sources
 
-Search sources are stored per channel and included in settings import/export as
-`imageSearchSources`. The list contains HTTP(S) URLs. Wikimedia Commons has a native catalog adapter.
-Pinterest and other websites use Brave Image Search restricted to their domains and requires `BRAVE_SEARCH_API_KEY` on the API. Without that setting
-Pinterest is reported unavailable with an explicit configuration message in search details, and other enabled sources proceed. Selecting
-Pinterest does not establish an image reuse license.
+Search sources are stored per channel in Media and in the import/export `imageSearchSources` field. They are tried in the saved order. Pinterest and other configured websites use the existing OpenAI API through Responses image search, restricted to that site's domain. Pinterest gets up to two distinct English queries. Wikimedia Commons uses its native catalog and license filtering. After the configured list is exhausted, one broader OpenAI search and the open catalog are available before generation. Openverse and native Wikimedia catalog results are limited to public-domain or CC0 media. A selected preference supplies a general concept, a dedicated keyword and selection brief for search, a dedicated composition brief for generation, and up to eight references according to its Search, Generation or Both setting. In Hybrid mode, a Generation-only preference goes directly to generation. Available reference attachments are reused for a batch. If every configured attachment fails, the applicable media path reports a reference error.
 
-Search and Hybrid modes respect the configured source order. A Pinterest search begins with up to three distinct English phrases. With Pinterest first and Commons second, Commons is tried after the initial Pinterest shortlist fails. The automatic catalog uses Openverse and can fall back to Wikimedia Commons. Catalog results are restricted to public-domain or CC0 media. A selected preference supplies a general concept, a dedicated keyword and selection brief for search, a dedicated composition brief for generation, and up to eight references according to its Search, Generation or Both setting. In Hybrid mode, a Generation-only preference goes directly to generation. Available reference attachments are reused for a batch. If every configured attachment fails, the applicable media path reports a reference error.
-
-When references are available for search, up to three viable images enter one metered visual review. The review can select a matching image or reject the shortlist. Search-first mode can request a generated image after exhausting the search. Hybrid search slots keep the search-first order on retries and fall back to generation. A preference marked Search supplies guidance and references to searching only. A Search preference explicitly linked to an assigned sphere or subsphere requires a real image. When possible, Hybrid swaps that slot with another search slot to preserve its planned mix. For other search preferences with fallback enabled, generation uses the post topic without the search references. For references with a generation brief, the visual review can select a single reference for the edit request and describe the framing, light and texture even when the shortlist is empty. The channel's existing URL and SHA-256 checks remain in use. New AI Posting images also store a visual fingerprint in run history to recognize resized or re-encoded copies.
+When references are available for search, up to three viable images enter one metered visual review. The review can select a matching image or reject the shortlist. Search-first mode can request a generated image after exhausting the search. Hybrid search slots keep the search-first order on retries and fall back to generation. A preference marked Search supplies guidance and references to searching only. A Search preference linked to a sphere or subsphere starts with real images. If search fails, the fallback is a topic illustration that must not imitate documentary evidence. When possible, Hybrid swaps that slot with another search slot to preserve its planned mix. For other search preferences with fallback enabled, generation uses the post topic without the search references. For references with a generation brief, the visual review can select a single reference for the edit request and describe the framing, light and texture even when the shortlist is empty. The channel's existing URL and SHA-256 checks remain in use. New AI Posting images also store a visual fingerprint in run history to recognize resized or re-encoded copies.
 
 Planning uses the configured assignments and recent usage. The generator reads up to eight recent runs in one channel-scoped query to favor underused subspheres and rubrics. Lengths rotate across batches, and an ultra-short quote can select its matching rubric and subsphere.
 
-After topic planning, one test run can contain up to ten publications. All publication pipelines can start text work after planning. Up to five media pipelines run concurrently, so a slow search does not delay text for other slots. Each completed preview is saved immediately and final results retain topic order. A two-choice draft returns the labels separately, and the server formats the reaction lines. Media links in model-authored copy are removed before caption validation. The progress bar counts settled publications, and the stage list tracks each publication independently. The batch shares reference downloads and image history, and reserves image identities and fallback slots to prevent reuse and quota overruns. AI gateway admission and provider timeouts remain in effect. The batch waits for a sibling that passed admission before retrying a capacity rejection. When progress is read, a background run with four minutes of inactivity is reported as interrupted. Starting a new run clears its active status. No recurring work is added for idle channels.
+After topic planning, one test run can contain up to ten publications. All publication pipelines can start text work after planning. Up to five media pipelines run concurrently, so a slow search does not delay text for other slots. Each completed preview is saved immediately and final results retain topic order. A two-choice draft returns the labels separately, and the server formats the reaction lines. Media links in model-authored copy are removed before caption validation. The progress bar counts settled publications, and the stage list tracks each publication independently. The batch shares reference downloads and image history, and reserves image identities to prevent reuse. AI gateway admission and provider timeouts remain in effect. The batch waits for a sibling that passed admission before retrying a capacity rejection. When progress is read, a background run with four minutes of inactivity is reported as interrupted. Starting a new run clears its active status. No recurring work is added for idle channels.
 
-Catalog search uses bounded rounds with at most three parallel queries and six candidate downloads per round. The first pass covers the configured sources in order. Alternate queries and a later result window use the first three sources. Each round can review one shortlist. Generation runs only where the selected mode allows it. All AI requests use the existing budget and usage ledger. Media search checkpoints are written when another search round begins. This path adds no polling or timers.
+Each website search uses one metered OpenAI tool call and a bounded list of up to six candidates. Native catalog lookups and the existing visual review use the same candidate limits. Search calls and model tokens use the existing gateway admission, budgets, and ledger. Each shortlist is evaluated before continuing to the next source. Media search checkpoints reuse existing run progress. No background polling or timer is added for idle channels.
 
 ## Verification
 
@@ -134,7 +134,7 @@ Stop marks a manual background run as canceled. Clear also stops manual
 background runs and removes test history after confirmation. Both prevent
 later stages from starting. An already submitted provider request can still
 finish and be billed. If the API process exits, an abandoned run can be stopped
-or cleared. After 30 minutes without a saved checkpoint, it is shown as
+or cleared. After four minutes without a saved checkpoint, it is shown as
 interrupted. The API does not replay paid operations from a dead process.
 
 The resume read checks workspace membership and one run by ID and sends back
@@ -188,3 +188,67 @@ The active console tracks the run ID returned on acceptance and refreshes
 history as previews appear or the run completes. History and progress reads
 bypass the HTTP response cache. Expanding image search adds bounded work only
 to active search slots, with no changes to idle reads, retention, or workers.
+
+### Detailed channel analysis
+
+From a channel's AI Posting settings, open **Детальный анализ канала** and
+start the analysis. The operation reads the full synced organic history for
+coverage and aggregate statistics, including the length distribution and median
+normalized performance by length band. It supplies the model with a bounded
+chronological sample, recent posts, and strong and weak examples with
+normalized 24-hour performance. Advertisements, mutual promotions and
+posts excluded from analytics are excluded. The visual step uses up to eight
+available images. The report lists actual high and low examples from the database alongside
+the qualitative interpretation and visual observations.
+
+Review the report and download the JSON if needed. **Подставить в настройки**
+loads the proposal into the existing editor. Review the channel idea,
+editorial voice, media direction and sphere weights, then save explicitly.
+Existing taxonomy identities, sources, configured endings, and publication
+controls are reused. A settings version check rejects a stale save. Use the
+test console to generate ten previews, then verify the range of subjects,
+voice, sources and the relation between each image and caption. Test previews
+remain pending until reviewed.
+
+Sphere weights are relative integers from 0 through 100. A positive weight
+activates proportional planning for the channel, an unspecified root counts
+as 1, and an explicit zero skips that root. Channels without positive
+weights retain the existing primary/secondary rotation. Analysis estimates
+weights from the classified chronological sample. The editor can adjust
+them without changing taxonomy IDs.
+
+The action is manual and scoped to one workspace and channel. Two bounded
+evidence queries return full-history aggregates and at most 79 short samples.
+The operation downloads up to eight images and makes two text AI requests
+plus one visual request when reference images exist and one additional text
+request when existing taxonomy has gaps. It reuses AI Gateway
+admission and receipts. Analysis itself adds no setting writes, recurring
+jobs, polling, or report retention. With 100 saved channels idle, it adds
+zero database or provider work. Running it individually on all 100 means up
+to 400 metered AI operations and up to 800 image reads. Database work per
+request scales with that single channel's synced history, with no per-post
+network or database access loops.
+
+### Visual variety
+
+The **Чередовать формы изображений** setting rotates five forms across the
+publication sequence: still life, editorial illustration, landscape, visual
+metaphor and documentary photography. A ten-slot batch assigns two of each.
+The setting controls composition independently of Hybrid search percentages.
+When enabled, assigned forms take precedence over sphere-level image briefs.
+Quote attribution does not require a portrait. Use the channel's rubric to
+describe preferred authors and verification requirements.
+
+The channel analysis includes up to four examples from editorial drafts and
+scheduled posts in its existing eight-image limit. The generation pipeline
+checks found images and generated images against the assigned form, relevance
+and natural finish. Generated images receive at most one existing bounded
+quality retry. A retry without a new brief keeps the original form; a manual
+revision can specify its own scene.
+
+This adds two bounded channel-scoped reads during manual channel analysis and
+up to two metered visual checks per slot that reaches image generation. A
+ten-slot run therefore adds at most 20 visual checks. One such batch across
+100 opted-in channels adds at most 2,000 checks, subject to existing admission
+and budgets. Idle workloads, storage retention and publication scheduling
+use their existing paths.

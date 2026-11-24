@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { SupportProduct } from '@telegram-system/shared';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { resolve4 } from 'node:dns/promises';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   isProductionEnvironment,
@@ -14,11 +15,39 @@ import {
 } from '../../../config/deployment-config';
 import { TelegramBotApiClient } from '../../../telegram/shared/bot/telegram-bot-api.client';
 
+import { isTelegramUsername } from '../../../telegram/shared/imports/telegram-import.helpers';
+
 export const SUPPORT_PRODUCTS = ['NEXELOQ', 'GROSHLY'] as const;
 const prefixes = {
   NEXELOQ: 'TELEGRAM_SYSTEM_BOT',
   GROSHLY: 'FINANCE_BOT',
 } as const;
+
+/** An expired local tunnel may be replaced, but a live or remote owner wins. */
+export async function isStaleLocalSupportWebhook(
+  previous: string,
+  next: string,
+  resolve = resolve4,
+) {
+  let oldUrl: URL;
+  let newUrl: URL;
+  try {
+    oldUrl = new URL(previous);
+    newUrl = new URL(next);
+  } catch {
+    return false;
+  }
+  const quickTunnel = /^[a-z0-9-]+\.trycloudflare\.com$/i;
+  if (oldUrl.protocol !== 'https:' || newUrl.protocol !== 'https:' ||
+    !quickTunnel.test(oldUrl.hostname) || !quickTunnel.test(newUrl.hostname) ||
+    oldUrl.hostname === newUrl.hostname || oldUrl.pathname !== newUrl.pathname) return false;
+  try {
+    await resolve(oldUrl.hostname);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOTFOUND';
+  }
+}
 
 @Injectable()
 export class SupportBotsService implements OnApplicationBootstrap {
@@ -77,6 +106,13 @@ export class SupportBotsService implements OnApplicationBootstrap {
     return { workspaceId, username, token, secret, botId };
   }
 
+  publicUsername(product: SupportProduct, workspaceId: string) {
+    const bot = this.resolve(product);
+    return bot?.workspaceId === workspaceId && isTelegramUsername(bot.username)
+      ? bot.username
+      : null;
+  }
+
   authenticate(product: SupportProduct, signature?: string) {
     const bot = this.resolve(product);
     const expected = Buffer.from(bot?.secret ?? '');
@@ -101,13 +137,13 @@ export class SupportBotsService implements OnApplicationBootstrap {
     )
       return;
     for (const product of SUPPORT_PRODUCTS) {
-      void this.register(product, origin).catch(() =>
+      void this.register(product, origin, owner === 'local' && !isProductionEnvironment()).catch(() =>
         this.logger.warn(`Could not register ${product} support webhook`),
       );
     }
   }
 
-  private async register(product: SupportProduct, origin: string) {
+  private async register(product: SupportProduct, origin: string, replaceExpired: boolean) {
     const bot = this.resolve(product);
     if (!bot) return;
     const url = `${origin}/api/telegram-support/webhooks/${product}`;
@@ -124,11 +160,13 @@ export class SupportBotsService implements OnApplicationBootstrap {
     if (identity.username?.toLowerCase() !== bot.username.toLowerCase())
       throw new Error('Support bot username mismatch');
     if (existing.url && existing.url !== url) {
-      this.logger.warn(
-        `${product} support webhook belongs to another endpoint`,
-      );
-      return;
+      const stale = replaceExpired && typeof existing.url === 'string' &&
+        await isStaleLocalSupportWebhook(existing.url, url);
+      if (!stale || (await this.telegram.getWebhookInfo(bot.token)).url !== existing.url) {
+        this.logger.warn(`${product} support webhook belongs to another endpoint`);
+        return;
+      }
     }
-    await this.telegram.setWebhook(bot.token, url, bot.secret, ['message']);
+    await this.telegram.setWebhook(bot.token, url, bot.secret, ['message', 'message_reaction']);
   }
 }

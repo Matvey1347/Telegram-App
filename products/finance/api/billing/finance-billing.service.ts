@@ -62,12 +62,18 @@ export class FinanceBillingService implements OnApplicationBootstrap {
   }): Promise<ConsumerBillingCatalog> {
     const [catalog, current, paymentEvents, usedIntro] = await Promise.all([
       this.billing.catalog(input.botIntegrationId, input.telegramBotUserId),
-      this.entitlements.resolve(input),
+      this.entitlements.resolveForBilling(input),
       this.prisma.botBillingEvent.findMany({
         where: {
           botIntegrationId: input.botIntegrationId,
-          type: { in: ["PAYMENT_SUCCEEDED", "PAYMENT_FAILED"] },
           subscription: { telegramBotUserId: input.telegramBotUserId },
+          OR: [
+            { type: { in: ["PAYMENT_SUCCEEDED", "PAYMENT_FAILED"] } },
+            {
+              type: "GRANT_CREATED",
+              subscription: { source: { in: ["GIFT", "MANUAL"] } },
+            },
+          ],
         },
         orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
         take: 20,
@@ -90,6 +96,72 @@ export class FinanceBillingService implements OnApplicationBootstrap {
         select: { id: true },
       }),
     ]);
+    const { activeSubscriptions, ...entitlements } = current;
+    const mode = isProductionEnvironment() ? "LIVE" : "TEST";
+    const grants = activeSubscriptions.flatMap(
+      (subscription) => subscription.grants,
+    );
+    const gift = grants.length
+      ? {
+          expiresAt: grants.some((grant) => grant.expiresAt === null)
+            ? null
+            : new Date(
+                Math.max(...grants.map((grant) => Number(grant.expiresAt))),
+              ).toISOString(),
+        }
+      : null;
+    const paid = activeSubscriptions
+      .filter(
+        (subscription) =>
+          subscription.source === "STRIPE" &&
+          subscription.providerSubscription &&
+          subscription.currentPeriodEnd,
+      )
+      .sort(
+        (a, b) =>
+          Number(b.providerSubscription?.mode === mode) -
+            Number(a.providerSubscription?.mode === mode) ||
+          Number(b.currentPeriodEnd) - Number(a.currentPeriodEnd),
+      )[0];
+    const provider = paid?.providerSubscription;
+    const canManage = provider?.mode === mode;
+    const renewal =
+      paid &&
+      provider &&
+      canManage &&
+      !paid.cancelAtPeriodEnd &&
+      paid.status === "ACTIVE"
+        ? await this.billing
+            .stripeRenewal({
+              botIntegrationId: input.botIntegrationId,
+              mode: provider.mode,
+              providerSubscriptionId: provider.providerSubscriptionId,
+            })
+            .catch(() => null)
+        : null;
+    const stripe = paid?.currentPeriodEnd
+      ? {
+          id: paid.id,
+          currentPeriodEnd: paid.currentPeriodEnd.toISOString(),
+          cancelAtPeriodEnd: paid.cancelAtPeriodEnd || paid.status !== "ACTIVE",
+          canManageRenewal: canManage && paid.status === "ACTIVE",
+          canChangePlan:
+            canManage &&
+            paid.status === "ACTIVE" &&
+            !paid.cancelAtPeriodEnd &&
+            provider?.providerStatus !== "trialing" &&
+            paid.plan?.code.toUpperCase() === "PRO",
+          interval:
+            provider?.providerStatus === "trialing"
+              ? "DAY"
+              : (renewal?.interval ?? paid.interval),
+          intervalCount:
+            provider?.providerStatus === "trialing"
+              ? paid.intervalCount
+              : (renewal?.intervalCount ?? paid.intervalCount),
+          renewal,
+        }
+      : null;
     const persisted = new Map(
       catalog.plans.map((plan) => [plan.code.toUpperCase(), plan]),
     );
@@ -155,11 +227,10 @@ export class FinanceBillingService implements OnApplicationBootstrap {
     return {
       ...catalog,
       providers: catalog.providers.filter(
-        (provider) =>
-          provider.provider !== "STRIPE" ||
-          provider.mode === (isProductionEnvironment() ? "LIVE" : "TEST"),
+        (provider) => provider.provider !== "STRIPE" || provider.mode === mode,
       ),
-      current,
+      current: entitlements,
+      activeAccess: { gift, stripe },
       plans,
       subscriptions: catalog.subscriptions.map((subscription) => ({
         ...subscription,
@@ -167,7 +238,12 @@ export class FinanceBillingService implements OnApplicationBootstrap {
       })),
       paymentHistory: paymentEvents.map((event) => ({
         id: event.id,
-        status: event.type === "PAYMENT_SUCCEEDED" ? "SUCCEEDED" : "FAILED",
+        status:
+          event.type === "GRANT_CREATED"
+            ? "GIFTED"
+            : event.type === "PAYMENT_SUCCEEDED"
+              ? "SUCCEEDED"
+              : "FAILED",
         provider: event.provider,
         amountMinor: event.amountMinor,
         currency: event.currency,
@@ -217,6 +293,38 @@ export class FinanceBillingService implements OnApplicationBootstrap {
 
   stripePortal(input: Parameters<BotBillingService["stripePortal"]>[0]) {
     return this.billing.stripePortal(input);
+  }
+
+  async changeStripePlan(
+    input: Parameters<BotBillingService["changeStripePlan"]>[0],
+  ) {
+    const price = await this.prisma.botPlanPrice.findFirst({
+      where: {
+        id: input.priceId,
+        isActive: true,
+        isPublic: true,
+        currency: "UAH",
+        interval: { in: ["MONTH", "YEAR"] },
+        plan: {
+          botIntegrationId: input.botIntegrationId,
+          code: "PRO",
+          isActive: true,
+        },
+      },
+      select: {
+        currency: true,
+        interval: true,
+        intervalCount: true,
+        amountMinor: true,
+      },
+    });
+    if (
+      !price ||
+      !["MONTH", "YEAR"].includes(price.interval) ||
+      !this.isCanonicalPrice("PRO", price)
+    )
+      throw new BadRequestException("Choose a recurring Groshly Plus plan");
+    return this.billing.changeStripePlan(input);
   }
 
   syncCatalog(userId: string, botIntegrationId: string) {

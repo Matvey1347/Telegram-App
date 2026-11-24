@@ -1,4 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment -- Jest mocks intentionally use partial canonical sync results. */
+jest.mock('../../growth/ad-campaigns/ad-campaign-tracking-sync', () => ({
+  attachNewCampaignTrackingLinks: jest.fn(),
+}));
+
 import { TelegramWorkspaceFullSyncService } from './telegram-workspace-full-sync.service';
 
 function channel(
@@ -77,6 +81,25 @@ describe('TelegramWorkspaceFullSyncService', () => {
       skipped: 1,
     });
     expect(result.failures[0].reason).not.toContain('private-value');
+  });
+
+  it('refreshes tracked campaign invite links even if the normal invite section is off', async () => {
+    const canonicalSync = jest.fn().mockResolvedValue({ status: 'success' });
+    const prisma = {
+      workspace: { findUniqueOrThrow: jest.fn().mockResolvedValue({ name: 'Business' }) },
+      workspaceMember: { findFirst: jest.fn().mockResolvedValue({ userId: 'actor' }) },
+      telegramChannel: { findMany: jest.fn().mockResolvedValue([
+        { ...channel('destination', 'Destination', false), inviteLinks: [{ id: 'tracking-link' }] },
+      ]) },
+    };
+    const service = new TelegramWorkspaceFullSyncService(prisma as never, {
+      registerRequestByContextId: jest.fn(),
+      resolve: jest.fn().mockResolvedValue({ syncNow: canonicalSync }),
+    } as never);
+    await service.syncWorkspace({ workspaceId: 'workspace', actor: { type: 'SCHEDULED_TASK' } });
+    expect(canonicalSync).toHaveBeenCalledWith('actor', 'destination', {
+      telegramUserAccountId: 'account-destination', saveSelection: false, syncIncludeInviteLinks: true,
+    });
   });
 
   it('filters disabled automatic sync channels before canonical sync is invoked', async () => {

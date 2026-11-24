@@ -27,7 +27,13 @@ describe('TelegramAiPostingAutopilotNotificationService', () => {
       criticalDraftThreshold: 10,
       readyDrafts: 3,
       generated: 2,
+      scheduled: 3,
       scheduledInWindow: 8,
+      scheduledThrough: '2026-12-03T17:00:00Z',
+      channelTitle: 'Editorial',
+      costs: { text: '0.003', search: '0.007' },
+      unknownCosts: 1,
+      rubrics: ['Reader poll'],
       errors: ['AI_API_UNAVAILABLE'],
       scheduleMode: 'LOCAL',
     });
@@ -36,10 +42,14 @@ describe('TelegramAiPostingAutopilotNotificationService', () => {
       'LOW_SCHEDULE_COVERAGE',
       'CRITICAL_DRAFT_STOCK',
       'AI_API_OR_BUDGET_FAILURE',
-      'WEEKLY_REPLENISHMENT',
       'WEEKLY_REPORT',
     ]);
     expect(notify.mock.calls[1][0].priority).toBe('HIGH');
+    const report = notify.mock.calls.at(-1)?.[0];
+    expect(report).toMatchObject({ title: 'AI Posting · Editorial', metadata: { scheduled: 3 } });
+    expect(report.body).toContain('Reader poll');
+    expect(report.body).toContain('$0.01');
+    expect(report.body).toContain('Операций с неподтверждённой стоимостью: 1');
   });
 
   it('records notification errors without leaking the raw exception', async () => {

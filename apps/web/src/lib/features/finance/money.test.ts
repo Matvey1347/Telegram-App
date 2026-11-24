@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  amountInDisplayCurrency,
   formatCompactMoney,
   formatMoneyPreview,
   getDominantMoneyAmount,
   getMoneyPreview,
+  sumDisplayBalances,
 } from "./money";
 
 describe("compact money", () => {
@@ -98,5 +100,22 @@ describe("money preview", () => {
         { amount: 50, currency: "USD", amountInPrimaryCurrency: 50 },
       ]),
     ).toEqual({ currency: "PLN", amount: 1_200, amountInPrimary: 330 });
+  });
+});
+
+describe("display-currency balances", () => {
+  const rates = [{ id: "quote", baseCurrency: "PLN", targetCurrency: "UAH", rate: 11, date: "2026-11-24" }];
+
+  it("sums original balances in the chosen currency, preserving signed amounts", () => {
+    const balances = [{ balance: 722.46, currency: "UAH" }, { balance: -18, currency: "PLN" }];
+    expect(sumDisplayBalances(balances, "UAH", rates)).toBeCloseTo(524.46);
+    expect(sumDisplayBalances(balances, "PLN", rates)).toBeCloseTo(722.46 / 11 - 18);
+    expect(amountInDisplayCurrency(722.46, "UAH", "UAH")).toBe(722.46);
+  });
+
+  it("withholds an incomplete total and handles an empty or zero balance", () => {
+    expect(sumDisplayBalances([{ balance: 5, currency: "GBP" }], "UAH", rates)).toBeNull();
+    expect(sumDisplayBalances([{ balance: 0, currency: "GBP" }], "UAH", rates)).toBe(0);
+    expect(sumDisplayBalances([], "UAH")).toBe(0);
   });
 });

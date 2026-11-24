@@ -350,6 +350,7 @@ export class TelegramChannelHistoricalSyncService {
             workspaceId,
             channelId,
             account,
+            channelReference,
             remote,
             importedCount: liveInviteLinkSync.importedCount,
             updatedCount: liveInviteLinkSync.updatedCount,

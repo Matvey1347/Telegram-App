@@ -29,7 +29,8 @@ import {
   decodeAiPostingRunPublications,
   encodeAiPostingRunPublications,
 } from './telegram-ai-posting-run-data';
-import { resolveTelegramAiPostingLanguage } from './telegram-ai-posting-language';
+import { resolveTelegramAiPostingLanguage, telegramAiPostingLanguageName } from './telegram-ai-posting-language';
+import { readTelegramAiPostingVisualDirection } from './telegram-ai-posting-visual-direction';
 import { publicationEmojiInstruction } from './telegram-ai-posting-prompts';
 import {
   clearTelegramAiPostingMediaFailure,
@@ -103,7 +104,6 @@ export class TelegramAiPostingTestRunService {
       };
     });
   }
-
   async readRunProgress(userId: string, channelId: string, runId: string) {
     const workspaceId = await this.workspace.resolveWorkspaceIdForUser(userId);
     const run = await this.prisma.telegramAiPostingTestRun.findFirst({
@@ -158,7 +158,6 @@ export class TelegramAiPostingTestRunService {
       ? await this.images.renderBotWatermark(post.imagePreviewUrl, run?.telegramChannel.photoUrl, input)
       : post.imagePreviewUrl };
   }
-
   async reviewPublication(
     userId: string,
     channelId: string,
@@ -192,7 +191,7 @@ export class TelegramAiPostingTestRunService {
           ? telegramHtmlToManagedMarkup(publication.text) : '',
       } as TestPublication;
     });
-    const sourceDiagnostics = decoded.sourceDiagnostics;
+    const { sourceDiagnostics } = decoded;
     const item = publications[index];
     if (!item) throw new NotFoundException('AI Posting publication not found');
     const imageTextLimit = Number(item.editorialMetadata?.length?.minCharacters) >= 700 ? 4096 : 1024;
@@ -497,15 +496,17 @@ export class TelegramAiPostingTestRunService {
           workspaceId,
           channelId,
           topic: item.topic,
+          language: telegramAiPostingLanguageName(typeof config.language === 'string' ? config.language : undefined),
           publicationText: item.text.slice(0, 950),
           imageMode: preference?.purpose === 'SEARCH' && item.editorialMetadata?.sphere ? 'found' : item.mediaMode ?? (!item.imageUrl && item.mediaReadiness === 'MISSING' && config.imageMode === 'hybrid'
             ? 'found'
             : config.imageMode === 'hybrid' || config.imageMode === 'found' ? config.imageMode : 'ai'),
           imageSearchSources: config.imageSearchSources ?? [],
           searchPageOffset: typeof value === 'string' && value.trim() ? 0 : item.mediaSearch?.nextPageOffset,
-          fallbackToGeneration: preference?.purpose !== 'SEARCH' || !item.editorialMetadata?.sphere,
+          fallbackToGeneration: true,
           usePhotoDirectory: false,
           referenceImageUrls: preference?.references ?? [],
+          visualDirection: typeof value === 'string' && value.trim() ? undefined : readTelegramAiPostingVisualDirection(item.visualDirection),
           preferencePurpose: preference?.purpose,
           visualPreference: preference?.description || preference?.name,
           generationDescription: preference?.generationDescription,
@@ -518,7 +519,6 @@ export class TelegramAiPostingTestRunService {
           imageCandidates: [],
           prompt: [
             preference?.generationDescription ? item.imagePrompt.split(/\.?\s*Visual preference:/u, 1)[0] : item.imagePrompt,
-
             nextAvoidances.length
               ? `Avoid similar compositions and visual directions: ${nextAvoidances.slice(-5).join('; ')}`
               : '',

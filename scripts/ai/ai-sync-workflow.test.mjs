@@ -4,6 +4,29 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readPendingAiReceiptBatch } from "./sync-local-ai-costs.mjs";
+
+test("reads the first remaining receipt after a full batch is acknowledged", async () => {
+  const receipts = Array.from({ length: 102 }, (_, index) => ({
+    id: String(index).padStart(3, "0"),
+    source: "LOCAL_UNSYNCED",
+  }));
+  const database = {
+    aiOperation: {
+      findMany: async ({ where, take, skip = 0 }) =>
+        receipts
+          .filter((row) => row.source === where.source && (!where.id || row.id > where.id.gt))
+          .slice(skip, take + skip),
+    },
+  };
+
+  const first = await readPendingAiReceiptBatch(database);
+  assert.equal(first.length, 100);
+  for (const row of first) row.source = "LOCAL_SYNCED";
+
+  const rest = await readPendingAiReceiptBatch(database, first.at(-1).id);
+  assert.deepEqual(rest.map(({ id }) => id), ["100", "101"]);
+});
 
 test("protected release push is blocked by failed AI reconciliation; feature pushes do not run it", () => {
   const directory = mkdtempSync(join(tmpdir(), "ai-sync-hook-"));

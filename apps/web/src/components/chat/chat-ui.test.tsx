@@ -25,6 +25,20 @@ const mockBotSupportAdapter = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("shared Chat UI adapters", () => {
+  it("places message actions on the outer edge and keeps time inline with the text", () => {
+    const incoming = mockBotSupportAdapter.message;
+    const outgoing = { ...incoming, id: "staff-reply", text: "Hi!", direction: "outgoing", status: "sent" } as const;
+    render(<ChatThread messages={[incoming, outgoing]} capabilities={crmCapabilities} />);
+    for (const [message, edge] of [[incoming, "left"], [outgoing, "right"]] as const) {
+      const bubble = screen.getByRole("article", { name: message.direction === "incoming" ? "Incoming message" : "Outgoing message" });
+      const button = within(bubble).getByRole("button", { name: "Message actions" });
+      const edgeContainer = button.closest(`[data-message-menu-edge="${edge}"]`);
+      expect(edgeContainer).toHaveClass(edge === "left" ? "left-1" : "right-1");
+      expect(bubble).toHaveClass("w-fit");
+      expect(within(bubble).getByText(message.text).querySelector("time")).toHaveAttribute("datetime", message.sentAt);
+    }
+  });
+
   it("reports whether the viewer is at the bottom of message history", () => {
     const onNearBottomChange = vi.fn();
     render(<ChatThread messages={[mockBotSupportAdapter.message]} capabilities={crmCapabilities} onNearBottomChange={onNearBottomChange} />);
@@ -115,8 +129,8 @@ describe("shared Chat UI adapters", () => {
   it("keeps the action button out of the message text flow", () => {
     render(<ChatThread messages={[{ ...mockBotSupportAdapter.message, text: "Навзаєм 🤗" }]} capabilities={crmCapabilities} />);
     const bubble = screen.getByRole("article", { name: "Incoming message" });
-    expect(bubble).toHaveClass("min-w-[9rem]");
-    expect(screen.getByRole("button", { name: "Message actions" }).parentElement?.parentElement?.parentElement).not.toHaveClass("float-right");
+    expect(bubble).not.toHaveClass("min-w-[9rem]");
+    expect(screen.getByRole("button", { name: "Message actions" }).closest("[data-message-menu-edge]")).toHaveClass("absolute");
     expect(screen.getByText("Навзаєм 🤗")).toBeInTheDocument();
   });
 

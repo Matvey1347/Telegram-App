@@ -64,6 +64,31 @@ Finance Bot serves people who may have never tracked personal finances before.
   ledger proposal, or recommend the dedicated Finance screen for a transfer,
   debt, recurring payment, saving, investment, account, category, budget, or
   reminder. The user must not have to classify the request before sending it.
+- Groshly Web and Mini App use the same streaming assistant endpoint as the
+  Finance assistant. A quoted message stays separate from the new request.
+  Financial context is selected for the authenticated profile on demand and
+  covers account balances, period analytics, recent ledger activity, transfers,
+  categories, debts, regular payments, goals, investments, limits, and reminders.
+  The model receives bounded data and must say when it lacks the requested facts.
+  Plain greetings use the model without loading financial records.
+- Groshly AI stores named conversations per authenticated Finance profile.
+  The first send creates a General chat, uses the first message or attachment
+  name as its initial title, and keeps the selected chat in the URL. A retried
+  creation uses the same chat ID. The sidebar supports renaming, moving a chat
+  to the archive, restoring it, and deleting it.
+  General and transaction chats can prepare proposals for review. Advice chats
+  accept text and cannot prepare operations. The model gets up to four recent
+  completed turns from the current conversation, with each message bounded to
+  1,200 characters. The transcript can load earlier pages. A stopped response
+  may keep its visible fragment in the transcript. Retries reuse the same turn.
+  Chat history is retained until the user deletes the chat or the underlying
+  profile. Chat deletion cascades to its turns. There is no cleanup timer or
+  historical aggregation, and opening an idle chat does not write.
+- The Finance Bot dashboard reads the selected bot runtime. Its monthly AI
+  usage uses recorded provider tokens and the pricing snapshot, and shows
+  unpriced requests separately. Older receipts with an owned profile and no
+  runtime ID are grouped by that profile's Telegram runtime. The Users page
+  reads one usage aggregate for the displayed page alongside the subscriptions.
 - Balance investigations use bounded, profile-scoped expected account balances
   and recent ledger entries. When the user supplies the real balance, the
   assistant may calculate the difference and identify possible candidates, but
@@ -168,6 +193,20 @@ states independently for the selected `LOCAL` or `PRODUCTION` runtime.
   JWT authentication and dashboard infrastructure.
 - Keep Telegram chat as the quick-action surface and use the Mini App for the workflows
   where a richer interface genuinely helps.
+
+## Groshly AI dictation
+
+- The microphone in the Groshly AI web chat uses browser speech recognition in
+  the selected app language. Live results appear in the draft, alongside a
+  waveform sampled from the microphone when a local audio meter is available.
+- Send or Enter ends dictation and submits the resulting text after the browser
+  finishes recognition. Keeping the result in the draft allows edits before
+  sending. Discard restores the draft from before dictation.
+- Browser support and microphone permission are required. The browser's
+  recognition service may process the audio remotely. The waveform stays
+  local, and the Groshly assistant receives text.
+- Hiding the tab or leaving the chat releases the microphone and cancels any
+  queued submission. The file attachment control accepts audio independently.
 
 ## Brand assets
 

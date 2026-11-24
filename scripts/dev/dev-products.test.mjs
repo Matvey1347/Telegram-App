@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -10,9 +10,47 @@ import {
   financeApiEnvironment,
   financeLocalBotRuntimeEnvironment,
   financeWebEnvironment,
+  prepareProductPorts,
   selectedProducts,
   tunnelProcessEnvironment,
 } from "./dev-products.mjs";
+import { stopLocalDevProcesses } from "./stop-local-dev.mjs";
+
+test("tunnel startup stops the previous listeners before checking the selected ports", async () => {
+  const events = [];
+  const stopListeners = async ({ ports }) => { events.push(["stop", ...ports]); };
+  const checkPort = async (port) => { events.push(["probe", port]); };
+  await prepareProductPorts(["nexeloq", "finance"], { replace: true, stopListeners, checkPort });
+  assert.deepEqual(events, [
+    ["stop", 4000, 3000, 4001, 3001],
+    ["probe", 4000], ["probe", 3000], ["probe", 4001], ["probe", 3001],
+  ]);
+  events.length = 0;
+  await prepareProductPorts(["nexeloq"], { stopListeners, checkPort });
+  assert.deepEqual(events, [["probe", 4000], ["probe", 3000]]);
+});
+
+test("stops only workspace listeners and reports the occupied foreign port", async () => {
+  const workspace = realpathSync(mkdtempSync(join(tmpdir(), "telegram-dev-stop-")));
+  try {
+    const occupied = new Map([[4000, [123]], [3000, [456]]]);
+    const signals = [];
+    await assert.rejects(stopLocalDevProcesses({
+      workspace,
+      ports: [4000, 3000],
+      listListeners: async (port) => occupied.get(port) ?? [],
+      stopLaunchers: async (ports) => { signals.push(["launchers", ...ports]); },
+      getProcessDetails: async (pid) => ({ cwd: pid === 123 ? workspace : `${workspace}-other` }),
+      signalProcess: (pid, signal) => {
+        signals.push([pid, signal]);
+        occupied.delete(4000);
+      },
+    }), /3000 \(PID 456\)/u);
+    assert.deepEqual(signals, [["launchers", 4000, 3000], [123, "SIGTERM"]]);
+  } finally {
+    rmSync(workspace, { recursive: true, force: true });
+  }
+});
 
 test("local product commands use non-overlapping fixed ports", () => {
   const nexeloqPorts = LOCAL_PRODUCTS.nexeloq.ports.map(([port]) => port);
@@ -142,7 +180,7 @@ test("Finance Web receives only public product profile keys", () => {
   assert.deepEqual(financeWebEnvironment(profilePath), {});
 });
 
-test("Finance API receives only the selected Finance bot runtime", () => {
+test("Finance API receives support configuration without passing it to the web", () => {
   const directory = mkdtempSync(join(tmpdir(), "finance-profile-"));
   const profilePath = join(directory, ".env.local");
   writeFileSync(
@@ -151,6 +189,8 @@ test("Finance API receives only the selected Finance bot runtime", () => {
       "FINANCE_BOT_RUNTIME_ENVIRONMENT=LOCAL",
       "FINANCE_BOT_LOCAL_USERNAME=@smart_budgeting_test_bot",
       "FINANCE_BOT_LOCAL_TOKEN=not-exposed-to-the-api-runner",
+      "FINANCE_BOT_SUPPORT_USERNAME=groshly_help_bot",
+      "FINANCE_BOT_SUPPORT_TOKEN=101:test-fixture",
     ].join("\n"),
   );
 
@@ -158,7 +198,10 @@ test("Finance API receives only the selected Finance bot runtime", () => {
     assert.deepEqual(financeApiEnvironment(profilePath), {
       TELEGRAM_BOT_RUNTIME_ENVIRONMENT: "LOCAL",
       FINANCE_BROWSER_LOGIN_BOT_USERNAME: "@smart_budgeting_test_bot",
+      FINANCE_BOT_SUPPORT_USERNAME: "groshly_help_bot",
+      FINANCE_BOT_SUPPORT_TOKEN: "101:test-fixture",
     });
+    assert.deepEqual(financeWebEnvironment(profilePath), {});
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

@@ -1,4 +1,4 @@
-import type { CampaignInviteWindow } from "@telegram-system/shared";
+import type { AdCampaignTrackingChannel, CampaignInviteWindow } from "@telegram-system/shared";
 import type { AxiosInstance, AxiosRequestConfig } from "axios";
 import type { PaginatedResponse } from "@telegram-system/shared";
 import type {
@@ -95,11 +95,7 @@ export function createMarketingApi({
             kind: string;
             label: string;
             tag: string;
-            channels: Array<{
-              id: string;
-              title: string;
-              photoUrl?: string | null;
-            }>;
+            channels: AdCampaignTrackingChannel[];
           }>;
         }>("/ad-campaigns/tracking/invite-links")
       ).data,

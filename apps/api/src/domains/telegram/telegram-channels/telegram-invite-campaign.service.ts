@@ -48,7 +48,7 @@ export class TelegramInviteCampaignService {
       await this.telegramInvitePersistenceService.updateInviteLinkWithRequestedCountFallback(
         {
           where: { id: link.id },
-          data: { adCampaignId: campaign.id, lastSyncedAt: new Date() },
+          data: { adCampaignId: campaign.id },
         },
       );
     await this.recalculateCampaignMetricsById(campaign.id);
@@ -70,7 +70,7 @@ export class TelegramInviteCampaignService {
       await this.telegramInvitePersistenceService.updateInviteLinkWithRequestedCountFallback(
         {
           where: { id: link.id },
-          data: { adCampaignId: null, lastSyncedAt: new Date() },
+          data: { adCampaignId: null },
         },
       );
     if (link.adCampaignId)

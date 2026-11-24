@@ -45,6 +45,8 @@ export class TelegramInviteSyncService {
     joinedCount: true,
     requestedCount: true,
     creatorTelegramUserId: true,
+    joinedObservedAt: true,
+    requestedObservedAt: true,
   } as const;
 
   public async persistInviteLinkFromRemote(params: {
@@ -168,9 +170,25 @@ export class TelegramInviteSyncService {
       },
     );
 
+    if (existing?.adCampaignId && existing.joinedObservedAt && existing.requestedObservedAt &&
+      countersConfirmed && params.link.requestNeeded && !params.link.revoked &&
+      params.link.usage > existing.joinedCount && params.link.requested < existing.requestedCount) {
+      await this.prisma.adCampaign.updateMany({
+        where: {
+          id: existing.adCampaignId, workspaceId: params.workspaceId, telegramChannelId: params.channelId,
+          endedAt: null,
+          OR: [{ placementDate: { lte: observedAt } }, { placementDate: null, createdAt: { lte: observedAt } }],
+          botInviteLinks: { some: {} },
+          inviteLinks: { some: { id: existing.id } },
+        },
+        data: { endedAt: observedAt },
+      });
+    }
+
     return {
       existing,
       upserted,
+      observedAt,
       joinedObservation: joinedObserved ? params.link.usage : null,
       requestedObservation: requestedObserved ? params.link.requested : null,
       matchedMember: Boolean(attribution.creatorMemberId),
@@ -180,16 +198,25 @@ export class TelegramInviteSyncService {
     };
   }
 
+  async recordSingleInviteObservation(
+    workspaceId: string,
+    channelId: string,
+    observation: Awaited<ReturnType<TelegramInviteSyncService['persistInviteLinkFromRemote']>>,
+  ) {
+    if (observation.joinedObservation == null && observation.requestedObservation == null) return;
+    const link = observation.upserted;
+    await this.telegramInviteSnapshotStore.persistInviteLinkSnapshots({
+      workspaceId, channelId, syncedAt: observation.observedAt,
+      links: [{ id: link.id, telegramChannelId: channelId, adCampaignId: link.adCampaignId,
+        joinedCount: observation.joinedObservation, requestedCount: observation.requestedObservation, isRevoked: link.isRevoked }],
+    });
+  }
+
   public async finalizeInviteLinkSync(params: {
     workspaceId: string;
     channelId: string;
-    account: {
-      id: string;
-      label: string;
-      username: string | null;
-      firstName: string | null;
-      phoneMasked?: string | null;
-    };
+    account: Parameters<TelegramInviteSyncService['syncChannelInviteLinks']>[0]['account'];
+    channelReference?: Parameters<TelegramInviteSyncService['syncChannelInviteLinks']>[0]['channelReference'];
     remote: TelegramInviteLinksResult;
     importedCount: number;
     updatedCount: number;
@@ -199,6 +226,7 @@ export class TelegramInviteSyncService {
     onProgress?: BulkProgressCallback;
     progressStep: { current: number; total: number };
   }) {
+    if (params.channelReference) await this.refreshMissingCampaignLinks({ ...params, channelReference: params.channelReference });
     const campaignIds = [...params.affectedCampaignIds];
     if (campaignIds.length) {
       await this.telegramChannelsSupportService.notifyDetailedTaskProgress(
@@ -301,6 +329,61 @@ export class TelegramInviteSyncService {
       missingTotalLinks,
       warnings: params.remote.warnings,
     };
+  }
+
+  private async refreshMissingCampaignLinks(
+    params: Parameters<TelegramInviteSyncService['finalizeInviteLinkSync']>[0] & {
+      channelReference: NonNullable<Parameters<TelegramInviteSyncService['finalizeInviteLinkSync']>[0]['channelReference']>;
+    },
+  ) {
+    const confirmedUrls = params.remote.links.filter((link) =>
+      link.usageObserved !== false && link.requestedObserved !== false).map((link) => link.url);
+    const tracked = await this.prisma.telegramInviteLink.findMany({
+      where: {
+        workspaceId: params.workspaceId, telegramChannelId: params.channelId, isRevoked: false,
+        ...(confirmedUrls.length ? { url: { notIn: confirmedUrls } } : {}),
+        OR: [{ adCampaign: { endedAt: null } }, { botRequestTrackingCampaigns: { some: { adCampaign: { endedAt: null } } } }],
+      },
+      orderBy: [{ requestedObservedAt: { sort: 'asc', nulls: 'first' } }, { id: 'asc' }],
+      select: { url: true }, take: 12,
+    });
+    if (!tracked.length) return;
+    const listedByUrl = new Map(params.remote.links.map((link) => [link.url, link]));
+    const maps = await this.telegramInviteAttributionService.buildInviteAttributionMaps(params.workspaceId);
+    for (const { url } of tracked) {
+      const listed = listedByUrl.get(url);
+      let detail: Awaited<ReturnType<TelegramMtprotoClient['getChannelInviteLink']>>;
+      try {
+        detail = await this.mtprotoClient.getChannelInviteLink({
+          ...this.telegramChannelAccessService.accountCredentials(params.account),
+          channel: params.channelReference, inviteLink: url,
+        });
+      } catch {
+        const unavailable = {
+          ...(!listed || listed.usageObserved === false ? { joinedObserved: false as const } : {}),
+          ...(!listed || listed.requestedObserved === false ? { requestedObserved: false as const } : {}),
+        };
+        await this.prisma.telegramInviteLink.updateMany({
+          where: { workspaceId: params.workspaceId, telegramChannelId: params.channelId, url,
+            OR: Object.keys(unavailable).flatMap((field) => [{ [field]: true }, { [field]: null }]) },
+          data: unavailable,
+        });
+        continue;
+      }
+      const observation = await this.persistInviteLinkFromRemote({
+          workspaceId: params.workspaceId, channelId: params.channelId, maps,
+          link: {
+            ...detail,
+            ...(detail.usageObserved === false && listed && listed.usageObserved !== false
+              ? { usage: listed.usage, usageObserved: true } : {}),
+            ...(detail.requestedObserved === false && listed && listed.requestedObserved !== false
+              ? { requested: listed.requested, requestedObserved: true } : {}),
+          },
+          processedCount: 1, totalLinks: 1, warnings: [], progressStep: params.progressStep,
+        });
+        await this.recordSingleInviteObservation(params.workspaceId, params.channelId, observation);
+        if (observation.upserted.adCampaignId) params.affectedCampaignIds.add(observation.upserted.adCampaignId);
+    }
   }
 
   public async syncChannelInviteLinks(params: {
@@ -419,6 +502,7 @@ export class TelegramInviteSyncService {
       workspaceId: params.workspaceId,
       channelId: params.channelId,
       account: params.account,
+      channelReference: params.channelReference,
       remote,
       importedCount,
       updatedCount,

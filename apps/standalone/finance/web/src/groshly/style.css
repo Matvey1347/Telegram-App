@@ -803,6 +803,9 @@ body.money-input-active .app-shell .app-main.page-investmentDetail{padding-botto
 
 .desktop-sidebar a{text-decoration:none}.desktop-brand,.desktop-side-profile{color:var(--ink)}
 
+a.setting-row { color: inherit; text-decoration: none; }
+a.setting-row:focus-visible { outline: 2px solid #98c876; outline-offset: -2px; }
+
 .finance-billing { display: grid; gap: 14px; }
 .finance-billing .billing-message { display: flex; align-items: center; gap: 12px; padding: 20px; }
 .finance-billing .billing-message p { margin: 0; }
@@ -815,7 +818,17 @@ body.money-input-active .app-shell .app-main.page-investmentDetail{padding-botto
 .finance-billing .billing-current strong { color: var(--deep); font-size: 22px; }
 .finance-billing .billing-current p { margin: 12px 0 0; }
 .finance-billing .billing-manage { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
-.finance-billing .billing-manage > span { display: inline-flex; align-items: center; gap: 7px; padding: 5px 9px; }
+.finance-billing .billing-brand { display: inline-flex; align-items: center; gap: 9px; }
+.finance-billing .billing-brand svg, .finance-billing .billing-gift svg,
+.finance-billing .billing-benefits svg { color: var(--green); flex-shrink: 0; }
+.finance-billing .billing-benefits { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 12px; }
+.finance-billing .billing-benefits article, .finance-billing .billing-gift { display: flex; align-items: flex-start; gap: 12px; padding: 18px 20px; }
+.finance-billing .billing-benefits h2 { margin: 0 0 5px; font-size: 16px; }
+.finance-billing .billing-benefits p { margin: 0; color: var(--sub); line-height: 1.5; }
+.finance-billing .billing-gift { margin-top: 12px; border-radius: 14px; background: var(--lime2); color: var(--deep); }
+.finance-billing .billing-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr)); gap: 12px; margin: 14px 0 0; }
+.finance-billing .billing-details dt { color: var(--sub); }
+.finance-billing .billing-details dd { margin: 4px 0 0; font-weight: 700; }
 .finance-billing .billing-disclosure { padding: 17px 20px; border: 1px solid #b8d68b; background: var(--lime2); color: var(--deep); font-weight: 650; }
 .finance-billing .billing-error { color: var(--red); font-weight: 700; }
 .finance-billing .billing-history { padding: 20px; }
@@ -855,4 +868,11 @@ body.money-input-active .app-shell .app-main.page-investmentDetail{padding-botto
   .desktop-side-bottom{flex:none}
   .desktop-side-profile{min-height:62px;padding:10px 9px;border-radius:12px}
   .desktop-avatar img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+}
+
+.app-shell .app-main.page-ai {
+  padding-top: clamp(14px, 3vw, 28px) !important;
+  padding-bottom: 12px !important;
+  scroll-padding-bottom: 12px !important;
+  overflow: hidden;
 }

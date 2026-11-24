@@ -3574,6 +3574,7 @@ model AdCampaign {
   inviteLinks         TelegramInviteLink[]
   inviteLinkSnapshots TelegramInviteLinkSnapshot[]
   admissionBatches    AdCampaignAdmissionBatch[]
+  trackingScope      Json?
   botInviteLinks      AdCampaignBotInviteLink[]
   inviteLinkWindows   AdCampaignInviteLinkWindow[]
 
@@ -4824,6 +4825,7 @@ model FinanceProfile {
   dataExportReceipts     FinanceDataExportReceipt[]
   proposals              FinancePendingProposal[]
   assistantProfile       FinanceAssistantProfile?
+  assistantChats         FinanceAssistantChat[]
   aiUsage                AiUsageEvent[]
   chatFlows              FinanceChatFlow[]
   consumerTransfers      FinanceConsumerTransfer[]
@@ -5511,6 +5513,45 @@ model FinanceDataExportReceipt {
   profile       FinanceProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
   @@index([profileId, createdAt], map: "FinanceDataExportReceipt_profile_created_idx")
+}
+
+enum FinanceAssistantChatMode {
+  GENERAL
+  ADVICE
+  TRANSACTIONS
+}
+
+model FinanceAssistantChat {
+  id        String                   @id @default(uuid())
+  profileId String
+  title     String                   @db.VarChar(80)
+  mode      FinanceAssistantChatMode @default(GENERAL)
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  profile FinanceProfile         @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  turns   FinanceAssistantTurn[]
+  archivedAt DateTime?
+
+  @@index([profileId, archivedAt, updatedAt, id])
+}
+
+model FinanceAssistantTurn {
+  chatId        String
+  requestId     String
+  userText      String
+  replyTo       Json?
+  assistantText String?
+  result        Json?
+  status        String   @default("PENDING")
+  attempt       Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  chat FinanceAssistantChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@id([chatId, requestId])
+  @@index([chatId, createdAt, requestId])
 }
 
 model FinanceAssistantProfile {
@@ -7026,11 +7067,21 @@ model TelegramSupportMessage {
   updateId    String?
   replyId     String?
   text        String
+  automatic   Boolean @default(false)
+  formatted   Boolean @default(false)
+  telegramMessageId  Int?
+  replyToTelegramId  Int?
+  editedAt          DateTime?
+  deletedAt         DateTime?
+  reactions         String[] @default([])
+  reactionDate      Int?
+  reactionUpdateId  BigInt?
   status      String
   createdAt   DateTime @default(now())
   ticket      TelegramSupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, product, updateId], map: "TelegramSupportMessage_update_key")
   @@unique([ticketId, replyId], map: "TelegramSupportMessage_reply_key")
+  @@index([ticketId, telegramMessageId], map: "TelegramSupportMessage_telegram_idx")
   @@index([ticketId, createdAt, id], map: "TelegramSupportMessage_thread_idx")
 }

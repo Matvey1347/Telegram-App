@@ -500,8 +500,19 @@ export class BotBillingService {
     botIntegrationId: string;
     telegramBotUserId: string;
     cancelAtPeriodEnd: boolean;
+    subscriptionId?: string;
   }) {
     return this.checkout.setStripeAutoRenewal(input);
+  }
+
+  changeStripePlan(
+    input: Parameters<BotBillingCheckout['changeStripePlan']>[0],
+  ) {
+    return this.checkout.changeStripePlan(input);
+  }
+
+  stripeRenewal(input: Parameters<BotBillingCheckout['stripeRenewal']>[0]) {
+    return this.checkout.stripeRenewal(input);
   }
 
   stripePortal(input: {

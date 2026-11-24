@@ -42,6 +42,8 @@ const navigation = {
   "navigation.accountSettings": "Настройки аккаунта",
   "navigation.user": "Пользователь",
   "navigation.logout": "Выйти",
+  "navigation.regionalPreferences": "Язык и валюта",
+  "navigation.displayCurrency": "Валюта отображения",
   "navigation.language": "Язык",
   "navigation.english": "English",
   "navigation.russian": "Русский",

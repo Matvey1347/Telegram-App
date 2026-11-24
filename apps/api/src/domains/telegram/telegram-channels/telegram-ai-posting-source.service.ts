@@ -2,8 +2,7 @@ import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { createHash } from 'node:crypto';
 import * as https from 'node:https';
-import { Injectable, Optional } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import type { TelegramAiPostingImageCatalog } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
@@ -151,7 +150,6 @@ function safeSourceValue(source: PostingSource) {
 export class TelegramAiPostingSourceService {
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly config?: ConfigService,
   ) {}
 
   async checkWebSource(type: string, value: string) {
@@ -497,9 +495,8 @@ export class TelegramAiPostingSourceService {
     };
   }
 
-  async searchOpenImages(query: string, page = 1, catalog: TelegramAiPostingImageCatalog = 'auto', domain?: string): Promise<ImageCandidate[]> {
-    if (catalog === 'pinterest') return this.searchWebsiteImages(query, page, 'pinterest.com');
-    if (catalog === 'website' && domain) return this.searchWebsiteImages(query, page, domain);
+  async searchOpenImages(query: string, page = 1, catalog: TelegramAiPostingImageCatalog = 'auto'): Promise<ImageCandidate[]> {
+    if (catalog === 'pinterest' || catalog === 'website' || catalog === 'openai') return [];
     if (catalog === 'wordpress-photos') return this.searchPhotoDirectory(query, page);
     if (catalog === 'auto') {
       try {
@@ -558,41 +555,6 @@ export class TelegramAiPostingSourceService {
         return [];
       }
     }).slice(0, 6);
-  }
-
-  private async searchWebsiteImages(query: string, page: number, domain: string): Promise<ImageCandidate[]> {
-    const key = this.config?.get<string>('BRAVE_SEARCH_API_KEY')?.trim();
-    if (!key) throw new Error('IMAGE_SEARCH_NOT_CONFIGURED');
-    const url = new URL('https://api.search.brave.com/res/v1/images/search');
-    url.search = new URLSearchParams({
-      q: `${query.slice(0, 180)} site:${domain}`, count: String(Math.min(64, page * 16)),
-      safesearch: 'strict', search_lang: 'en', country: 'ALL',
-    }).toString();
-    const response = await fetch(url, {
-      headers: { 'X-Subscription-Token': key, Accept: 'application/json' },
-      signal: AbortSignal.timeout(4_000),
-      redirect: 'error',
-    });
-    if (!response.ok) throw new Error('WEBSITE_IMAGE_SEARCH_UNAVAILABLE');
-    const data = await response.json() as {
-      results?: { url?: string; properties?: { url?: string } }[];
-    };
-    return (data.results ?? []).flatMap((result) => {
-      try {
-        const pin = new URL(result.url ?? '');
-        const image = new URL(result.properties?.url ?? '');
-        if (pin.hostname !== domain && !pin.hostname.endsWith(`.${domain}`)) return [];
-        if (image.protocol !== 'https:' || image.username || image.password) return [];
-        const pinterest = domain === 'pinterest.com';
-        if (pinterest && (
-          !/^\/pin\/(?:[^/]*--)?\d+(?:\/|$)/u.test(pin.pathname) ||
-          image.origin !== 'https://i.pinimg.com'
-        )) return [];
-        return [{ url: image.href, sourceId: pinterest ? 'pinterest' : domain, sourceType: 'image-search' }];
-      } catch {
-        return [];
-      }
-    }).slice((page - 1) * 8, page * 8);
   }
 
   private async searchPhotoDirectory(query: string, page: number): Promise<ImageCandidate[]> {

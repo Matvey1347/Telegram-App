@@ -153,9 +153,6 @@ export function resolveRouteTabIdentity({
   if (pathname === "/transfers") {
     return { title: pageTitle("Transfers"), emoji: "🔄", color: "#0f766e" };
   }
-  if (pathname === "/currencies") {
-    return { title: pageTitle("Currencies"), emoji: "💱", color: "#1d4ed8" };
-  }
   if (pathname === "/telegram-channels") {
     const tab = parseTelegramTab(get("tab"));
     const channelFilter = parseChannelFilter(get("channelTab"));

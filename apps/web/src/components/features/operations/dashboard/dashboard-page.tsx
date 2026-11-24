@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { currencyPresentation } from "@telegram-system/shared";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDownRight,
   ArrowUpRight,
   Bot,
   CalendarDays,
-  ChevronDown,
   Landmark,
   Megaphone,
   Scale,
@@ -27,7 +27,9 @@ import {
 } from "@/components/ui/primitives";
 import { getDashboardSummary, type DashboardSummary } from "@/lib/api";
 import { formatDate } from "@/lib/date-format";
-import { formatMoney } from "@/lib/features/finance/money";
+import { formatFinanceAmount } from "@/lib/features/finance/money";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
+import { useFinanceDisplay } from "@/providers/finance-display-provider";
 import { dashboardKeys } from "@/lib/query-keys";
 import {
   currentCalendarMonthPeriod,
@@ -145,9 +147,12 @@ function PeriodFilter({
 }
 
 export function DashboardOverview({ data }: { data: DashboardSummary }) {
-  const currency = data.primaryCurrency ?? "USD";
-  const money = (value: number | null | undefined) =>
-    typeof value === "number" ? formatMoney(value, currency) : "—";
+  const display = useFinanceDisplay();
+  const primaryCurrency = data.primaryCurrency ?? "USD";
+  const currency = display.currency ?? primaryCurrency;
+  const money = (value: number | null | undefined, source = primaryCurrency) => (
+    <CurrencyAmount amount={value} currency={source} className="" fallbackCurrency={primaryCurrency} />
+  );
   const hasAudience = Number(data.activeSubscribersEstimate) > 0;
   const incomeBreakdown = data.incomeBreakdownForPeriod ?? {
     channels: data.incomeForPeriod,
@@ -182,7 +187,7 @@ export function DashboardOverview({ data }: { data: DashboardSummary }) {
           <div className="max-w-md text-sm text-neutral-400 md:text-right">
             {hasAudience ? (
               <>
-                {money(incomeBreakdown.channels)} channel revenue divided by{" "}
+                {formatFinanceAmount(incomeBreakdown.channels, primaryCurrency)} channel revenue divided by{" "}
                 {data.activeSubscribersEstimate.toLocaleString()} active
                 subscribers.
               </>
@@ -197,7 +202,7 @@ export function DashboardOverview({ data }: { data: DashboardSummary }) {
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-white">Cash flow</h3>
           <p className="mt-1 text-sm text-neutral-400">
-            Totals for the selected period in {currency}.
+            Totals for the selected period · {currencyPresentation(currency).symbol}
           </p>
         </div>
         <div className="divide-y divide-neutral-800">
@@ -205,7 +210,7 @@ export function DashboardOverview({ data }: { data: DashboardSummary }) {
             icon={ArrowUpRight}
             label="Income"
             value={money(data.incomeForPeriod)}
-            currency={currency}
+            money={money}
             tone="text-emerald-300"
             breakdown={[
               {
@@ -228,7 +233,7 @@ export function DashboardOverview({ data }: { data: DashboardSummary }) {
             icon={ArrowDownRight}
             label="Expenses"
             value={money(data.expensesForPeriod)}
-            currency={currency}
+            money={money}
             tone="text-rose-300"
             breakdown={[
               {
@@ -259,7 +264,7 @@ export function DashboardOverview({ data }: { data: DashboardSummary }) {
             icon={Landmark}
             label="Investments"
             value={money(data.investedCapitalForPeriod)}
-            currency={currency}
+            money={money}
             tone="text-violet-300"
             capitalGroups={data.investmentBreakdownForPeriod}
             details={
@@ -296,7 +301,7 @@ function CashFlowRow({
   icon: Icon,
   label,
   value,
-  currency,
+  money,
   tone,
   breakdown,
   details,
@@ -304,12 +309,12 @@ function CashFlowRow({
 }: {
   icon: typeof ArrowUpRight;
   label: string;
-  value: string;
-  currency: string;
+  value: ReactNode;
+  money: (value: number, currency?: string) => ReactNode;
   tone: string;
   breakdown?: Array<{
     label: string;
-    value: string;
+    value: ReactNode;
     icon: typeof Megaphone;
     iconTone: string;
     hint?: string;
@@ -320,8 +325,6 @@ function CashFlowRow({
 }) {
   const transactionGroups =
     details ?? breakdown?.flatMap((item) => item.details ?? []) ?? [];
-  // Top-level totals are summaries; category-level disclosure is rendered in
-  // the breakdown cards below.
   const expanded = false;
   return (
     <div className="py-4 first:pt-1 last:pb-1">
@@ -330,7 +333,7 @@ function CashFlowRow({
           <Icon size={20} className={tone} />
           {label}
         </div>
-        <div className={`tabular-nums text-lg font-semibold ${tone}`}>
+        <div className={`text-right tabular-nums text-lg font-semibold ${tone}`}>
           {value}
         </div>
       </div>
@@ -370,7 +373,7 @@ function CashFlowRow({
             <DashboardTransactionGroup
               key={`${category.type}:${category.id ?? category.name}`}
               category={category}
-              primaryCurrency={currency}
+              money={money}
             />
           ))}
         </div>
@@ -393,7 +396,7 @@ function CashFlowRow({
                         : "Reinvested profit"}
                   </strong>
                   <span className="tabular-nums text-neutral-200">
-                    {formatMoney(group.amount, currency)}
+                    {money(group.amount)}
                   </span>
                 </div>
                 {group.movements.map((movement) => (
@@ -416,7 +419,7 @@ function CashFlowRow({
                     <span
                       className={`shrink-0 tabular-nums ${movement.amountInPrimaryCurrency < 0 ? "text-rose-300" : "text-violet-300"}`}
                     >
-                      {formatMoney(movement.amountInPrimaryCurrency, currency)}
+                      {money(movement.movementType === "WITHDRAWAL" ? -Math.abs(movement.amount) : movement.amount, movement.currency)}
                     </span>
                   </div>
                 ))}
@@ -430,10 +433,10 @@ function CashFlowRow({
 
 function DashboardTransactionGroup({
   category,
-  primaryCurrency,
+  money,
 }: {
   category: DashboardCategory;
-  primaryCurrency: string;
+  money: (value: number, currency?: string) => ReactNode;
 }) {
   const transactions = category.transactions ?? [];
   const categoryLabel = `${category.count} ${category.count === 1 ? "transaction" : "transactions"}`;
@@ -454,7 +457,7 @@ function DashboardTransactionGroup({
           </div>
         </div>
         <span className="shrink-0 text-sm font-semibold tabular-nums text-neutral-200">
-          {formatMoney(category.amount, primaryCurrency)}
+          {money(category.amount)}
         </span>
       </div>
       <div>
@@ -501,7 +504,7 @@ function DashboardTransactionGroup({
               <span
                 className={`shrink-0 text-sm font-semibold tabular-nums sm:text-right ${transaction.type === "income" ? "text-emerald-300" : "text-rose-300"}`}
               >
-                {formatMoney(signedAmount, transaction.currency)}
+                {money(signedAmount, transaction.currency)}
               </span>
             </div>
           );

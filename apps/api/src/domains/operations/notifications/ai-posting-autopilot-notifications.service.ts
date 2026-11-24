@@ -110,7 +110,7 @@ export class AiPostingAutopilotNotificationsService {
         pwaPushEnabled: prefsByMember.get(member.id)?.pwaPush ?? true,
       },
       targetUrl:
-        input.targetUrl ?? `/telegram-channels/${input.channelId}/ai-posting`,
+        input.targetUrl ?? `/telegram-posts/${input.channelId}/ai-posting?aiPostingTab=autopilot`,
       requiredPermissionKey: 'channels.view',
       deliverAt: new Date(),
       publishedAt: new Date(),
@@ -161,7 +161,7 @@ export class AiPostingAutopilotNotificationsService {
       const isGroupNotificationOwner = member.id === recipients[0]?.id;
       return (['TELEGRAM_BOT', 'EMAIL'] as const)
         .filter((transport) => transport === 'TELEGRAM_BOT'
-          ? critical && isGroupNotificationOwner
+          ? (critical || input.event === 'WEEKLY_REPORT') && isGroupNotificationOwner
           : settings.email)
         .map((transport) => ({
           workspaceId: input.workspaceId,

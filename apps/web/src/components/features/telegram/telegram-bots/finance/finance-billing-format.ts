@@ -22,3 +22,15 @@ export function toMinorUnits(value: string) {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : null;
 }
 import { formatDate } from "@/lib/date-format";
+
+export function formatAiCost(micros: number | null) {
+  if (micros == null) return "—";
+  if (!micros) return "$0";
+  if (micros < 10) return "<$0.00001";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: micros < 10_000 ? 4 : 2,
+    maximumFractionDigits: 4,
+  }).format(micros / 1_000_000);
+}

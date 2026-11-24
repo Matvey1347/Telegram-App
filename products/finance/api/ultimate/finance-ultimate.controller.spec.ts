@@ -28,6 +28,7 @@ describe('FinanceUltimateController message stream', () => {
       requests as never,
       ultimate as never,
       {} as never,
+      {} as never,
     );
     const request = Object.assign(new EventEmitter(), {
       headers: { 'x-finance-consumer-request': '1' },

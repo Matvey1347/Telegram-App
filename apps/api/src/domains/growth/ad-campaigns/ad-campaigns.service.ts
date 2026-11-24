@@ -28,8 +28,7 @@ import {
   selectedInviteLinkIds,
   ensurePromosBelongToChannel,
   replaceCampaignInviteLinks,
-  replaceCampaignTrackingInviteLinks,
-  resolveTrackingInviteLinks,
+  updateCampaignTrackingSelection,
   trackingInviteLinks,
 } from './ad-campaign-link-selection';
 import { AdCampaignPromoStorage } from './ad-campaign-promo-storage';
@@ -233,7 +232,6 @@ export class AdCampaignsService {
   async create(userId: string, dto: CreateAdCampaignDto) {
     const promoIds = selectedPromoIds(dto);
     const inviteLinkIds = selectedInviteLinkIds(dto);
-    const botInviteLinkIds = normalizeSelectionIds(dto.botInviteLinkIds || []);
     const { workspaceId, assignedMemberId } =
       await this.workspaceService.resolveAssignedMemberId(
         userId,
@@ -331,23 +329,7 @@ export class AdCampaignsService {
           row.id,
           inviteLinkIds,
         );
-        const trackingInviteLinkIds =
-          dto.trackingChannelIds !== undefined
-            ? await resolveTrackingInviteLinks(
-                tx,
-                workspaceId,
-                dto.trackingChannelIds,
-                dto.trackingLinkKind || 'BOT',
-                dto.telegramChannelId,
-              )
-            : botInviteLinkIds;
-        await replaceCampaignTrackingInviteLinks(
-          tx,
-          workspaceId,
-          row.id,
-          trackingInviteLinkIds,
-          dto.trackingLinkKind || 'BOT',
-        );
+        await updateCampaignTrackingSelection(tx, workspaceId, row.id, dto.telegramChannelId, dto);
 
         if (advertisingSources.channelIds.length) {
           await (tx as any).adCampaignTelegramChannelPlacement.createMany({
@@ -405,7 +387,7 @@ export class AdCampaignsService {
       dto.inviteLinkIds !== undefined || dto.telegramInviteLinkId !== undefined;
     const hasBotInviteLinkSelection =
       dto.botInviteLinkIds !== undefined ||
-      dto.trackingChannelIds !== undefined;
+      dto.trackingChannelIds !== undefined || dto.trackingAllChannels !== undefined;
     const existingPromoLinks =
       (await this.promoStorage.hasCampaignPromoStorage())
         ? await (this.prisma as any).adCampaignPromo.findMany({
@@ -568,23 +550,7 @@ export class AdCampaignsService {
           );
         }
         if (hasBotInviteLinkSelection) {
-          const trackingInviteLinkIds =
-            dto.trackingChannelIds !== undefined
-              ? await resolveTrackingInviteLinks(
-                  tx,
-                  workspaceId,
-                  dto.trackingChannelIds,
-                  dto.trackingLinkKind || 'BOT',
-                  nextOwnTelegramChannelId,
-                )
-              : normalizeSelectionIds(dto.botInviteLinkIds || []);
-          await replaceCampaignTrackingInviteLinks(
-            tx,
-            workspaceId,
-            id,
-            trackingInviteLinkIds,
-            dto.trackingLinkKind || 'BOT',
-          );
+          await updateCampaignTrackingSelection(tx, workspaceId, id, nextOwnTelegramChannelId, dto);
         }
 
         if (dto.advertisingChannelIds) {

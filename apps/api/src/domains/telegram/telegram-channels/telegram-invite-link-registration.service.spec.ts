@@ -68,6 +68,7 @@ describe('TelegramInviteLinkRegistrationService', () => {
       buildInviteAttributionMaps: jest.fn().mockResolvedValue({ members: [] }),
     };
     const inviteSync = {
+      recordSingleInviteObservation: jest.fn(),
       persistInviteLinkFromRemote: jest
         .fn()
         .mockResolvedValue({ upserted: { id: 'stored-link', joinedCount: remote.usage, requestedCount: remote.requested } }),

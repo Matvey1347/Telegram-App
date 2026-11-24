@@ -11,6 +11,7 @@ describe('InvestmentsService', () => {
       workspaceMember: { findFirst: jest.fn() },
       account: { findFirst: jest.fn() },
       transactionCategory: { findUnique: jest.fn() },
+      investment: { findMany: jest.fn(), count: jest.fn() },
       $transaction: jest.fn((callback) => callback(tx)),
     };
     const workspaceService = {
@@ -19,7 +20,7 @@ describe('InvestmentsService', () => {
         assignedMemberId: 'owner-member',
       }),
     };
-    const authorization = { require: jest.fn().mockResolvedValue({}) };
+    const authorization = { require: jest.fn().mockResolvedValue({}), can: jest.fn() };
     const financeCategories = { ensureSystemCategories: jest.fn() };
     const service = new InvestmentsService(
       prisma as never,
@@ -27,8 +28,39 @@ describe('InvestmentsService', () => {
       authorization as never,
       financeCategories as never,
     );
-    return { service, prisma, tx, financeCategories };
+    return { service, prisma, tx, financeCategories, authorization };
   };
+
+  it('lists native amounts within the authorised workspace and the caller’s own scope', async () => {
+    const { service, prisma, authorization } = setup();
+    authorization.require.mockResolvedValue({ workspaceId: 'active-workspace', memberId: 'current-member' });
+    authorization.can.mockImplementation(async (_user, permission) => permission === 'finance.editOwn');
+    const date = new Date('2026-10-03T14:00:00Z');
+    prisma.investment.findMany.mockResolvedValue([
+      { id: 'withdrawal', amount: 18, date, currency: 'PLN', notes: null, movementType: 'WITHDRAWAL', workspaceMember: { user: { name: 'Investor' } }, account: null },
+    ]);
+    prisma.investment.count.mockResolvedValue(11);
+    prisma.$transaction.mockImplementation((operations) => Promise.all(operations));
+
+    const list = await service.findAll('reader', { page: 2, pageSize: 10 });
+    expect(list.items).toEqual([
+      { id: 'withdrawal', amount: '18', date: date.toISOString(), currency: 'PLN', notes: null, movementType: 'WITHDRAWAL', workspaceMember: { user: { name: 'Investor' } }, account: null },
+    ]);
+    expect(list.pagination.totalItems).toBe(11);
+    expect(prisma.investment.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { workspaceId: 'active-workspace', assignedMemberId: 'current-member' },
+      skip: 10,
+      take: 10,
+      select: expect.objectContaining({ workspaceMember: { select: { user: { select: { name: true } } } } }),
+    }));
+  });
+
+  it('requires Finance read permission before fetching investments', async () => {
+    const { service, prisma, authorization } = setup();
+    authorization.require.mockRejectedValue(new Error('denied'));
+    await expect(service.findAll('blocked')).rejects.toThrow('denied');
+    expect(prisma.investment.findMany).not.toHaveBeenCalled();
+  });
 
   it('links the generated transaction to its category and actual investor', async () => {
     const { service, prisma, tx, financeCategories } = setup();

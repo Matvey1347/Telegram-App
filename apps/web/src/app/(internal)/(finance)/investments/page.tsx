@@ -1,2 +1,5 @@
-import { redirect } from 'next/navigation';
-export default function InvestmentsPage() { redirect('/finance#transactions'); }
+import { FinanceInvestmentsPage } from "@/components/features/finance/internal/finance-investments-page";
+
+export default function InvestmentsPage() {
+  return <FinanceInvestmentsPage />;
+}

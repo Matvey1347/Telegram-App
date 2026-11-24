@@ -16,7 +16,7 @@ import { networkKeys, telegramChannelKeys } from "@/lib/query-keys";
 import { type AdCampaignsViewMode } from "@/components/features/growth/ad-campaigns/ad-campaign-route-state";
 import { usePagination } from "@/hooks/use-pagination";
 
-const CAMPAIGN_BOT_REQUESTS_READ_MODEL_VERSION = "campaign-metrics-v3";
+const CAMPAIGN_BOT_REQUESTS_READ_MODEL_VERSION = "campaign-metrics-v4";
 
 export function useAdsWorkspaceReads({
   viewMode,

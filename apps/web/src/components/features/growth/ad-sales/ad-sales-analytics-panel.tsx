@@ -24,7 +24,7 @@ import {
   Tooltip as UiTooltip,
 } from "@/components/ui/primitives";
 import { IconAvatar } from "@/components/icons/icon-avatar";
-import { MoneyStack } from "@/components/ui/money-stack";
+import { CurrencyAmount } from "@/components/ui/currency-amount";
 import type { CurrencySettings, ExchangeRate } from "@/lib/api";
 import { telegramAdSalesApi } from "@/lib/api";
 import { MetricPreviewLabel } from "@/lib/metric-preview-icons";
@@ -98,33 +98,27 @@ export function AdSalesAnalyticsPanel({
   }
 
   const summary = overviewQuery.data?.summary;
-  const moneySettings = settings ?? {
-    primaryCurrency: "USD",
-    secondaryCurrency: "PLN",
-    tertiaryCurrency: "UAH",
-    currencyDisplayMode: "code" as const,
-  };
+  const primaryCurrency = settings?.primaryCurrency ?? "USD";
+  const revenueCurrency = summary?.currency ?? primaryCurrency;
   const moneyPreview = (value: string | number | null | undefined) => (
-    <MoneyStack
+    <CurrencyAmount
       amount={value}
-      currency={summary?.currency ?? moneySettings.primaryCurrency}
-      settings={moneySettings}
+      currency={revenueCurrency}
+      fallbackCurrency={primaryCurrency}
       rates={rates}
-      mainClassName="whitespace-nowrap text-lg font-semibold leading-tight text-white"
-      subClassName="mt-1 text-xs text-neutral-500"
+      className="text-lg font-semibold leading-tight text-white"
     />
   );
   const tableMoney = (
     value: string | number | null | undefined,
     currency?: string | null,
   ) => (
-    <MoneyStack
+    <CurrencyAmount
       amount={value}
-      currency={currency ?? moneySettings.primaryCurrency}
-      settings={moneySettings}
+      currency={currency ?? primaryCurrency}
+      fallbackCurrency={primaryCurrency}
       rates={rates}
-      mainClassName="font-medium text-white"
-      subClassName="text-xs text-neutral-500"
+      className="font-medium text-white"
     />
   );
   const tableMoneyCompact = (
@@ -233,7 +227,11 @@ export function AdSalesAnalyticsPanel({
                   <CartesianGrid stroke="#262626" />
                   <XAxis dataKey="date" stroke="#737373" />
                   <YAxis stroke="#737373" />
-                  <Tooltip />
+                  <Tooltip
+                    contentStyle={{ background: "#0b1220", borderColor: "#334155" }}
+                    labelStyle={{ color: "#e2e8f0" }}
+                    formatter={(value) => tableMoney(typeof value === "number" ? value : null, revenueCurrency)}
+                  />
                   <Area
                     type="monotone"
                     dataKey="agreed"

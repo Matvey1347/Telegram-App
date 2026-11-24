@@ -49,6 +49,9 @@ export type ConsumerFinanceAssistantMessage = {
 export type ConsumerFinanceAssistantMessageInput = {
   text: string;
   history?: ConsumerFinanceAssistantMessage[];
+  replyTo?: ConsumerFinanceAssistantMessage;
+  chatId?: string;
+  turnId?: string;
 };
 
 export type ConsumerFinanceAssistantMessageResult = {
@@ -70,3 +73,26 @@ export type ConsumerFinanceAssistantStreamEvent =
   | { type: "delta"; delta: string }
   | { type: "done"; result: ConsumerFinanceAssistantMessageResult }
   | { type: "error"; message: string; code?: string };
+
+
+export type ConsumerFinanceAssistantChatMode = "GENERAL" | "ADVICE" | "TRANSACTIONS";
+
+export type ConsumerFinanceAssistantChat = {
+  id: string;
+  title: string;
+  mode: ConsumerFinanceAssistantChatMode;
+  updatedAt: string;
+  archivedAt?: string | null;
+};
+
+export type ConsumerFinanceAssistantTurn = {
+  id: string;
+  userText: string;
+  assistantText: string | null;
+  replyTo: ConsumerFinanceAssistantMessage | null;
+};
+
+export type ConsumerFinanceAssistantPage<T> = {
+  items: T[];
+  nextCursor: string | null;
+};

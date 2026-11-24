@@ -40,7 +40,7 @@ export function patchFinanceAccountCache(
   update: Account,
 ) {
   queryClient.setQueriesData<Account[] | PaginatedResponse<Account>>(
-    { queryKey: accountKeys.accounts() },
+    { queryKey: accountKeys.accounts(), predicate: (query) => query.queryKey[1] !== accountKeys.balanceTotals()[1] },
     (accounts) =>
       patchCollection(accounts, (account) => patchAccount(account, update)),
   );

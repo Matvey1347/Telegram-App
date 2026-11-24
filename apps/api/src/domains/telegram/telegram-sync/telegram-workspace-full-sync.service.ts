@@ -1,3 +1,4 @@
+import { attachNewCampaignTrackingLinks } from '../../growth/ad-campaigns/ad-campaign-tracking-sync';
 import {
   BadRequestException,
   ForbiddenException,
@@ -42,6 +43,8 @@ export class TelegramWorkspaceFullSyncService {
       throw new BadRequestException('Select at least one sync section');
     }
     const startedAt = Date.now();
+    if (input.actor.type === 'SCHEDULED_TASK')
+      await attachNewCampaignTrackingLinks(this.prisma, input.workspaceId);
     const [workspace, channels, actorUserId] = await Promise.all([
       this.prisma.workspace.findUniqueOrThrow({
         where: { id: input.workspaceId },
@@ -83,6 +86,14 @@ export class TelegramWorkspaceFullSyncService {
           syncIncludeChannelStats: true,
           syncIncludeManagedPosts: true,
           syncIncludeAudienceSnapshot: true,
+          ...(input.actor.type === 'SCHEDULED_TASK' ? {
+            inviteLinks: {
+              where: { isRevoked: false,
+                OR: [{ adCampaign: { endedAt: null } }, { botRequestTrackingCampaigns: { some: { adCampaign: { endedAt: null } } } }],
+              },
+              select: { id: true }, take: 1,
+            },
+          } : {}),
           adminLinks: {
             where: {
               telegramUserAccountIntegration: {
@@ -135,11 +146,12 @@ export class TelegramWorkspaceFullSyncService {
           current,
           channels.length,
         );
+      const hasTrackedLinks = input.actor.type === 'SCHEDULED_TASK' && Boolean(channel.inviteLinks?.length);
       const hasSelection = input.selection
         ? Object.values(input.selection).some(Boolean)
         : [
             channel.syncIncludePublicInfo,
-            channel.syncIncludeInviteLinks,
+            channel.syncIncludeInviteLinks || hasTrackedLinks,
             channel.syncIncludeHistoricalPosts,
             channel.syncIncludePostMetrics,
             channel.syncIncludeOlderPosts,
@@ -173,7 +185,8 @@ export class TelegramWorkspaceFullSyncService {
               saveSelection: false,
             }
           : scheduledAccount
-            ? { telegramUserAccountId: scheduledAccount, saveSelection: false }
+            ? { telegramUserAccountId: scheduledAccount, saveSelection: false,
+                ...(hasTrackedLinks ? { syncIncludeInviteLinks: true } : {}), }
             : undefined;
         const channelProgress = input.onProgress
           ? (

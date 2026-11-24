@@ -3,7 +3,7 @@ import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 describe('AdCampaignListReadService', () => {
   it('shares bot requests between overlapping campaigns including those outside the page', async () => {
     const start = new Date('2026-01-01T00:00:00Z');
-    const inviteLink = { id: 'link', telegramChannelId: 'channel', joinedCount: 0, requestedCount: 10, telegramChannel: { title: 'Channel', photoUrl: null } };
+    const inviteLink = { id: 'link', telegramChannelId: 'channel', joinedCount: 0, requestedCount: 10, requestedObservedAt: new Date('2026-01-02T00:00:00Z'), telegramChannel: { title: 'Channel', photoUrl: null } };
     const row = { id: 'first', placementDate: start, startedAt: null, createdAt: start, endedAt: null, botInviteLinks: [{ baselineJoinedCount: 0, baselineRequestedCount: 0, inviteLink }] };
     const prisma = { adCampaignBotInviteLink: { findMany: jest.fn().mockResolvedValue(['first', 'second'].map((id) => ({ inviteLinkId: 'link', adCampaign: { id, placementDate: start, startedAt: null, createdAt: start, endedAt: null } }))) }, telegramInviteLinkSnapshot: { findMany: jest.fn().mockResolvedValue([]) } };
     const service = new AdCampaignListReadService(prisma as never, {} as never);

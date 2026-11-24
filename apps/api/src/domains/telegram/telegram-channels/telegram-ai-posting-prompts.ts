@@ -24,10 +24,10 @@ export function mandatoryChannelRules(configuration: Record<string, unknown>) {
 
 export function editorialDescription(configuration: Record<string, unknown>) {
   const fields = [
+    ['Стиль', configuration.style],
     ['Описание канала', configuration.channelDescription],
     ['Тематика', configuration.topic],
     ['Аудитория', configuration.audience],
-    ['Стиль', configuration.style],
     ['Инструкции владельца', configuration.instructions],
   ] as const;
   return fields

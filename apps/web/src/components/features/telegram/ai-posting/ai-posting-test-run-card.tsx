@@ -40,6 +40,8 @@ export function AiPostingTestRunCard({
   stopPending,
   channelId,
   channelTitle,
+  captionLengthMax,
+  messageLengthMax,
   channelPhotoUrl,
   watermarkPreview,
   customEmojiPacks,
@@ -72,6 +74,8 @@ export function AiPostingTestRunCard({
   stopPending?: boolean;
   channelId?: string;
   channelTitle: string;
+  captionLengthMax?: number;
+  messageLengthMax?: number;
   channelPhotoUrl?: string | null;
   watermarkPreview?: AiPostingWatermarkPreviewSettings;
   customEmojiPacks?: TelegramCustomEmojiPackSummary[];
@@ -158,6 +162,8 @@ export function AiPostingTestRunCard({
         run={run}
         historyNavigation={historyNavigation}
         channelTitle={channelTitle}
+        captionLengthMax={captionLengthMax}
+        messageLengthMax={messageLengthMax}
         channelId={channelId}
         channelPhotoUrl={channelPhotoUrl}
         watermarkPreview={watermarkPreview}
@@ -223,10 +229,11 @@ function RunCosts({ run }: { run: TestRun }) {
     image: run.imageCost ?? null,
     review: run.reviewCost ?? null,
   });
+  const count = run.requestedCount ?? run.progress?.count;
   return (
     <footer className="flex flex-wrap gap-x-4 gap-y-2 border-t border-neutral-800 pt-3 text-xs text-neutral-400">
       <strong className="text-neutral-200">
-        Итого за запуск: {total === null ? "есть неподтверждённые расходы" : money(total)}
+        Итого за запуск{count ? ` (публикаций: ${count})` : ""}: {total === null ? "есть неподтверждённые расходы" : money(total)}
       </strong>
       <span>Планирование: {money(run.planningCost)}</span>
       <span>Текст: {money(run.textCost)}</span>

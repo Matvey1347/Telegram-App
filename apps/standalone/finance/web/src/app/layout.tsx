@@ -5,6 +5,7 @@ import { TelegramWebAppSdk } from "@finance-web/components/telegram/telegram-web
 import { FinanceDatabaseEnvironmentBadge } from "@finance-web/components/finance-database-environment-badge";
 import { ConsumerFinanceProvider } from "@consumer-finance/web/provider/consumer-finance-provider";
 import "../groshly/style.css";
+import "../groshly/assistant.css";
 import "../groshly/finance-polish.css";
 import "./globals.css";
 import "./legal.css";

@@ -30,13 +30,14 @@ export function CampaignBotRequestsModal({
     >
       <div className="space-y-5">
         <p className="text-sm text-slate-400">
-          {campaign.title} · {number(performance.total)} request
-          {performance.total === 1 ? "" : "s"}
+          {campaign.title} · {performance.confirmed === false
+            ? "Waiting for confirmed Telegram counters"
+            : `${number(performance.total)} request${performance.total === 1 ? "" : "s"}`}
         </p>
 
-        <CampaignTrend performance={performance} />
+        {performance.confirmed !== false && <CampaignTrend performance={performance} />}
 
-        {performance.channels.length ? (
+        {performance.confirmed === false ? null : performance.channels.length ? (
           <section>
             <div className="mb-2 flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-300">

@@ -60,13 +60,21 @@ export class TelegramInviteLinkRegistrationService {
           joinedFrom: period?.from, joinedUntil: period?.until,
           includePendingSince: period?.includePending,
         });
-        remote = period ? {
+        remote = {
           ...result,
-          joinedWithinPeriod: result.joinedWithinPeriod ?? remote?.joinedWithinPeriod ?? null,
-          pendingWithinPeriod: result.pendingWithinPeriod ?? remote?.pendingWithinPeriod ?? null,
-        } : result;
-        if (!period || result.revoked || (result.expireDate && result.expireDate <= new Date()) ||
-            (remote.joinedWithinPeriod != null && (!period.includePending || remote.pendingWithinPeriod != null))) break;
+          ...(result.usageObserved === false && remote && remote.usageObserved !== false
+            ? { usage: remote.usage, usageObserved: true } : {}),
+          ...(result.requestedObserved === false && remote && remote.requestedObserved !== false
+            ? { requested: remote.requested, requestedObserved: true } : {}),
+          ...(period ? {
+            joinedWithinPeriod: result.joinedWithinPeriod ?? remote?.joinedWithinPeriod ?? null,
+            pendingWithinPeriod: result.pendingWithinPeriod ?? remote?.pendingWithinPeriod ?? null,
+          } : {}),
+        };
+        if (result.revoked || (result.expireDate && result.expireDate <= new Date()) ||
+          (period ? remote.joinedWithinPeriod != null &&
+            (!period.includePending || remote.pendingWithinPeriod != null)
+            : remote.usageObserved !== false && remote.requestedObserved !== false)) break;
       } catch {
         // Only a read is retried. ExportChatInvite is never repeated here.
       }
@@ -103,6 +111,7 @@ export class TelegramInviteLinkRegistrationService {
       warnings: [],
       progressStep: { current: 1, total: 1 },
     });
+    if (!period) await this.inviteSync.recordSingleInviteObservation(workspaceId, channelId, persisted);
     return {
       id: persisted.upserted.id,
       // The selector that initiated registration needs the Telegram title

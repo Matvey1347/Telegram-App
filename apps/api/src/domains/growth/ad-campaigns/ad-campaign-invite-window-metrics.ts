@@ -19,9 +19,9 @@ export function campaignInviteWindowMetrics(
   for (const link of links) {
     const window = byLink.get(link.id);
     const joinedValue = window ? window.joinedCount :
-      link.joinedObserved !== undefined && !link.joinedObserved && !link.joinedObservedAt && !link.lastSyncedAt ? null : link.joinedCount;
+      link.joinedObserved === false && !link.joinedObservedAt || link.joinedObserved === null && !link.joinedObservedAt && !link.lastSyncedAt ? null : link.joinedCount;
     const pendingValue = window ? window.pendingCount :
-      link.requestedObserved !== undefined && !link.requestedObserved && !link.requestedObservedAt && !link.lastSyncedAt ? null : link.requestedCount;
+      link.requestedObserved === false && !link.requestedObservedAt || link.requestedObserved === null && !link.requestedObservedAt && !link.lastSyncedAt ? null : link.requestedCount;
     joined = joined == null || joinedValue == null ? null : joined + joinedValue;
     pending = pending == null || pendingValue == null ? null : pending + pendingValue;
   }

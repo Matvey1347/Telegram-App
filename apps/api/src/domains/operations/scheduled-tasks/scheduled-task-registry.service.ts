@@ -9,6 +9,18 @@ export class ScheduledTaskRegistryService {
   definitions(): ScheduledTaskDefinition[] {
     return [
       {
+        key: 'telegram.ai_posting.autopilot',
+        name: 'AI Posting Autopilot',
+        description: 'Replenishes verified editorial drafts and fills channel calendar slots.',
+        scope: 'SYSTEM_MAINTENANCE',
+        defaultSchedule: { frequency: 'INTERVAL', intervalMinutes: 60, timezone: 'Europe/Warsaw' },
+        scheduleEditable: false,
+        supportedFrequencies: ['INTERVAL'],
+        notificationSupported: false,
+        dueDriven: true,
+        execute: this.executor.executors['telegram.ai_posting.autopilot'],
+      },
+      {
         key: 'telegram.managed_posts.publish_due',
         name: 'Scheduled Telegram publication delivery',
         description:

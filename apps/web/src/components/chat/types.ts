@@ -42,6 +42,7 @@ export type ChatMessage = {
   direction: "incoming" | "outgoing";
   sentAt: string;
   editedAt?: string | null;
+  deliveryLabel?: string;
   deleted?: boolean;
   forwarded?: string;
   actionCapabilities?: Partial<Pick<ChatCapabilities, "canReply" | "canEdit" | "canDelete" | "canReact" | "canForward">>;
@@ -51,6 +52,8 @@ export type ChatMessage = {
   reactions?: Array<{ emoji: string; count: number; chosen?: boolean; displayEmoji?: string; iconPresentation?: ResolvedEmoji }>;
   /** Optional safe renderer supplied by an adapter for supported text entities. */
   content?: ReactNode;
+  caption?: ReactNode;
+  notice?: ReactNode;
 };
 
 export type ChatMessageActions = {

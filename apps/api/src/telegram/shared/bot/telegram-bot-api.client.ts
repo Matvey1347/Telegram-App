@@ -280,6 +280,7 @@ export class TelegramBotApiClient {
       text: string;
       parse_mode?: string;
       reply_markup?: unknown;
+      reply_parameters?: { message_id: number };
       link_preview_options?: unknown;
     },
   ) {

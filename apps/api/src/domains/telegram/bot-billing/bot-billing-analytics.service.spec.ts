@@ -52,7 +52,7 @@ describe('BotBillingAnalyticsService', () => {
     });
   });
 
-  it('aggregates real AI cost by model and user across a logical bot', async () => {
+  it('counts priced receipts and older profile-attributed events in the selected runtime', async () => {
     const prisma = {
       telegramBotRuntimeInstance: {
         findFirst: jest.fn().mockResolvedValue({ id: 'runtime-local' }),
@@ -95,24 +95,30 @@ describe('BotBillingAnalyticsService', () => {
             telegramUserId: '42',
             username: 'alice',
             firstName: 'Alice',
+            billingSubscriptions: [{ plan: { name: 'Plus' } }],
           },
         ]),
       },
     };
     const service = new BotBillingAnalyticsService(prisma as never);
     await expect(
-      service.aiUsage('workspace-1', 'bot-1'),
+      service.aiUsage('workspace-1', 'bot-1', 'LOCAL'),
     ).resolves.toMatchObject({
       requests: 2,
       estimatedCostMicros: 90,
       unpricedRequests: 0,
       byModel: [{ model: 'gpt-5-mini', requests: 2 }],
-      byUser: [{ telegramBotUserId: 'user-1', username: 'alice', requests: 2 }],
+      byUser: [{ telegramBotUserId: 'user-1', username: 'alice', planName: 'Plus', requests: 2 }],
     });
     expect(prisma.aiUsageEvent.aggregate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.not.objectContaining({
-          runtimeInstanceId: expect.anything(),
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          botIntegrationId: 'bot-1',
+          OR: [
+            { runtimeInstanceId: 'runtime-local' },
+            { runtimeInstanceId: null, profile: { is: { botIntegrationId: 'bot-1', telegramUser: { runtimeInstanceId: 'runtime-local' } } } },
+          ],
         }),
       }),
     );

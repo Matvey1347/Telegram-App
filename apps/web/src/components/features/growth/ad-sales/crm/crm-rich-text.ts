@@ -94,7 +94,7 @@ export function serializeCrmDraft(root: Node): string {
   const serialize = (node: Node): string => {
     if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
     if (!(node instanceof HTMLElement)) return '';
-    if (node.tagName === 'BR') return '\n';
+    if (node.tagName === 'BR') return node.dataset.crmCaret === undefined ? '\n' : '';
     if (node.dataset.raw) {
       const visible = node.dataset.raw.startsWith('![') ? /^!\[([^\]]*)\]/.exec(node.dataset.raw)?.[1] : node.dataset.raw.slice(1);
       if (node.textContent === visible) return node.dataset.raw;

@@ -159,15 +159,12 @@ describe("Groshly special transactions", () => {
     expect(onSaveLedgerEntry.mock.calls[0][0].draft.receivedAmount).toBe(973.12);
   });
 
-  it("settles the AI preparation state after a simple message", async () => {
+  it("requires sign-in before showing the AI message composer", () => {
     render(<App initialData={snapshot()} />);
     fireEvent.click(screen.getByRole("button", { name: /AI/ }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Message to AI" }), {
-      target: { value: "expense 120 groceries" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    await waitFor(() => expect(screen.getByText("I prepared the actions. Review them before saving.")).toBeInTheDocument());
-    expect(screen.queryByText("Preparing actions...")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeVisible();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument();
   });
 
   it("edits an investment cash flow without requiring or sending a category", async () => {

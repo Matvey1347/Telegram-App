@@ -10,6 +10,7 @@ import { randomBytes } from "node:crypto";
 import { assertPortAvailable } from "./dev-port-availability.mjs";
 import { useLocalDatabase } from "./dev-local-database.mjs";
 import { terminateDevChildren } from "./dev-process-termination.mjs";
+import { registerDevLauncher } from "./dev-launcher-ownership.mjs";
 import { waitForHttpReady } from "./dev-service-readiness.mjs";
 import { localBotPublicEnvironment } from "../deployment/public-origin-environment.mjs";
 import { extractCloudflareQuickTunnelUrl } from "./dev-cloudflare-tunnel.mjs";
@@ -153,7 +154,7 @@ function start(name, command, args, env, required = true, onLine) {
   const recentLines = [];
   const child = spawn(command, args, {
     cwd: process.cwd(),
-    env: { ...process.env, ...env },
+    env: { ...process.env, ...env, TELEGRAM_DEV_MANAGED_LAUNCH: "1" },
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
   });
@@ -531,6 +532,7 @@ if (withFinanceApi) {
       ...LOCAL_PRODUCTS.finance.ports.map(([port, name]) => assertPortAvailable(port, name)),
       assertPortAvailable(botGatewayPort, "Finance bot gateway"),
     ]);
+    registerDevLauncher([3001, 4001, botGatewayPort]);
     await prepareLocalSchema();
     if (stopping) await new Promise(() => {});
     startBotGateway(4001, 3001);
@@ -539,6 +541,7 @@ if (withFinanceApi) {
       ...LOCAL_PRODUCTS.finance.processes[0].env,
       LOCAL_DEV_BOTS_CONTROL_SECRET: localDevControlSecret,
       ...financeEnvironment,
+      TELEGRAM_SUPPORT_WEBHOOK_OWNER: "off",
       ...financeLocalBotRuntimeEnvironment(),
       ...localBotPublicEnvironment(publicUrl),
       FINANCE_WEB_PUBLIC_URL: publicUrl,
@@ -590,6 +593,7 @@ if (withFinanceApi) {
         ? [assertPortAvailable(botGatewayPort, "Bot gateway")]
         : []),
     ]);
+    registerDevLauncher([3000, 4000, ...(usesLocalBotGateway ? [botGatewayPort] : [])]);
   } catch (error) {
     failure("Local development", error);
     process.exit(1);

@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TestI18nProvider } from "@/test/render-with-i18n";
+import { TelegramPostsViewNavigation } from "../telegram/telegram-posts-workspace-navigation";
 import { AiPostingPage } from "./ai-posting-page";
 
 const mocks = vi.hoisted(() => ({
@@ -79,14 +80,22 @@ const settings = {
   detectedLanguage: "uk",
 };
 
-function renderPage() {
+function renderPage(withNavigation = false) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <TestI18nProvider>
       <QueryClientProvider client={client}>
-        <AiPostingPage channelId="channel-1" channelTitle="Channel" />
+        <AiPostingPage
+          channelId="channel-1"
+          channelTitle="Channel"
+          viewNavigation={withNavigation ? <TelegramPostsViewNavigation
+            view="ai-posting"
+            onViewChange={vi.fn()}
+            labels={{ "ai-posting": "AI Posting", calendar: "Calendar", editor: "Editor" }}
+          /> : undefined}
+        />
       </QueryClientProvider>
     </TestI18nProvider>,
   );
@@ -103,6 +112,29 @@ describe("AiPostingPage", () => {
     mocks.put.mockResolvedValue({ data: settings });
     mocks.post.mockResolvedValue({ data: {} });
     mocks.resolveCustomEmojiDocuments.mockResolvedValue({ packs: [] });
+  });
+
+  it("shows the publication tabs, settings tabs, and analysis action in one toolbar", async () => {
+    renderPage(true);
+    const navigation = screen.getByRole("tablist", { name: "Публикации канала" });
+    const analysis = await screen.findByRole("button", { name: "Детальный анализ канала" });
+    const settings = screen.getByRole("group", { name: "Разделы AI Posting" });
+    expect(navigation.nextElementSibling).toBe(settings);
+    expect(settings.nextElementSibling).toBe(analysis);
+    expect(navigation.parentElement).toHaveClass("@min-[54rem]:flex-nowrap");
+    expect(screen.getByRole("region", { name: "Настройки AI Posting" })).not.toContainElement(settings);
+    expect(analysis).toHaveClass("ml-auto", "bg-blue-600");
+    expect(screen.getByRole("region", { name: "Настройки AI Posting" })).not.toContainElement(analysis);
+  });
+
+  it("opens Autopilot first when the URL does not select a settings tab", async () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("aiPostingTab");
+    window.history.replaceState(window.history.state, "", url);
+    renderPage();
+    const tab = await screen.findByRole("link", { name: "Autopilot" });
+    expect(tab).toHaveAttribute("aria-current", "page");
+    expect(tab.parentElement?.firstElementChild).toBe(tab);
   });
 
   it("keeps expanded subspheres and card edit actions accessible across settings tabs", async () => {

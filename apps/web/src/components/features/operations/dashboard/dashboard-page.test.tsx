@@ -79,7 +79,7 @@ describe("dashboard", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("2.00 UAH")).toBeInTheDocument();
+    expect(await screen.findByText("2.00 ₴")).toBeInTheDocument();
     expect(getSummaryMock).not.toHaveBeenCalled();
   });
 
@@ -107,13 +107,13 @@ describe("dashboard", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("2.00 UAH")).toBeInTheDocument();
+    expect(await screen.findByText("2.00 ₴")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "All time" }));
 
     expect(
       await screen.findByRole("status", { name: "Loading dashboard" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("2.00 UAH")).not.toBeInTheDocument();
+    expect(screen.queryByText("2.00 ₴")).not.toBeInTheDocument();
     await waitFor(() =>
       expect(getSummaryMock).toHaveBeenLastCalledWith(undefined),
     );
@@ -239,7 +239,7 @@ describe("dashboard", () => {
     expect(
       screen.getByText("Revenue per active subscriber"),
     ).toBeInTheDocument();
-    expect(screen.getByText("2.00 USD")).toBeInTheDocument();
+    expect(screen.getByText("2.00 $")).toBeInTheDocument();
     expect(screen.getByText("Income")).toBeInTheDocument();
     expect(screen.getByText("Expenses")).toBeInTheDocument();
     expect(screen.getByText("Investments")).toBeInTheDocument();
@@ -247,7 +247,7 @@ describe("dashboard", () => {
     expect(screen.getByText("Other (bots, etc.)")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "1,000.00 USD channel revenue divided by 600 active subscribers.",
+        "1,000.00 $ channel revenue divided by 600 active subscribers.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Balance adjustments")).toBeInTheDocument();

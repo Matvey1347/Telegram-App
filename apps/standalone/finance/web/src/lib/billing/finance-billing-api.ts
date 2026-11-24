@@ -53,8 +53,9 @@ export const financeBillingApi = {
       tier: catalog.current.tier === "FREE" ? "FREE" : "PLUS",
       activeUntil: catalog.current.activeUntil,
       cancelAtPeriodEnd: catalog.current.cancelAtPeriodEnd,
-      subscription: catalog.subscriptions.find((item) =>
-        ["ACTIVE", "PAST_DUE"].includes(item.status),
+      activeAccess: catalog.activeAccess,
+      hasOverduePayment: catalog.subscriptions.some(
+        (item) => item.source === "STRIPE" && item.status === "PAST_DUE",
       ),
       offers,
       history: catalog.paymentHistory,
@@ -63,6 +64,7 @@ export const financeBillingApi = {
   checkout: (botId: string, priceId: string, mode?: "TEST" | "LIVE") =>
     consumerFinancePlanningApi.checkout(botId, "STRIPE", priceId, mode),
   portal: consumerFinancePlanningApi.paymentPortal,
+  changePlan: consumerFinancePlanningApi.changePlan,
   cancel: consumerFinancePlanningApi.cancelAutoRenew,
   resume: consumerFinancePlanningApi.resumeAutoRenew,
 };

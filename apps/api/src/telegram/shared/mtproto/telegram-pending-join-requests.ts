@@ -16,12 +16,24 @@ export async function livePending(
   onFailure?: (code: string) => void,
 ) {
   void fullChannel; // Metadata is not a verified live queue, even when nonzero.
+  return readInviteImporterCount(client, peer, true, run, undefined, onFailure);
+}
+
+export async function readInviteImporterCount(
+  client: TelegramClient,
+  peer: Api.TypeEntityLike,
+  requested: boolean,
+  run: <T>(request: Promise<T>) => Promise<T>,
+  link?: string,
+  onFailure?: (code: string) => void,
+) {
   try {
     const response = (await run(
       client.invoke(
         new Api.messages.GetChatInviteImporters({
           peer,
-          requested: true,
+          ...(requested ? { requested: true } : {}),
+          ...(link ? { link } : {}),
           offsetDate: 0,
           offsetUser: new Api.InputUserEmpty(),
           limit: 1,
