@@ -11,6 +11,7 @@ import { TelegramPublicationSchedulesService } from './telegram-publication-sche
 import { classifyAutopilotError } from './telegram-ai-posting-autopilot-error';
 import {
   AUTOPILOT_COVERAGE_DAYS,
+  AUTOPILOT_LEASE_MS,
   AUTOPILOT_REFILL_DAYS,
   autopilotReadyDraftWhere,
   autopilotContentSlots,
@@ -58,6 +59,7 @@ export class TelegramAiPostingAutopilotChannelService {
           mode: true,
           draftExpirationDays: true,
           autopilotLastSummary: true,
+          autopilotLeaseExpiresAt: true,
         },
       });
     const settings = await lease();
@@ -231,9 +233,22 @@ export class TelegramAiPostingAutopilotChannelService {
           // Reuse the bounded generator under the same channel lease and report.
           // Count attempted slots so a provider outage cannot trigger an open-ended retry loop.
           for (let attempted = 0; attempted < amount; ) {
-            if (!(await lease())) {
+            const current = await lease();
+            if (!current) {
               stopped = true;
               break;
+            }
+            if (current.autopilotLeaseExpiresAt &&
+                +current.autopilotLeaseExpiresAt - Date.now() < AUTOPILOT_LEASE_MS / 2) {
+              const refreshedAt = new Date();
+              const renewed = await this.prisma.telegramAiPostingSettings.updateMany({
+                where: { ...leaseWhere, autopilotLeaseExpiresAt: { gt: refreshedAt } },
+                data: { autopilotLeaseExpiresAt: new Date(+refreshedAt + AUTOPILOT_LEASE_MS) },
+              });
+              if (!renewed.count) {
+                stopped = true;
+                break;
+              }
             }
             const count = Math.min(MAX_TELEGRAM_AI_POSTING_BATCH_SIZE, amount - attempted);
             attempted += count;

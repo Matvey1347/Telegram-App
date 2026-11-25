@@ -1,3 +1,4 @@
+import { AUTOPILOT_LEASE_MS } from './telegram-ai-posting-autopilot-policy';
 import {
   ConflictException,
   Injectable,
@@ -13,7 +14,6 @@ import { WorkspaceService } from '../../../common/workspace.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { TelegramAiPostingAutopilotChannelService } from './telegram-ai-posting-autopilot-channel.service';
 
-const LEASE_MS = 60 * 60_000;
 
 
 @Injectable()
@@ -128,7 +128,7 @@ export class TelegramAiPostingAutopilotService {
           },
           data: {
             autopilotLeaseOwner: owner,
-            autopilotLeaseExpiresAt: new Date(Date.now() + LEASE_MS),
+            autopilotLeaseExpiresAt: new Date(Date.now() + AUTOPILOT_LEASE_MS),
           },
         });
       } catch {

@@ -6,6 +6,7 @@ import {
 import type { PrismaService } from '../../../prisma/prisma.service';
 import { editorialDraftWhere } from './telegram-managed-draft-editorial';
 
+export const AUTOPILOT_LEASE_MS = 60 * 60_000;
 export const AUTOPILOT_REFILL_DAYS = 10;
 export const AUTOPILOT_COVERAGE_DAYS = 20;
 export const AUTOPILOT_STOCK_DAYS = 50;
