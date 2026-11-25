@@ -147,14 +147,17 @@ it("shows send on an empty composer and updates native replies, edits, deletions
     reactions: ["👍"], status: "SENT", formatted: true, createdAt: now,
   };
   let response: typeof outgoing | (typeof outgoing & { deletedAt: string }) | undefined;
-  const confirmation = Promise.withResolvers<typeof outgoing>();
+  let confirmSend!: (message: typeof outgoing) => void;
+  const confirmation = new Promise<typeof outgoing>((resolve) => {
+    confirmSend = resolve;
+  });
   vi.spyOn(telegramSupportApi, "avatar").mockResolvedValue(null);
   vi.spyOn(telegramSupportApi, "list").mockResolvedValue({ items: [ticket], nextCursor: null });
   vi.spyOn(telegramSupportApi, "thread").mockImplementation(async () => ({
     items: response ? [response, incoming] : [incoming],
     nextCursor: null, lastInboundAt: now,
   }));
-  const send = vi.spyOn(telegramSupportApi, "reply").mockReturnValue(confirmation.promise);
+  const send = vi.spyOn(telegramSupportApi, "reply").mockReturnValue(confirmation);
   const edit = vi.spyOn(telegramSupportApi, "editMessage").mockImplementation(async (_, _messageId, text) => {
     response = { ...outgoing, text };
     return response;
@@ -179,7 +182,7 @@ it("shows send on an empty composer and updates native replies, edits, deletions
   expect(send).toHaveBeenCalledWith(ticket.id, expect.any(String), outgoing.text, incoming.id);
 
   response = outgoing;
-  confirmation.resolve(outgoing);
+  confirmSend(outgoing);
   const sent = await screen.findByRole("button", { name: "👍: 1" });
   const bubble = sent.closest("article")!;
   expect(within(bubble).getByText("Sent")).toBeVisible();
