@@ -59,6 +59,7 @@ export class TelegramInviteLinkRegistrationService {
           ...this.access.accountCredentials(account), channel, inviteLink,
           joinedFrom: period?.from, joinedUntil: period?.until,
           includePendingSince: period?.includePending,
+          ...(!period ? { preferLivePending: true } : {}),
         });
         remote = {
           ...result,

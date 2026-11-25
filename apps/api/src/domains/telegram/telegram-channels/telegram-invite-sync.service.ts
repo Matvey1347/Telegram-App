@@ -226,7 +226,7 @@ export class TelegramInviteSyncService {
     onProgress?: BulkProgressCallback;
     progressStep: { current: number; total: number };
   }) {
-    if (params.channelReference) await this.refreshMissingCampaignLinks({ ...params, channelReference: params.channelReference });
+    if (params.channelReference) await this.refreshTrackedCampaignLinks({ ...params, channelReference: params.channelReference });
     const campaignIds = [...params.affectedCampaignIds];
     if (campaignIds.length) {
       await this.telegramChannelsSupportService.notifyDetailedTaskProgress(
@@ -331,7 +331,7 @@ export class TelegramInviteSyncService {
     };
   }
 
-  private async refreshMissingCampaignLinks(
+  private async refreshTrackedCampaignLinks(
     params: Parameters<TelegramInviteSyncService['finalizeInviteLinkSync']>[0] & {
       channelReference: NonNullable<Parameters<TelegramInviteSyncService['finalizeInviteLinkSync']>[0]['channelReference']>;
     },
@@ -341,22 +341,28 @@ export class TelegramInviteSyncService {
     const tracked = await this.prisma.telegramInviteLink.findMany({
       where: {
         workspaceId: params.workspaceId, telegramChannelId: params.channelId, isRevoked: false,
-        ...(confirmedUrls.length ? { url: { notIn: confirmedUrls } } : {}),
-        OR: [{ adCampaign: { endedAt: null } }, { botRequestTrackingCampaigns: { some: { adCampaign: { endedAt: null } } } }],
+        OR: [
+          { adCampaign: { endedAt: null } },
+          {
+            ...(confirmedUrls.length ? { url: { notIn: confirmedUrls } } : {}),
+            botRequestTrackingCampaigns: { some: { adCampaign: { endedAt: null } } },
+          },
+        ],
       },
       orderBy: [{ requestedObservedAt: { sort: 'asc', nulls: 'first' } }, { id: 'asc' }],
-      select: { url: true }, take: 12,
+      select: { url: true, adCampaignId: true }, take: 12,
     });
     if (!tracked.length) return;
     const listedByUrl = new Map(params.remote.links.map((link) => [link.url, link]));
     const maps = await this.telegramInviteAttributionService.buildInviteAttributionMaps(params.workspaceId);
-    for (const { url } of tracked) {
+    for (const { url, adCampaignId } of tracked) {
       const listed = listedByUrl.get(url);
       let detail: Awaited<ReturnType<TelegramMtprotoClient['getChannelInviteLink']>>;
       try {
         detail = await this.mtprotoClient.getChannelInviteLink({
           ...this.telegramChannelAccessService.accountCredentials(params.account),
           channel: params.channelReference, inviteLink: url,
+          ...(adCampaignId ? { preferLivePending: true } : {}),
         });
       } catch {
         const unavailable = {

@@ -1,4 +1,5 @@
-import { attachNewCampaignTrackingLinks } from '../../growth/ad-campaigns/ad-campaign-tracking-sync';
+import { AdCampaignInviteWindowsService } from '../../growth/ad-campaigns/ad-campaign-invite-windows.service';
+import { attachNewCampaignTrackingLinks, loadDueCampaignInviteWindows } from '../../growth/ad-campaigns/ad-campaign-tracking-sync';
 import {
   BadRequestException,
   ForbiddenException,
@@ -120,6 +121,14 @@ export class TelegramWorkspaceFullSyncService {
       contextId,
       { strict: false },
     );
+    const dueWindows = input.actor.type === 'SCHEDULED_TASK'
+      ? await loadDueCampaignInviteWindows(
+          this.prisma, input.workspaceId,
+          channels.filter(({ inviteLinks }) => inviteLinks?.length).map(({ id }) => id),
+          new Date(startedAt),
+        )
+      : undefined;
+    let inviteWindows: Promise<AdCampaignInviteWindowsService> | undefined;
     let successful = 0;
     let failed = 0;
     let skipped = 0;
@@ -228,6 +237,17 @@ export class TelegramWorkspaceFullSyncService {
             message: this.outcomeFailureReason(outcome),
           });
         } else {
+          const window = dueWindows?.get(channel.id);
+          if (window) {
+            try {
+              const service = await (inviteWindows ??= this.moduleRef.resolve<AdCampaignInviteWindowsService>(
+                AdCampaignInviteWindowsService, contextId, { strict: false },
+              ));
+              await service.refresh(actorUserId, window.campaignId, [window.inviteLinkId]);
+            } catch {
+              notify({ phase: 'channel_progress', message: 'Campaign invite interval could not be refreshed.' });
+            }
+          }
           successful += 1;
           notify({
             phase: 'channel_completed',
