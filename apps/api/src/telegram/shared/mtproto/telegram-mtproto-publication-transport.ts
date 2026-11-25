@@ -309,26 +309,26 @@ export class TelegramMtprotoPublicationTransport {
   }) {
     const client = await this.context.createClient(params);
     try {
-      const resolved = params.channel
-        ? await this.context.resolveStoredChannel(client, params.channel)
-        : null;
-      if (
-        resolved &&
-        !resolved.channel.isCreator &&
-        !resolved.channel.adminRights?.deleteMessages
-      )
-        throw new BadRequestException(
-          'The selected Telegram account no longer has delete rights.',
-        );
-      const peer =
-        resolved?.peer ||
-        (await client.getInputEntity(params.channelRef as string));
-      await client.invoke(
-        new Api.channels.DeleteMessages({
+      const deleteFrom = async (channel?: StoredTelegramChannelReference) => {
+        const resolved = channel ? await this.context.resolveStoredChannel(client, channel) : null;
+        if (resolved && !resolved.channel.isCreator && !resolved.channel.adminRights?.deleteMessages) {
+          throw new BadRequestException('The selected Telegram account no longer has delete rights.');
+        }
+        const peer = resolved?.peer ?? await client.getInputEntity(params.channelRef as string);
+        await client.invoke(new Api.channels.DeleteMessages({
           channel: peer,
           id: params.messageIds.map(Number).filter(Number.isFinite),
-        }),
-      );
+        }));
+      };
+      try {
+        await deleteFrom(params.channel);
+      } catch (error) {
+        // The API explicitly rejected the peer. Resolve the same channel for
+        // this account before a single retry with the exact same message IDs.
+        if (!params.channel?.telegramAccessHash || (error as { errorMessage?: string })?.errorMessage !== 'CHANNEL_INVALID')
+          throw error;
+        await deleteFrom({ ...params.channel, telegramAccessHash: null });
+      }
     } finally {
       await this.context.closeClient(client);
     }

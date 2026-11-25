@@ -78,7 +78,7 @@ describe("workspace query isolation", () => {
     "telegram-managed-posts-calendar",
     "telegram-publication-schedules",
     "dashboard-summary",
-    "telegram-channel-reminders",
+    "publication-notifications",
     "telegram-managed-post-history",
     "telegram-post-batches",
     "telegram-ad-baseline",

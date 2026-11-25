@@ -35,6 +35,20 @@ describe('TelegramMtprotoClient import resolution', () => {
       .mockResolvedValue(null as never);
   });
 
+  it('re-resolves the same channel after an explicit invalid peer rejection during deletion', async () => {
+    const channel = { telegramChatId: '42', telegramAccessHash: '5' };
+    const first = new Api.InputPeerChannel({ channelId: returnBigInt('42'), accessHash: returnBigInt('5') });
+    const refreshed = new Api.InputPeerChannel({ channelId: returnBigInt('42'), accessHash: returnBigInt('9') });
+    const resolve = jest.spyOn(client as never, 'resolveStoredChannel' as never)
+      .mockResolvedValueOnce({ peer: first, channel: { isCreator: true } } as never)
+      .mockResolvedValueOnce({ peer: refreshed, channel: { isCreator: true } } as never);
+    fakeClient.invoke.mockRejectedValueOnce(Object.assign(new Error('Invalid peer'), { errorMessage: 'CHANNEL_INVALID' }))
+      .mockResolvedValueOnce({});
+    await client.deletePublishedMessages({ apiId: '1', apiHash: 'test', session: 'test', channel, messageIds: ['11'] });
+    expect(resolve).toHaveBeenNthCalledWith(2, fakeClient, { ...channel, telegramAccessHash: null });
+    expect(fakeClient.invoke).toHaveBeenNthCalledWith(2, expect.objectContaining({ channel: refreshed, id: [11] }));
+  });
+
   it('downloads the current account avatar through the authorized session', async () => {
     const me = new Api.User({
       id: returnBigInt('42'),
