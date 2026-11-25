@@ -207,3 +207,75 @@ channel that were missing from the catalog or had incomplete counters. Each
 fallback requests a one-row importer page when Telegram omits an aggregate.
 There is no additional timer or idle poll. Existing invite snapshots are reused
 for attribution and completed tracking windows keep their historical counters.
+
+### Workspace creative encyclopedia
+
+The Ads header loads the encyclopedia only when opened. The list reads up to 20
+creatives per section and batches comment and attachment metadata with the page.
+Copying all sections walks the same cursor pages without downloading file bytes.
+Files are fetched individually when a user opens a preview. The workload is the
+same with 2 or 100 channels, with no polling, background writes, or external
+calls. Neon can idle between interactions and Railway has no additional
+resident processes.
+
+Entries and mentor comments remain as workspace knowledge until their entry or
+workspace is deleted. A single private attachment per entry is capped at 10 MiB
+and stored separately from list metadata. For 100 entries, attachment storage
+is bounded at 1,000 MiB before database overhead. Deletion cascades to the file
+and comments. There is no automatic expiry of user-created notes.
+
+### Dashboard acquisition and sales
+
+The period summary uses the existing dashboard cache and stored Telegram
+observations. It does not start timers, fetch Telegram history remotely, or add
+writes or retained records. For 100 channels, channel and source lookups are
+batched. The traffic query uses the workspace/invite-link/time index for one
+baseline and a date range per link. It sends one aggregate per measured link
+back to the API. The all-time view reads the available observation history, so
+its cost grows with stored snapshots. Sales counts are grouped in PostgreSQL. A second workspace-scoped aggregate reads posted receipts for seller revenue only when the viewer may access both finance and sales. Idle dashboards add no polling or connection activity.
+
+### Publication coverage notifications
+
+A subscribed workspace has one indexed due timestamp. The existing due-driven
+task reads at most 30 due workspaces per execution. It uses one active-channel
+read and one batched booking summary for all included channels in each workspace.
+At 100 channels that is still one batched booking summary. Telegram receives
+at most one message per coverage threshold per 15 channels, and only when a
+threshold is reached. There is one next-date write per checked workspace and
+none for disabled workspaces. In-app notifications use existing retention. For a Telegram route, each
+successful batch records one receipt on the workspace. A receipt keeps only
+keys for that local date, so a partial failure can resume without resending
+already confirmed batches. At 100 channels there are at most eight Telegram
+batches across both thresholds. Autopilot sends one report per run via the
+selected workspace route and reuses the existing delivery ledger, retries and
+retention. The three routes are the app inbox, the workspace Telegram group
+and the workspace's connected personal account. The default route is the
+group. No new timers, idle polls or per-channel workers are introduced. A
+channel preview does one scoped read, and a generic example needs no
+channel read. Both use the delivery message format.
+
+
+### Campaign invite intervals
+
+The existing invite sync checks up to 12 tracked links per channel, including
+active campaign links with complete catalog metadata. A direct campaign link
+uses one bounded request for the live pending count. At 100 active channels
+this is at most 1,200 direct checks per invite-sync pass. One batch read per
+workspace selects at most one stale configured interval per included channel.
+The existing range reader retries an interval no more than daily and paginates
+within its Telegram limit. Both paths use the existing sync cadence and link
+snapshot retention. Work remains idle when there are no active campaigns.
+
+### Mentor advice and AI Posting report costs
+
+Standalone mentor advice uses the same workspace-scoped creative page and
+retention. It stores one text row and requires no System Bot session or
+attachment lookup. Opening or copying a section remains bounded by the
+existing cursor page size and is independent of the number of channels.
+
+Autopilot groups the existing run-indexed AI ledger by result and operation
+stage in one per-run read. Confirmed charges are split into saved or ready
+drafts, unsuccessful attempts and shared planning. Unknown receipts stay
+unconfirmed. The preview reuses the delivery formatter with example amounts.
+There are no new timers or database wakeups while idle. For 100 active channels
+the maximum remains one grouped read per run, including the fatal-run report.

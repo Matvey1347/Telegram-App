@@ -54,6 +54,13 @@ export function pushPreferenceAllows(
   preference: PushPreference | null,
   metadata?: Prisma.JsonValue | null,
 ) {
+  if (
+    metadata &&
+    typeof metadata === 'object' &&
+    !Array.isArray(metadata) &&
+    metadata.inAppOnly === true
+  )
+    return false;
   return (
     Boolean(preference?.webPushEnabled) &&
     (type !== 'AI_POSTING_AUTOPILOT' ||

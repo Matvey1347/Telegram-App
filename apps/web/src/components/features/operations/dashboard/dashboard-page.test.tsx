@@ -4,7 +4,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDashboardSummary, type DashboardSummary } from "@/lib/api";
 import { dashboardKeys } from "@/lib/query-keys";
@@ -117,6 +117,49 @@ describe("dashboard", () => {
     await waitFor(() =>
       expect(getSummaryMock).toHaveBeenLastCalledWith(undefined),
     );
+  });
+
+  it("shows period spending, sales and acquired audience without treating missing counters as zero", () => {
+    render(<DashboardOverview data={{
+      primaryCurrency: "UAH",
+      expensesBreakdownForPeriod: { channels: 75, other: 25 },
+      spendingMix: { advertising: 50, channelPurchases: 25, otherChannelExpenses: 0 },
+      categoryBreakdown: [{
+        id: "channel-purchase",
+        name: "Buy Channels",
+        flow: "expense",
+        bucket: "channels",
+        amount: 25,
+        iconPresentation: { type: "unicode", value: "📣" },
+      }],
+      investmentBreakdownForPeriod: [
+        { origin: "EXTERNAL", amount: 200, movements: [
+          { movementType: "CONTRIBUTION", amountInPrimaryCurrency: 300 },
+          { movementType: "WITHDRAWAL", amountInPrimaryCurrency: -100 },
+        ] },
+        { origin: "REINVESTMENT", amount: 100, movements: [
+          { movementType: "CONTRIBUTION", amountInPrimaryCurrency: 100 },
+        ] },
+      ],
+      salesMix: { total: 4, owner: 3, otherSellers: 1, unassigned: 0, external: 2 },
+      trafficSources: [
+        { kind: "BOT", trackedLinks: 2, measuredLinks: 1, arrivals: 2, requests: 2, joined: 1, departures: 0, departurePercent: 0 },
+        { kind: "AD_CAMPAIGNS", trackedLinks: 1, measuredLinks: 1, arrivals: 3, requests: 2, joined: 3, departures: 1, departurePercent: 25, spend: 100, costPerRequest: 50 },
+        { kind: "BROADCAST", trackedLinks: 1, measuredLinks: 0, arrivals: null },
+      ],
+    } as DashboardSummary} />);
+
+    expect(screen.getByRole("heading", { name: "Investment and spending" })).toBeInTheDocument();
+    expect(within(screen.getByText("Reinvestments").closest("div[tabindex]")!).getByText("25%")).toBeInTheDocument();
+    expect(within(screen.getByText("Workspace owner").closest("div[tabindex]")!).getByText("75%")).toBeInTheDocument();
+    expect(within(screen.getByText("Deals including external channels").closest("div[tabindex]")!).getByText("50%")).toBeInTheDocument();
+    expect(screen.getByText("Bot share of measured requests · 50%")).toBeInTheDocument();
+    expect(screen.getByText("Deals in the selected period · 4")).toBeInTheDocument();
+    expect(within(screen.getByText("Buy Channels").parentElement!).getByText("📣")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Capital contributions" }).querySelector("svg [data-segment]")).not.toBeNull();
+    expect(screen.getByRole("row", { name: /Welcome bot/ }).querySelector("svg")).not.toBeNull();
+    expect(within(screen.getByRole("row", { name: /Ad campaigns/ })).getByText("1 · 25%")).toBeInTheDocument();
+    expect(within(screen.getByRole("row", { name: /Broadcast links/ })).getAllByText("—").length).toBeGreaterThan(0);
   });
 
   it("shows one success metric and the three essential cash flows", () => {

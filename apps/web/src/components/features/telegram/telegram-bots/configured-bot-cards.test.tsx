@@ -43,7 +43,7 @@ it("groups the system and finance cards and displays the system audience in one 
         </ConfiguredBotCards>
       </QueryClientProvider>,
     );
-    const section = screen.getByRole("region", { name: "Environment-managed bots" });
+    const section = screen.getByRole("region", { name: "Configured bots" });
     const system = (await within(section).findByRole("heading", { name: "Nexeloq" })).closest("article")!;
     expect(within(section).getAllByRole("article")).toHaveLength(2);
     expect(system.parentElement).toBe(within(section).getByText("Groshly").parentElement);
@@ -59,7 +59,8 @@ it("groups the system and finance cards and displays the system audience in one 
     expect(within(system).queryByText("@nexeloq_bot")).toBeNull();
     expect(within(system).getByLabelText("Support bot avatar").querySelector("img"))
       .toHaveAttribute("src", "/brand/nexeloq-support.png");
-    expect(within(system).queryByRole("button", { name: "System bot actions" })).toBeNull();
+    expect(within(system).getByRole("button", { name: "System bot actions" })).toBeVisible();
+    expect(within(system).getByText("ENV")).toBeVisible();
     expect(within(system).queryByRole("button", { name: "Open support inbox" })).toBeNull();
     await user.click(within(system).getByRole("tab", { name: "Production" }));
     expect(within(system).getByRole("heading", { name: "Nexeloq" })).toBeVisible();

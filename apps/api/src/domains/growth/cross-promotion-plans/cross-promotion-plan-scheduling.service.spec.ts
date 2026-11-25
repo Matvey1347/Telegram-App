@@ -150,6 +150,20 @@ describe('CrossPromotionPlanSchedulingService', () => {
     jest.useRealTimers();
   });
 
+  it('resumes a saved but unscheduled post without creating a duplicate', async () => {
+    const { service, plans, telegram } = setup();
+    plans.resumeSchedulingContext.mockResolvedValueOnce({
+      dto: payload,
+      placements: [{ telegramChannelId: 'channel-1', managedPostId: 'existing-draft', postGroupId: 'group-1' }],
+      pendingPostIds: new Set(['existing-draft']),
+    });
+    await service.resume('user', 'plan-1', jest.fn(), new AbortController().signal);
+    expect(telegram.createManagedPost).toHaveBeenCalledTimes(1);
+    expect(telegram.scheduleManagedPost).toHaveBeenCalledWith(
+      'user', 'channel-1', 'existing-draft', { scheduledAt: payload.publicationPost.publisherPlacements[0].scheduledAt },
+    );
+  });
+
   it('persists a plan before scheduling and checkpoints every scheduled channel', async () => {
     const { service, plans, telegram, systemPostGroups } = setup();
     const progress = jest.fn();

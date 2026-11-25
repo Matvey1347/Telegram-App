@@ -3,6 +3,8 @@ export type DashboardReadAccess = {
   advertising: boolean;
   channels: boolean;
   members: boolean;
+  sales?: boolean;
+  traffic?: boolean;
 };
 
 export function dashboardCategoryKey(transaction: {
@@ -21,6 +23,7 @@ export function dashboardCategoryKey(transaction: {
 export function dashboardReadAccess(
   featureIds: readonly string[],
   permissionKeys: readonly string[] = [],
+  isOwner = false,
 ): DashboardReadAccess {
   const features = new Set(featureIds);
   const permissions = new Set(permissionKeys);
@@ -42,6 +45,18 @@ export function dashboardReadAccess(
       canReadAggregate('advertising') && canReadAggregate('channels'),
     channels: canReadAggregate('channels'),
     members: canReadAggregate('members'),
+    sales:
+      canReadAggregate('adSales.sales') &&
+      (isOwner || permissions.has('adSales.sales.view')) &&
+      (!permissions.has('adSales.sales.editOwn') ||
+        permissions.has('adSales.sales.editAny') ||
+        isOwner),
+    traffic:
+      canReadAggregate('advertising') &&
+      canReadAggregate('channels') &&
+      (isOwner ||
+        (permissions.has('advertising.view') &&
+          permissions.has('channels.view'))),
   };
 }
 
@@ -60,6 +75,8 @@ const KEYS_BY_FEATURE = {
     'profitForPeriod',
     'investedCapital',
     'investedCapitalForPeriod',
+    'investmentBreakdownForPeriod',
+    'spendingMix',
     'operatingProfitAllTime',
     'remainingToBreakEven',
     'projectedMonthlyProfit',
@@ -82,6 +99,8 @@ const KEYS_BY_FEATURE = {
     'bestCampaigns',
     'worstCampaigns',
   ],
+  sales: ['salesMix'],
+  traffic: ['trafficSources'],
   channels: [
     'telegramChannelsCount',
     'ownChannelsCount',

@@ -28,7 +28,7 @@ const defaults = {
   emojiPolicy: 'contextual',
   ending: '',
   hashtags: 'disabled',
-  imageMode: 'ai',
+  imageMode: 'hybrid',
   hybridSearchPercent: DEFAULT_TELEGRAM_AI_POSTING_SEARCH_PERCENT,
   useChannelAvatarInMedia: false,
   channelAvatarWatermarkSize: 12,

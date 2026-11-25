@@ -608,7 +608,7 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
   });
 
   it('preserves image readiness, operations, costs, provenance and diagnostics when saving', async () => {
-    const ctx = setup({ status: 'APPROVED' });
+    const ctx = setup({ status: 'APPROVED', publicationIndex: 3 });
     await act(ctx.service, 'save');
     expect(ctx.storedRun.publications).toMatchObject({
       sourceDiagnostics: [diagnostic],
@@ -633,7 +633,7 @@ describe('TelegramAiPostingTestRunService review lifecycle', () => {
       where: {
         workspaceId: 'workspace-1',
         aiPostingTestRunId: 'run-1',
-        aiPostingPublicationIndex: 0,
+        aiPostingPublicationIndex: 3,
       },
       data: { aiPostingManagedPostId: 'managed-post-1' },
     });

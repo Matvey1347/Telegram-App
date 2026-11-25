@@ -92,6 +92,7 @@ describe("NotificationCenter", () => {
       "You’re all caught up. New workspace notifications will appear here.",
     );
     expect(list).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("link", { name: "Настройки уведомлений" })).toHaveAttribute("href", "/settings/notifications");
 
     expect(
       screen.queryByRole("button", { name: "Push" }),

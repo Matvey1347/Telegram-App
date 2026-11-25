@@ -1,5 +1,11 @@
+import {
+  classifyTransportError,
+  dispatchDueAutopilotNotifications,
+  type AutopilotDeliveryScope,
+} from './ai-posting-autopilot-delivery';
 import { Injectable, Optional } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
+import type { PublicationNotificationDestination } from '@telegram-system/shared';
 import { randomUUID } from 'node:crypto';
 import { OperationsNotificationPriority } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -33,6 +39,7 @@ export type AutopilotNotificationInput = {
   body: string;
   metadata?: Record<string, string | number | boolean | null>;
   priority?: OperationsNotificationPriority;
+  destination?: PublicationNotificationDestination;
   targetUrl?: string;
 };
 type DeliveryPrefs = { telegramBot: boolean; pwaPush: boolean; email: boolean };
@@ -68,15 +75,51 @@ export class AiPostingAutopilotNotificationsService {
         this.permissions.has(member, 'channels.view'),
     );
     if (!recipients.length) return { recipients: 0, delivered: 0, failed: 0 };
-    const preferences =
-      await this.prisma.telegramAiPostingNotificationPreference.findMany({
-        where: {
-          workspaceId: input.workspaceId,
-          memberId: { in: recipients.map((member) => member.id) },
-          eventKey: { in: [input.event, '*'] },
-          channelScopeKey: { in: [input.channelId, '*'] },
-        },
+    if (input.destination && input.destination !== 'IN_APP') {
+      const html =
+        typeof input.metadata?.telegramHtml === 'string'
+          ? input.metadata.telegramHtml
+          : null;
+      const transport = input.destination;
+      await this.prisma.telegramAiPostingNotificationDelivery.createMany({
+        data: [
+          {
+            workspaceId: input.workspaceId,
+            channelId: input.channelId,
+            runId: input.runId,
+            eventKey: input.event,
+            memberId: recipients[0].id,
+            transport,
+            telegramMessage:
+              html ?? `${input.title}\n\n${input.body}`.slice(0, 4096),
+            telegramParseMode: html ? 'HTML' : null,
+            nextAttemptAt: new Date(),
+          },
+        ],
+        skipDuplicates: true,
       });
+      notifyScheduledTaskDueWorkChanged('telegram.ai_posting.autopilot');
+      const result = await this.retryDueDeliveries(1, {
+        runId: input.runId,
+        eventKey: input.event,
+        transport,
+      });
+      return {
+        recipients: 1,
+        delivered: result.delivered,
+        failed: result.failed,
+      };
+    }
+    const preferences = input.destination
+      ? []
+      : await this.prisma.telegramAiPostingNotificationPreference.findMany({
+          where: {
+            workspaceId: input.workspaceId,
+            memberId: { in: recipients.map((member) => member.id) },
+            eventKey: { in: [input.event, '*'] },
+            channelScopeKey: { in: [input.channelId, '*'] },
+          },
+        });
     const prefsByMember = new Map(
       recipients.map((member) => [
         member.id,
@@ -108,9 +151,11 @@ export class AiPostingAutopilotNotificationsService {
         runId: input.runId,
         eventKey: input.event,
         pwaPushEnabled: prefsByMember.get(member.id)?.pwaPush ?? true,
+        ...(input.destination === 'IN_APP' ? { inAppOnly: true } : {}),
       },
       targetUrl:
-        input.targetUrl ?? `/telegram-posts/${input.channelId}/ai-posting?aiPostingTab=autopilot`,
+        input.targetUrl ??
+        `/telegram-posts/${input.channelId}/ai-posting?aiPostingTab=autopilot`,
       requiredPermissionKey: 'channels.view',
       deliverAt: new Date(),
       publishedAt: new Date(),
@@ -153,16 +198,23 @@ export class AiPostingAutopilotNotificationsService {
         (row) => row.recipientMemberId === member.id,
       )?.id;
       if (!notificationId) return [];
-      const critical = input.event === 'LOW_SCHEDULE_COVERAGE' ||
+      const critical =
+        input.event === 'LOW_SCHEDULE_COVERAGE' ||
         input.event === 'CRITICAL_DRAFT_STOCK' ||
         input.event === 'GENERATION_OR_IMAGE_FAILURE' ||
         input.event === 'AI_API_OR_BUDGET_FAILURE' ||
         input.event === 'PLANNING_OR_PUBLICATION_FAILURE';
       const isGroupNotificationOwner = member.id === recipients[0]?.id;
       return (['TELEGRAM_BOT', 'EMAIL'] as const)
-        .filter((transport) => transport === 'TELEGRAM_BOT'
-          ? (critical || input.event === 'WEEKLY_REPORT') && isGroupNotificationOwner
-          : settings.email)
+        .filter(
+          (transport) =>
+            !input.destination &&
+            (transport === 'TELEGRAM_BOT'
+              ? input.metadata?.suppressTelegram !== true &&
+                (critical || input.event === 'WEEKLY_REPORT') &&
+                isGroupNotificationOwner
+              : settings.email),
+        )
         .map((transport) => ({
           workspaceId: input.workspaceId,
           memberId: member.id,
@@ -222,6 +274,9 @@ export class AiPostingAutopilotNotificationsService {
           await this.sendToWorkspaceBot(
             input.workspaceId,
             `${input.title}\n\n${input.body}`.slice(0, 4096),
+            typeof input.metadata?.telegramHtml === 'string'
+              ? input.metadata.telegramHtml
+              : undefined,
           );
         } else {
           if (!member?.user.email)
@@ -291,101 +346,15 @@ export class AiPostingAutopilotNotificationsService {
     return delivery?.nextAttemptAt ?? null;
   }
 
-  async retryDueDeliveries(limit = 50) {
-    const now = new Date();
-    const due =
-      await this.prisma.telegramAiPostingNotificationDelivery.findMany({
-        where: {
-          status: { in: ['PENDING', 'FAILED'] },
-          attempts: { lt: 3 },
-          nextAttemptAt: { lte: now },
-          OR: [{ claimExpiresAt: null }, { claimExpiresAt: { lte: now } }],
-        },
-        orderBy: { nextAttemptAt: 'asc' },
-        take: Math.min(100, Math.max(1, limit)),
-      });
-    let delivered = 0;
-    let failed = 0;
-    for (const delivery of due) {
-      const owner = randomUUID();
-      const claim =
-        await this.prisma.telegramAiPostingNotificationDelivery.updateMany({
-          where: {
-            id: delivery.id,
-            status: { in: ['PENDING', 'FAILED'] },
-            attempts: { lt: 3 },
-            OR: [{ claimExpiresAt: null }, { claimExpiresAt: { lte: now } }],
-          },
-          data: {
-            status: 'SENDING',
-            claimOwner: owner,
-            claimExpiresAt: new Date(Date.now() + 120_000),
-            attempts: { increment: 1 },
-          },
-        });
-      if (!claim.count) continue;
-      try {
-        const [notification, member] = await Promise.all([
-          delivery.notificationId
-            ? this.prisma.operationsNotification.findFirst({
-                where: { id: delivery.notificationId },
-                select: { title: true, body: true, targetUrl: true },
-              })
-            : null,
-          this.prisma.workspaceMember.findFirst({
-            where: { id: delivery.memberId, workspaceId: delivery.workspaceId },
-            select: {
-              user: {
-                select: {
-                  email: true,
-                },
-              },
-            },
-          }),
-        ]);
-        if (!notification || !member)
-          throw new Error('NOTIFICATION_RECIPIENT_UNAVAILABLE');
-        await this.sendTransport(delivery.transport, delivery.workspaceId, member.user, notification);
-        await this.prisma.telegramAiPostingNotificationDelivery.updateMany({
-          where: { id: delivery.id, claimOwner: owner },
-          data: {
-            status: 'SENT',
-            sentAt: new Date(),
-            claimOwner: null,
-            claimExpiresAt: null,
-            nextAttemptAt: null,
-          },
-        });
-        delivered++;
-      } catch (error) {
-        failed++;
-        const errorType = classifyTransportError(error);
-        const hasAttempts = delivery.attempts + 1 < 3;
-        await this.prisma.telegramAiPostingNotificationDelivery.updateMany({
-          where: { id: delivery.id, claimOwner: owner },
-          data: {
-            status: 'FAILED',
-            claimOwner: null,
-            claimExpiresAt: null,
-            lastErrorType: errorType,
-            lastErrorMessage: errorType,
-            nextAttemptAt: hasAttempts
-              ? new Date(Date.now() + 5 * 60_000)
-              : null,
-          },
-        });
-        await this.recordDeliveryFailure(
-          delivery.runId,
-          delivery.channelId,
-          delivery.attempts + 1,
-          errorType,
-          delivery.transport,
-        );
-        if (hasAttempts)
-          notifyScheduledTaskDueWorkChanged('telegram.ai_posting.autopilot');
-      }
-    }
-    return { attempted: due.length, delivered, failed };
+  retryDueDeliveries(limit = 50, scope?: AutopilotDeliveryScope) {
+    return dispatchDueAutopilotNotifications(
+      this.prisma,
+      limit,
+      scope,
+      (...args) => this.sendToWorkspaceBot(...args),
+      (...args) => this.sendTransport(...args),
+      (...args) => this.recordDeliveryFailure(...args),
+    );
   }
 
   private async sendTransport(
@@ -394,10 +363,25 @@ export class AiPostingAutopilotNotificationsService {
     user: {
       email: string;
     },
-    message: { title: string; body: string; targetUrl: string },
+    message: {
+      title: string;
+      body: string;
+      targetUrl: string;
+      metadata?: unknown;
+    },
   ) {
     if (transport === 'TELEGRAM_BOT') {
-      await this.sendToWorkspaceBot(workspaceId, `${message.title}\n\n${message.body}`.slice(0, 4096));
+      const metadata = message.metadata as
+        | { telegramHtml?: unknown }
+        | null
+        | undefined;
+      await this.sendToWorkspaceBot(
+        workspaceId,
+        `${message.title}\n\n${message.body}`.slice(0, 4096),
+        typeof metadata?.telegramHtml === 'string'
+          ? metadata.telegramHtml
+          : undefined,
+      );
       return;
     }
     if (!user.email) throw new Error('EMAIL_RECIPIENT_UNAVAILABLE');
@@ -409,16 +393,36 @@ export class AiPostingAutopilotNotificationsService {
     });
   }
 
-  private async sendToWorkspaceBot(workspaceId: string, text: string) {
+  private async sendToWorkspaceBot(
+    workspaceId: string,
+    text: string,
+    html?: string,
+    toAccount = false,
+  ) {
     if (!this.moduleRef) throw new Error('TELEGRAM_SYSTEM_BOT_NOT_AVAILABLE');
     const notifications = await this.moduleRef.resolve(
       TelegramSystemBotNotificationsService,
       undefined,
       { strict: false },
     );
-    const result = await notifications.sendToWorkspace(workspaceId, text);
+    const parseMode = html ? 'HTML' : undefined;
+    const result = toAccount
+      ? await notifications.sendToWorkspaceAccount(
+          workspaceId,
+          html ?? text,
+          parseMode,
+        )
+      : await notifications.sendToWorkspace(
+          workspaceId,
+          html ?? text,
+          parseMode,
+        );
     if (result.status !== 'SENT')
-      throw new Error('TELEGRAM_WORKSPACE_NOTIFICATION_GROUP_NOT_CONNECTED');
+      throw new Error(
+        toAccount
+          ? 'TELEGRAM_WORKSPACE_NOTIFICATION_ACCOUNT_NOT_CONNECTED'
+          : 'TELEGRAM_WORKSPACE_NOTIFICATION_GROUP_NOT_CONNECTED',
+      );
   }
 
   private async recordDeliveryFailure(
@@ -551,17 +555,4 @@ export class AiPostingAutopilotNotificationsService {
         }
       : fallback;
   }
-}
-
-function classifyTransportError(error: unknown) {
-  const message = error instanceof Error ? error.message : '';
-  if (/^(TELEGRAM|EMAIL)_[A-Z0-9_]+$/.test(message))
-    return message.slice(0, 80);
-  const code =
-    error && typeof error === 'object' && 'code' in error
-      ? (error as { code?: unknown }).code
-      : null;
-  if (typeof code === 'string' && /^[A-Z0-9_]{1,32}$/.test(code))
-    return `SMTP_${code}`;
-  return 'TRANSPORT_DELIVERY_FAILED';
 }

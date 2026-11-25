@@ -1,3 +1,4 @@
+import { readAutopilotRunCosts } from './telegram-ai-posting-autopilot-costs';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { MAX_TELEGRAM_AI_POSTING_BATCH_SIZE } from '@telegram-system/shared';
@@ -60,6 +61,7 @@ export class TelegramAiPostingAutopilotChannelService {
         },
       });
     const settings = await lease();
+    let reviewDrafts: Parameters<typeof readAutopilotRunCosts>[4];
     const summary = {
       status: 'STOPPED',
       generated: 0,
@@ -214,18 +216,8 @@ export class TelegramAiPostingAutopilotChannelService {
     await fill(slots.filter(({ scheduledAt }) => !reservedSlots.has(scheduledAt)));
     const remaining = slots.filter((slot) => !attemptedSlots.has(slot.scheduledAt));
     const stockAfterScheduling = readyBefore - summary.scheduled;
-    const amount = Math.min(
-      MAX_TELEGRAM_AI_POSTING_BATCH_SIZE,
-      Math.max(
-        0,
-        cadence.targetReadyDrafts -
-          stockAfterScheduling +
-          Math.max(
-            0,
-            remaining.length,
-          ),
-      ),
-    );
+    const requested = Math.max(0, cadence.targetReadyDrafts - stockAfterScheduling + remaining.length);
+    const amount = reviewOnly ? Math.min(MAX_TELEGRAM_AI_POSTING_BATCH_SIZE, requested) : requested;
     if (amount && !summary.errors.length && !stopped && (await lease())) {
       if (!canGenerate) {
         summary.errors.push('AI_AUTOMATIC_DISABLED');
@@ -236,60 +228,68 @@ export class TelegramAiPostingAutopilotChannelService {
             requested: amount,
             stockTarget: cadence.targetReadyDrafts,
           });
-          const generated = await this.generator.generate(
-            userId,
-            telegramChannelId,
-            amount,
-            'AUTOMATIC',
-            runId,
-          );
-          let version = generated.version;
-          for (const [index, item] of generated.generated.entries()) {
-            if (reviewOnly || item.mediaReadiness !== 'READY' || !item.imageUrl)
-              continue;
+          // Reuse the bounded generator under the same channel lease and report.
+          // Count attempted slots so a provider outage cannot trigger an open-ended retry loop.
+          for (let attempted = 0; attempted < amount; ) {
             if (!(await lease())) {
               stopped = true;
               break;
             }
-            const approved = await this.testRuns.reviewPublication(
-              userId,
-              telegramChannelId,
-              generated.runId,
-              index,
-              version,
-              'approve',
-            );
-            version = approved.version;
-            const saved = await this.testRuns.reviewPublication(
-              userId,
-              telegramChannelId,
-              generated.runId,
-              index,
-              version,
-              'save',
-            );
-            version = saved.version;
-            const savedPostId = saved.publications?.[index]?.savedPostId;
-            if (savedPostId) {
-              freshIds.push(savedPostId);
-              summary.generated++;
-              if (item.editorialMetadata?.sphere?.name)
-                summary.spheres.push(item.editorialMetadata.sphere.name);
-              if (item.editorialMetadata?.rubric?.name)
-                summary.rubrics.push(item.editorialMetadata.rubric.name);
-            }
-          }
-          if (reviewOnly)
-            await markTelegramAiPostingRunForReview(
-              this.prisma,
-              workspaceId,
-              generated.runId,
-            );
-          for (const failure of generated.failures) {
-            if (failure && typeof failure === 'object' && 'code' in failure)
-              summary.errors.push(
-                classifyAutopilotError(new Error(String(failure.code))),
+            const count = Math.min(MAX_TELEGRAM_AI_POSTING_BATCH_SIZE, amount - attempted);
+            attempted += count;
+            const generated = await this.generator.generate(userId, telegramChannelId, count, 'AUTOMATIC', runId);
+            if (reviewOnly) reviewDrafts = {
+              testRunId: generated.runId,
+              indices: generated.generated.flatMap((item) =>
+                item.mediaReadiness === 'READY' && item.imageUrl ? [item.publicationIndex] : []),
+            };
+            let version = generated.version;
+            for (const [index, item] of generated.generated.entries()) {
+              if (reviewOnly || item.mediaReadiness !== 'READY' || !item.imageUrl)
+                continue;
+              if (!(await lease())) {
+                stopped = true;
+                break;
+              }
+              const approved = await this.testRuns.reviewPublication(
+                userId,
+                telegramChannelId,
+                generated.runId,
+                index,
+                version,
+                'approve',
               );
+              version = approved.version;
+              const saved = await this.testRuns.reviewPublication(
+                userId,
+                telegramChannelId,
+                generated.runId,
+                index,
+                version,
+                'save',
+              );
+              version = saved.version;
+              const savedPostId = saved.publications?.[index]?.savedPostId;
+              if (savedPostId) {
+                freshIds.push(savedPostId);
+                summary.generated++;
+                if (item.editorialMetadata?.sphere?.name)
+                  summary.spheres.push(item.editorialMetadata.sphere.name);
+                if (item.editorialMetadata?.rubric?.name)
+                  summary.rubrics.push(item.editorialMetadata.rubric.name);
+              }
+            }
+            if (reviewOnly)
+              await markTelegramAiPostingRunForReview(
+                this.prisma,
+                workspaceId,
+                generated.runId,
+              );
+            const failures = generated.failures.map(({ code }) => classifyAutopilotError(new Error(code)));
+            summary.errors.push(...failures);
+            if (stopped || reviewOnly || failures.includes('AI_BUDGET_OR_QUOTA') ||
+                !generated.generated.some((item) => item.mediaReadiness === 'READY' && item.imageUrl))
+              break;
           }
         } catch (error) {
           summary.errors.push(classifyAutopilotError(error));
@@ -330,31 +330,9 @@ export class TelegramAiPostingAutopilotChannelService {
             summary.refillThrough !== null)
         ? 2
         : 24;
-    const receipts = await this.prisma.$queryRaw<
-      Array<{ stage: string; cost: Prisma.Decimal | null; unknown: number }>
-    >`
-      SELECT CASE
-        WHEN "configurationSnapshot"->>'promptVersion' IN ('telegram-posting-visual-review-v1', 'telegram-posting-web-image-search-v1') THEN 'search'
-        WHEN category = 'TELEGRAM_POSTING_PLAN' THEN 'planning'
-        WHEN category = 'TELEGRAM_POSTING_TEXT' THEN 'text'
-        WHEN category = 'TELEGRAM_POSTING_IMAGE' THEN 'image'
-        WHEN category = 'TELEGRAM_POSTING_REVIEW' THEN 'review'
-        ELSE 'other' END AS stage,
-        SUM("actualCost") AS cost,
-        COUNT(*) FILTER (WHERE "actualCost" IS NULL AND "pricingStatus" = 'UNKNOWN')::int AS unknown
-      FROM "AiOperation"
-      WHERE "workspaceId" = ${workspaceId} AND "aiPostingChannelId" = ${telegramChannelId}
-        AND "aiPostingAutopilotRunId" = ${runId}
-      GROUP BY 1
-    `;
-    for (const receipt of receipts) {
-      if (receipt.cost !== null)
-        summary.costs[receipt.stage] = receipt.cost.toString();
-      summary.unknownCosts += receipt.unknown;
-    }
     summary.spheres = [...new Set(summary.spheres)];
     summary.rubrics = [...new Set(summary.rubrics)];
-    return summary;
+    return { ...summary, ...await readAutopilotRunCosts(this.prisma, workspaceId, telegramChannelId, runId, reviewDrafts) };
   }
 
   private async stage(

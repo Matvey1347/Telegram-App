@@ -4,6 +4,8 @@ import type { CrossPromotionTargetInput } from '@telegram-system/shared';
 import type { TelegramChannelFinancialPreviewInput } from './telegram-channel-financial-read.types';
 import { PrismaService } from '../../../prisma/prisma.service';
 
+import { readInviteLinkPeriodActivity } from './telegram-channel-traffic-period';
+
 const MAX_DETAIL_SNAPSHOTS = 5_000;
 
 export type TrafficAttributionChannelSettings = {
@@ -28,6 +30,7 @@ export type TrafficAttributionInviteLinkRow = {
   requestedCount: number;
   peakAttributedCount: number;
   createdAt: Date;
+  botRequestTrackingCampaigns?: Array<{ id: string }>;
 };
 
 export type TrafficAttributionPlanBoundaryCounter = {
@@ -147,7 +150,11 @@ export class TelegramChannelTrafficAttributionReadService {
     return [...baseline, ...inWindow];
   }
 
-  async batch(workspaceId: string, channelIds: string[]) {
+  periodActivity(workspaceId: string, inviteLinkIds: string[], from: Date, to: Date) {
+    return readInviteLinkPeriodActivity(this.prisma, workspaceId, inviteLinkIds, from, to);
+  }
+
+  async batch(workspaceId: string, channelIds: string[], periodReport = false) {
     const [channels, links, campaigns, participants, plans, workspace] =
       await Promise.all([
         this.prisma.telegramChannel.findMany({
@@ -165,7 +172,13 @@ export class TelegramChannelTrafficAttributionReadService {
           },
         }),
         this.prisma.telegramInviteLink.findMany({
-          where: { workspaceId, telegramChannelId: { in: channelIds } },
+          where: {
+            workspaceId,
+            telegramChannelId: { in: channelIds },
+            ...(periodReport ? {
+              OR: [{ adCampaignId: null }, { adCampaign: { workspaceId, excludeFromAnalytics: false } }],
+            } : {}),
+          },
           select: {
             id: true,
             telegramChannelId: true,
@@ -175,6 +188,11 @@ export class TelegramChannelTrafficAttributionReadService {
             joinedCount: true,
             requestedCount: true,
             peakAttributedCount: true,
+            ...(periodReport ? { botRequestTrackingCampaigns: {
+              where: { kind: 'BOT', adCampaign: { workspaceId, excludeFromAnalytics: false } },
+              select: { id: true },
+              take: 1,
+            } } : {}),
             createdAt: true,
           },
         }),
@@ -196,6 +214,7 @@ export class TelegramChannelTrafficAttributionReadService {
             priceInPrimaryCurrency: true,
             joinedCount: true,
             newSubscribers: true,
+            ...(periodReport ? { telegramInviteLinkId: true } : {}),
             advertisingSource: { select: { imageUrl: true } },
           },
         }),
@@ -257,7 +276,7 @@ export class TelegramChannelTrafficAttributionReadService {
           }))
         : [],
     );
-    const planBoundaryCounters = boundaryTargets.length
+    const planBoundaryCounters = !periodReport && boundaryTargets.length
       ? await this.prisma.$queryRaw<
           TrafficAttributionPlanBoundaryCounter[]
         >(Prisma.sql`

@@ -71,10 +71,10 @@ export function BotCardShell({
 
   return (
     <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-3 shadow-sm">
-      {showSupport ? (
-        <SupportBotIdentity product="GROSHLY" bot={support} />
-      ) : (
-        <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
+        {showSupport ? (
+          <SupportBotIdentity product="GROSHLY" bot={support} />
+        ) : (
           <div className="flex min-w-0 items-center gap-3">
             <BotRuntimeAvatar
               type={appType}
@@ -99,6 +99,9 @@ export function BotCardShell({
               </p>
             </div>
           </div>
+        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {appType === "FINANCE" && <span className="rounded-full border border-sky-800 bg-sky-950 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">ENV</span>}
           <TelegramCardActionsMenu
             label={`Actions for ${runtime?.firstName || bot.label}`}
           >
@@ -174,7 +177,7 @@ export function BotCardShell({
             )}
           </TelegramCardActionsMenu>
         </div>
-      )}
+      </div>
       <BotRuntimeEnvironmentTabs
         environment={environment}
         availableEnvironments={bot.runtimes.map((item) => item.environment)}

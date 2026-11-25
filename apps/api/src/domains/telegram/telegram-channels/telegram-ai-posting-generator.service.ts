@@ -1,3 +1,5 @@
+import { HOLIDAY_POSTCARD_RUBRIC, upcomingPostcardOccasions } from './telegram-ai-posting-postcard-calendar';
+import { telegramAiPostingPostcardProfile } from './telegram-ai-posting-postcard';
 import {
   BadGatewayException, ConflictException, Injectable,
 } from '@nestjs/common';
@@ -406,11 +408,42 @@ export class TelegramAiPostingGeneratorService {
         editorialMetadata && typeof editorialMetadata === 'object' ? [editorialMetadata] : [],
       );
       recent.push(...(inventory?.usage ?? []));
+      const isPostcard = Boolean(telegramAiPostingPostcardProfile(channel?.title));
+      const holidayRubric = isPostcard && Array.isArray(generationConfig.rubrics)
+        ? generationConfig.rubrics.find((rubric) => rubric?.name === HOLIDAY_POSTCARD_RUBRIC)
+        : undefined;
+      const holiday = holidayRubric && mode === 'MANUAL' && !topicOverride && !retrySlot && count >= 3
+        ? upcomingPostcardOccasions(new Date(), calendar?.schedule?.timezone)
+            .map((occasion) => ({ ...occasion, topic: `Святкова листівка: ${occasion.name} (${occasion.date})` }))
+            .find(({ topic }) => !known.includes(normalize(topic)))
+        : undefined;
+      const selectionConfig = holidayRubric
+        ? {
+            ...generationConfig,
+            rubrics: generationConfig.rubrics.filter(({ id }) => id !== holidayRubric.id),
+            spheres: generationConfig.spheres?.filter(({ id }) => id !== holidayRubric.sphereId),
+          }
+        : generationConfig;
+      const postcardSpheresUsed = new Set<string>();
       const editorialSelections = Array.from({ length: count }, (_, offset) => {
         if (retrySlot?.editorialAssignment || retrySlot?.legacyVote)
           return restoreTelegramAiPostingEditorialSelection(generationConfig, retrySlot.editorialAssignment ?? {}, retrySlot.legacyVote);
         const index = editorialOffset + (retrySlot?.publicationIndex ?? offset);
-        const selection = telegramAiPostingEditorialSelection(generationConfig, index, index, recent, inventory?.rubricBoost);
+        const unusedPostcardSpheres = isPostcard
+          ? selectionConfig.spheres?.filter(({ id, parentId }) => !postcardSpheresUsed.has(parentId ?? id))
+          : undefined;
+        const currentConfig = unusedPostcardSpheres?.length
+          ? { ...selectionConfig, spheres: unusedPostcardSpheres }
+          : selectionConfig;
+        const selection = holiday && offset === count - 1
+          ? restoreTelegramAiPostingEditorialSelection(generationConfig, {
+              sphereId: holidayRubric.sphereId,
+              rubricId: holidayRubric.id,
+              lengthId: holidayRubric.lengthIds?.[0],
+            })
+          : telegramAiPostingEditorialSelection(currentConfig, index, index, recent, inventory?.rubricBoost);
+        const rootId = selection.parentSphere?.id ?? selection.sphere?.id;
+        if (isPostcard && rootId) postcardSpheresUsed.add(rootId);
         recent.push(selection);
         return selection;
       });
@@ -426,8 +459,13 @@ export class TelegramAiPostingGeneratorService {
       const topics: string[] = topicOverride ? [topicOverride] : [];
       if (!topicOverride && calendar) {
         const planning = telegramAiPostingPlanningContextText(calendar);
+        const holidayInstruction = isPostcard
+          ? holiday
+            ? `The final slot is reserved for ${holiday.name} on ${holiday.date}. Other topics must be everyday greetings, varying the daypart, audience and situation according to their rubrics.`
+            : 'Use everyday greetings that vary by daypart, audience and situation. Do not invent a date or plan a named calendar holiday in this batch.'
+          : '';
         const prompt = telegramAiPostingPlanPrompt(
-          generationConfig, sourceContext, planning, count, [...previousDrafts, ...(inventory?.titles ?? []).map((title) => ({ title, topic: title, text: '' }))], editorialSelections, assignedPreferences, visualDirections,
+          generationConfig, sourceContext, `${holidayInstruction} ${planning}`, count, [...previousDrafts, ...(inventory?.titles ?? []).map((title) => ({ title, topic: title, text: '' }))], editorialSelections, assignedPreferences, visualDirections,
         );
         for (const attempt of [1, 2]) {
           try {
@@ -435,6 +473,7 @@ export class TelegramAiPostingGeneratorService {
               ? prompt
               : `${prompt}\nThe previous plan was invalid or repeated an existing topic. Use different subjects and exactly ${count} unique strings, in assignment order, with no other keys or prose.`, attempt);
             const proposed = parseTelegramAiPostingTopics(reply, count);
+            if (holiday) proposed[count - 1] = holiday.topic;
             const distinct = new Set(known);
             for (const topic of proposed) {
               const key = normalize(topic);
@@ -523,6 +562,8 @@ export class TelegramAiPostingGeneratorService {
               channelUsername: channel?.username,
               channelTitle: channel?.title,
               topic,
+              postcardOrdinal: editorialOffset + publicationIndex,
+              occasionDate: holiday && offset === count - 1 ? holiday.date : undefined,
               imageMode,
               visualDirection,
               visualMotif,

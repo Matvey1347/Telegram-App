@@ -17,6 +17,8 @@ import {
   dashboardIsoDay,
   dashboardPeriodDays,
 } from './dashboard-period';
+import { DashboardInsightsReadService } from './dashboard-insights-read.service';
+import { dashboardSpendingMix, summarizeDashboardTraffic } from './dashboard-insights';
 import { DashboardReadService } from './dashboard-read.service';
 import { buildDashboardTrend } from './dashboard-trend';
 import { valueDashboardTransactions } from './dashboard-transaction-valuation';
@@ -50,6 +52,7 @@ export class DashboardService {
     private readonly conversionService: CurrencyConversionService,
     private readonly reads: DashboardReadService,
     private readonly authorization?: WorkspaceAuthorizationService,
+    private readonly insights?: DashboardInsightsReadService,
   ) {}
 
   async summary(
@@ -68,6 +71,7 @@ export class DashboardService {
     const access = dashboardReadAccess(
       context.featureIds,
       context.permissionKeys,
+      context.isOwner,
     );
     const summary = await this.buildSummary(
       context.workspaceId,
@@ -89,6 +93,17 @@ export class DashboardService {
     to: Date,
     access?: DashboardReadAccess,
   ) {
+    const insights = this.insights;
+    const insightsResult = Promise.all([
+      insights && access?.sales ? insights.salesForPeriod(workspaceId, from, to, access.finance) : undefined,
+      insights && access?.traffic ? insights.trafficForPeriod(workspaceId, from, to) : undefined,
+    ]);
+    const [[salesMix, trafficLinks], dashboardData] = await Promise.all([
+      insightsResult,
+      access
+        ? this.reads.load(workspaceId, from, to, access)
+        : this.reads.load(workspaceId, from, to),
+    ]);
     const {
       workspace,
       periodTransactions,
@@ -104,9 +119,7 @@ export class DashboardService {
       cumulativeBeforePeriod,
       revenueByChannel,
       periodInvestments,
-    } = access
-      ? await this.reads.load(workspaceId, from, to, access)
-      : await this.reads.load(workspaceId, from, to);
+    } = dashboardData;
 
     let preparedRateSource: Promise<PreparedCurrencyRateSource> | undefined;
     const currentRateSource = () =>
@@ -426,6 +439,15 @@ export class DashboardService {
       },
       {},
     );
+    const campaignCosts = access?.finance
+      ? periodCampaignsRaw.filter((campaign) => !campaign.excludeFromAnalytics)
+      : [];
+    const folderCosts = access?.finance
+      ? periodExpenseTransactions.filter(
+          (transaction) => transaction.mutualPromotionParticipantId && !transaction.adCampaignId,
+        )
+      : [];
+
     return {
       period: {
         dateFrom: dashboardIsoDay(from),
@@ -442,6 +464,16 @@ export class DashboardService {
       revenuePerActiveSubscriber: incomePerActiveSubscriber,
       expensesForPeriod: expenses,
       expensesBreakdownForPeriod: cashFlowBreakdown.expenses,
+      spendingMix: dashboardSpendingMix(periodExpenseTransactions),
+      salesMix,
+      trafficSources: trafficLinks && summarizeDashboardTraffic(trafficLinks, {
+        FOLDERS: folderCosts.length
+          ? folderCosts.reduce((sum, transaction) => sum + dec(transaction.amountInPrimaryCurrency), 0)
+          : null,
+        AD_CAMPAIGNS: campaignCosts.length
+          ? campaignCosts.reduce((sum, campaign) => sum + dec(campaign.priceInPrimaryCurrency), 0)
+          : null,
+      }),
       profitForPeriod: income - expenses,
       investedCapital: totalInvestedPrimary,
       investedCapitalForPeriod: investedForPeriod,

@@ -145,6 +145,7 @@ export class CrossPromotionPlanSchedulingService {
             lastError: null,
           });
         },
+        context.pendingPostIds,
       );
       const saved = await this.plans.savePlacements(userId, id, {
         placements: posts,

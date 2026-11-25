@@ -36,6 +36,8 @@ import {
   type DashboardPeriod,
 } from "./dashboard-period";
 
+import { DashboardInsights } from "./dashboard-insights";
+
 type RangeMode = "month" | "all" | "custom";
 type DashboardCategory = DashboardSummary["categoryBreakdown"][number];
 
@@ -197,6 +199,8 @@ export function DashboardOverview({ data }: { data: DashboardSummary }) {
           </div>
         </div>
       </Card>
+
+      <DashboardInsights data={data} money={money} />
 
       <Card>
         <div className="mb-4">

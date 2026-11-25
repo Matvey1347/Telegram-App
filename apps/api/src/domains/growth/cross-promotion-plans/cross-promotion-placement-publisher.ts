@@ -25,11 +25,12 @@ export class CrossPromotionPlacementPublisher {
     signal: AbortSignal,
     validate = true,
     onPlacementSaved?: (placement: ScheduledPost) => Promise<void>,
+    pendingPostIds: ReadonlySet<string> = new Set(),
   ) {
     if (validate) await this.plans.validateForScheduling(userId, dto);
-    const scheduledPublicationKeys = new Set(
+    const savedByPlacement = new Map(
       createdPosts.map(
-        (post) => `${post.publicationId}:${post.telegramChannelId}`,
+        (post) => [`${post.publicationId}:${post.telegramChannelId}`, post],
       ),
     );
     const usesPublicationItems = Boolean(
@@ -44,30 +45,24 @@ export class CrossPromotionPlacementPublisher {
       const channelId = placement.telegramChannelId;
       const publicationId = usesPublicationItems ? publication.id : undefined;
       const key = `${publicationId}:${channelId}`;
-      if (scheduledPublicationKeys.has(key)) continue;
+      let savedPost = savedByPlacement.get(key);
+      if (savedPost && !pendingPostIds.has(savedPost.managedPostId)) continue;
       signal.throwIfAborted();
-      const group = await this.systemPostGroups.ensureMutualPromotionGroup(
-        userId,
-        channelId,
-      );
-      const post = await this.telegramChannels.createManagedPost(
-        userId,
-        channelId,
-        managedPostPayload(dto, publication.post, placement),
-        { groupId: group.id },
-      );
-      const scheduledPost: ScheduledPost = {
-        telegramChannelId: channelId,
-        managedPostId: post.id,
-        postGroupId: group.id,
-        ...(publicationId ? { publicationId } : {}),
-      };
-      createdPosts.push(scheduledPost);
-      await onPlacementSaved?.(scheduledPost);
+      if (!savedPost) {
+        const group = await this.systemPostGroups.ensureMutualPromotionGroup(userId, channelId);
+        const post = await this.telegramChannels.createManagedPost(
+          userId, channelId, managedPostPayload(dto, publication.post, placement), { groupId: group.id },
+        );
+        savedPost = {
+          telegramChannelId: channelId, managedPostId: post.id, postGroupId: group.id,
+          ...(publicationId ? { publicationId } : {}),
+        };
+        createdPosts.push(savedPost);
+        savedByPlacement.set(key, savedPost);
+        await onPlacementSaved?.(savedPost);
+      }
       await this.telegramChannels.scheduleManagedPost(
-        userId,
-        channelId,
-        post.id,
+        userId, channelId, savedPost.managedPostId,
         { scheduledAt: placement?.scheduledAt ?? dto.scheduledAt },
       );
       onProgress(

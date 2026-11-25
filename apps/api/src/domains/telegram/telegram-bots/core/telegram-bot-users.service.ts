@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { trackBotAdInteraction } from './telegram-bot-ad-attribution';
 import { Prisma, type TelegramBotUser } from '@prisma/client';
 import { PrismaService } from '../../../../prisma/prisma.service';
 import type {
@@ -38,7 +39,7 @@ export class TelegramBotUsersService {
   }) {
     const actor = this.actorFromUpdate(input.update);
     if (!actor?.id) return null;
-    return this.upsertActor({
+    const user = await this.upsertActor({
       workspaceId: input.workspaceId,
       botIntegrationId: input.botIntegrationId,
       runtimeInstanceId: input.runtimeInstanceId,
@@ -53,6 +54,17 @@ export class TelegramBotUsersService {
       trackProductionActivity: input.trackProductionActivity,
       existingUser: input.existingUser,
     });
+    if (user) {
+      await trackBotAdInteraction(
+        this.prisma,
+        input.runtimeInstanceId,
+        user.id,
+        input.update,
+        user.pendingAdActivation,
+        new Date(),
+      );
+    }
+    return user;
   }
 
   async upsertActor(input: {

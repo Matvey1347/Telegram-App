@@ -511,6 +511,7 @@ export class TelegramMtprotoInviteLinks {
     joinedFrom?: Date | null;
     joinedUntil?: Date | null;
     includePendingSince?: boolean;
+    preferLivePending?: boolean;
   }): Promise<TelegramInviteLinksResult['links'][number]> {
     const parsed = parseTelegramImportInput(params.inviteLink);
     if (parsed.type !== 'invite') {
@@ -593,10 +594,11 @@ export class TelegramMtprotoInviteLinks {
       );
       const usage = this.context.toFiniteNumber(invite.usage) ??
         await readInviteImporterCount(client, resolved.peer, false, runCount, url);
-      const requested = this.context.toFiniteNumber(invite.requested) ??
-        (invite.requestNeeded
-          ? await readInviteImporterCount(client, resolved.peer, true, runCount, url)
-          : 0);
+      const exportedPending = this.context.toFiniteNumber(invite.requested);
+      const liveRequested = invite.requestNeeded && (params.preferLivePending || exportedPending == null)
+        ? await readInviteImporterCount(client, resolved.peer, true, runCount, url)
+        : null;
+      const requested = liveRequested ?? exportedPending ?? (invite.requestNeeded ? null : 0);
 
       return {
         url: canonicalTelegramInviteLink(parsed.inviteHash),

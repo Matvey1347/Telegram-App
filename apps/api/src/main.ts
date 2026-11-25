@@ -13,6 +13,7 @@ import {
   configuredRuntimeEnvironmentName,
   crmRuntimeProxyOrigin,
   crmLocalReactionAssetsEnabled,
+  crmLocalWorkspaceExportEnabled,
   publicWebOrigin,
   trustedProxyHops,
 } from './config/deployment-config';
@@ -29,6 +30,7 @@ async function bootstrap() {
     app.use(
       createCrmRuntimeProxy(crmOwnerOrigin, {
         localReactionAssets: crmLocalReactionAssetsEnabled(),
+        localWorkspaceExport: crmLocalWorkspaceExportEnabled(),
       }),
     );
   // Unified post imports contain up to 100 posts with their text and media

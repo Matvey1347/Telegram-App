@@ -36,6 +36,8 @@ type FlowStatus = "idle" | "working" | "waiting" | "done";
 export function PromoFormView(props: {
   open: boolean;
   modalTitle: string;
+  botAds?: boolean;
+  saving?: boolean;
   initial?: Promo;
   channels: TelegramChannel[];
   pendingDrafts: WorkspaceFormDraft<PromoModalDraft>[];
@@ -119,42 +121,46 @@ export function PromoFormView(props: {
               />
             </FormField>
           </div>
-          <div className="grid gap-3">
-            <FormField label="Channel" required>
-              <CustomSelect
-                value={p.channelId}
-                onChange={p.onChannelChange}
-                placeholder="Select channel"
-                options={p.channels.map((channel) => ({
-                  value: channel.id,
-                  label: channel.title,
-                  iconUrl: channel.photoUrl,
-                  iconFallback: channel.title,
-                }))}
-              />
-            </FormField>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <FormField label="Member">
-              <MemberSelect
-                value={p.assignedMemberId}
-                onChange={p.onMemberChange}
-                defaultToCurrent={!p.initial}
-              />
-            </FormField>
-            <FormField label="Invite link">
-              <TelegramInviteLinkSelect
-                value={p.inviteLinkId}
-                onChange={p.onInviteLinkChange}
-                disabled={!p.channelId}
-                onOpen={p.onRequestInviteLinks}
-                loading={p.inviteLinksLoading}
-                placeholder="Select invite link"
-                links={p.inviteLinks}
-                onCreate={p.onRegisterInviteLink}
-              />
-            </FormField>
-          </div>
+          {!p.botAds ? (
+            <>
+              <div className="grid gap-3">
+                <FormField label="Channel" required>
+                  <CustomSelect
+                    value={p.channelId}
+                    onChange={p.onChannelChange}
+                    placeholder="Select channel"
+                    options={p.channels.map((channel) => ({
+                      value: channel.id,
+                      label: channel.title,
+                      iconUrl: channel.photoUrl,
+                      iconFallback: channel.title,
+                    }))}
+                  />
+                </FormField>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <FormField label="Member">
+                  <MemberSelect
+                    value={p.assignedMemberId}
+                    onChange={p.onMemberChange}
+                    defaultToCurrent={!p.initial}
+                  />
+                </FormField>
+                <FormField label="Invite link">
+                  <TelegramInviteLinkSelect
+                    value={p.inviteLinkId}
+                    onChange={p.onInviteLinkChange}
+                    disabled={!p.channelId}
+                    onOpen={p.onRequestInviteLinks}
+                    loading={p.inviteLinksLoading}
+                    placeholder="Select invite link"
+                    links={p.inviteLinks}
+                    onCreate={p.onRegisterInviteLink}
+                  />
+                </FormField>
+              </div>
+            </>
+          ) : null}
           <PromoPostEditorSection
             expanded={p.postEditorExpanded}
             hasContent={hasPromoPostContent(p.post)}
@@ -169,11 +175,12 @@ export function PromoFormView(props: {
             onToggleEditor={p.onToggleEditor}
           >
             <div className="space-y-3">
-              <div className="rounded-lg border border-blue-900/60 bg-blue-950/20 p-3 text-xs text-blue-100">
-                Use <code>{PROMO_INVITE_LINK_TOKEN}</code> in text or button
-                URLs. The selected invite link is inserted only when the promo
-                is sent.
-              </div>
+              {!p.botAds && (
+                <div className="rounded-lg border border-blue-900/60 bg-blue-950/20 p-3 text-xs text-blue-100">
+                  Use <code>{PROMO_INVITE_LINK_TOKEN}</code> in text or button
+                  URLs. The selected invite link is inserted when the promo is sent.
+                </div>
+              )}
               <TelegramPostDraftEditor
                 draft={{
                   title: p.titleValue,
@@ -195,14 +202,16 @@ export function PromoFormView(props: {
                 onChange={(draft) => p.onPostChange(draft)}
               />
               <div className="flex flex-wrap justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={p.onReplaceTelegramLinks}
-                  disabled={!hasPromoPostContent(p.post)}
-                >
-                  <Link2 size={15} /> Replace links with {"{{invite_link}}"}
-                </Button>
+                {!p.botAds && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={p.onReplaceTelegramLinks}
+                    disabled={!hasPromoPostContent(p.post)}
+                  >
+                    <Link2 size={15} /> Replace links with {"{{invite_link}}"}
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="secondary"
@@ -230,7 +239,9 @@ export function PromoFormView(props: {
             </Button>
             <Button
               type="button"
-              disabled={!p.channelId || !p.titleValue.trim()}
+              disabled={
+                p.saving || (!p.botAds && !p.channelId) || !p.titleValue.trim()
+              }
               onClick={p.onSubmit}
             >
               {p.initial ? "Save promo" : "Create promo"}

@@ -12,6 +12,7 @@ import {
 import { createHash, createHmac, timingSafeEqual } from "crypto";
 import { TokenEncryptionService } from "@api/common/security/token-encryption.service";
 import { PrismaService } from "@api/prisma/prisma.service";
+import { trackBotAdActivity } from "@api/domains/telegram/telegram-bots/core/telegram-bot-ad-attribution";
 import {
   DEFAULT_FINANCE_CATEGORIES,
   FINANCE_INIT_DATA_MAX_AGE_SECONDS,
@@ -46,7 +47,15 @@ export class FinanceContextService {
       authTag: runtime.botTokenAuthTag,
     });
     const parsed = this.verifyInitData(initData, token);
-    return this.resolveIdentity(bot, runtime.id, parsed.user);
+    const context = await this.resolveIdentity(bot, runtime.id, parsed.user);
+    await trackBotAdActivity(
+      this.prisma,
+      runtime.id,
+      context.telegramUser.id,
+      context.telegramUser.pendingAdActivation,
+      new Date(parsed.authDate * 1_000),
+    );
+    return context;
   }
 
   async fromTelegramLogin(

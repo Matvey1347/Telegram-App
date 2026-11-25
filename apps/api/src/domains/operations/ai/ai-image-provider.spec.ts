@@ -1,5 +1,5 @@
 import { AiDeploymentConfig } from './ai-deployment-config.service';
-import { AiModelRegistry } from './ai-model-registry';
+import { AiModelRegistry, TELEGRAM_POSTCARD_REVIEW_SCHEMA_ID } from './ai-model-registry';
 import { AiProvider } from './ai-provider';
 
 describe('AiProvider image generation', () => {
@@ -46,6 +46,7 @@ describe('AiProvider image generation', () => {
       'https://api.openai.com/v1/images/generations',
       expect.objectContaining({ method: 'POST' }),
     );
+    expect(JSON.parse(fetch.mock.calls[0][1]?.body as string)).toMatchObject({ size: '1024x1024' });
     expect(outcome).toMatchObject({
       generationStarted: true,
       errorCategory: null,
@@ -82,6 +83,28 @@ describe('AiProvider image generation', () => {
     );
   });
 
+  it('returns postcard review fields without a second JSON wrapper', async () => {
+    const review = {
+      candidateIndex: 1, candidateObservation: 'Lantern at dusk', embeddedGreeting: false,
+      visibleGreeting: '', referenceIndex: 0, referenceDirection: '', rejectionReason: '',
+    };
+    const fetch = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ input_tokens: 400 })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        status: 'completed',
+        output: [{ content: [{ type: 'output_text', text: JSON.stringify(review) }] }],
+        usage: { input_tokens: 400, output_tokens: 20, total_tokens: 420 },
+      })));
+    const result = await provider.execute('Inspect the postcard', {
+      ...registry.category('TELEGRAM_POSTING_REVIEW'),
+      schemaId: TELEGRAM_POSTCARD_REVIEW_SCHEMA_ID,
+    }, undefined, undefined, { mime: 'image/jpeg', data: Buffer.from([0xff, 0xd8, 0xff]) });
+    expect(result).toMatchObject({ result: review, errorCategory: null });
+    const request = JSON.parse(fetch.mock.calls[1][1]?.body as string);
+    expect(request.text.format.name).toBe(TELEGRAM_POSTCARD_REVIEW_SCHEMA_ID);
+    expect(request.text.format.schema.required).toContain('embeddedGreeting');
+  });
+
   it('uses the OpenAI image edit route when a visual reference is attached', async () => {
     const fetch = jest
       .spyOn(global, 'fetch')
@@ -99,6 +122,11 @@ describe('AiProvider image generation', () => {
       undefined,
       undefined,
       { mime: 'image/jpeg', data: Buffer.from([0xff, 0xd8, 0xff, 0x01]) },
+      undefined,
+      false,
+      false,
+      undefined,
+      '1024x1536',
     );
 
     expect(fetch).toHaveBeenCalledWith(
@@ -108,6 +136,7 @@ describe('AiProvider image generation', () => {
     const form = fetch.mock.calls[0][1]?.body as FormData;
     expect(form.get('prompt')).toContain('guided by the attached reference');
     expect(form.get('image')).toBeInstanceOf(Blob);
+    expect(form.get('size')).toBe('1024x1536');
   });
 
   it('rejects an invalid image payload instead of returning it to a post', async () => {

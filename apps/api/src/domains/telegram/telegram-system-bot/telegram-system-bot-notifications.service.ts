@@ -21,16 +21,28 @@ export class TelegramSystemBotNotificationsService {
     text: string;
     parseMode?: string;
   }) {
+    return this.sendToWorkspaceAccount(
+      input.workspaceId,
+      input.text,
+      input.parseMode,
+    );
+  }
+
+  async sendToWorkspaceAccount(
+    workspaceId: string,
+    text: string,
+    parseMode?: string,
+  ) {
     const workspace = await this.prisma.workspace.findUnique({
-      where: { id: input.workspaceId },
+      where: { id: workspaceId },
       select: { telegramNotificationUserChatId: true },
     });
     if (!workspace?.telegramNotificationUserChatId)
       return { status: 'NOT_CONNECTED' as const };
     return this.sendMessage({
       chatId: workspace.telegramNotificationUserChatId,
-      text: input.text,
-      parseMode: input.parseMode,
+      text,
+      parseMode,
     });
   }
 

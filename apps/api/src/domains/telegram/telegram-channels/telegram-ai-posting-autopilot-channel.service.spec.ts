@@ -66,11 +66,12 @@ describe('AI Posting Autopilot channel execution', () => {
       $queryRaw: jest
         .fn()
         .mockResolvedValue([
-          { stage: 'search', cost: new Prisma.Decimal('0.012'), unknown: 1 },
+          { stage: 'search', bucket: 'successful', cost: new Prisma.Decimal('0.008'), unknown: 0 },
+          { stage: 'search', bucket: 'failed', cost: new Prisma.Decimal('0.004'), unknown: 1 },
         ]),
     };
     const generator = {
-      generate: jest.fn().mockResolvedValue({
+      generate: jest.fn().mockResolvedValue({ generated: [], failures: [], runId: 'empty', version: 1 }).mockResolvedValueOnce({
         generated: [
           { imageUrl: 'stored-image', mediaReadiness: 'READY' },
           { imageUrl: null, mediaReadiness: 'MISSING' },
@@ -185,8 +186,25 @@ describe('AI Posting Autopilot channel execution', () => {
       generated: 1,
       scheduled: 2,
       costs: { search: '0.012' },
+      costBreakdown: { successful: '0.008', failed: '0.004', shared: '0', unknownByBucket: { successful: 0, failed: 1, shared: 0 } },
       unknownCosts: 1,
     });
+  });
+
+  it('fills a deficit larger than one model batch under the same report run', async () => {
+    const { service, prisma, calendar, generator, testRuns } = make();
+    calendar.occurrencesByChannels.mockResolvedValue({ channel: [] });
+    prisma.telegramManagedPost.count.mockResolvedValueOnce(34).mockResolvedValueOnce(50);
+    generator.generate.mockReset().mockImplementation((_user, _channel, count: number) =>
+      Promise.resolve({ generated: Array.from({ length: count }, () => ({ imageUrl: 'stored', mediaReadiness: 'READY' })),
+        failures: [], runId: 'test', version: 1 }));
+    testRuns.reviewPublication.mockReset().mockImplementation((_user, _channel, _run, index: number, version: number) =>
+      Promise.resolve({ version: version + 1, publications: Array.from({ length: index + 1 }, () => ({ savedPostId: 'saved' })) }));
+    const result = await service.run('workspace', 'channel', 'run', 'worker');
+    expect(generator.generate.mock.calls.map((args) => args.slice(2))).toEqual([
+      [10, 'AUTOMATIC', 'run'], [6, 'AUTOMATIC', 'run'],
+    ]);
+    expect(result).toMatchObject({ generated: 16, readyDrafts: 50, errors: [] });
   });
 
   it('schedules complete editor drafts while automatic AI is disabled', async () => {
@@ -219,7 +237,7 @@ describe('AI Posting Autopilot channel execution', () => {
       { id: 'old-1' }, { id: 'old-2' },
     ]);
     const ready = { imageUrl: 'stored-image', mediaReadiness: 'READY' };
-    generator.generate.mockResolvedValue({
+    generator.generate.mockReset().mockResolvedValue({
       generated: [ready, ready], failures: [], runId: 'test-run', version: 1,
     });
     testRuns.reviewPublication.mockReset()

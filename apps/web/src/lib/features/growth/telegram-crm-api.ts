@@ -115,6 +115,13 @@ export const telegramCrmApi = {
         params: segment === "ALL" ? undefined : { segment },
       })
     ).data,
+  exportWorkspace: async (signal?: AbortSignal) =>
+    (
+      await api.get<string>(
+        "/telegram-crm/workspace-export",
+        { responseType: "text", signal },
+      )
+    ).data,
   listTags: async (signal?: AbortSignal) =>
     (await api.get<CrmTagSummary[]>("/telegram-crm/tags", { signal })).data,
   createTag: async (payload: { name: string; color?: string | null }) =>

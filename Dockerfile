@@ -3,7 +3,7 @@ FROM node:20.19.0-bookworm-slim
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates openssl \
+    && apt-get install -y --no-install-recommends ca-certificates openssl fontconfig fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable

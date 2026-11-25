@@ -62,10 +62,7 @@ export function ConfiguredBotCards({
     await overview.refetch();
   };
   return (
-    <section aria-label="Environment-managed bots" className="space-y-3">
-      <h2 className="text-lg font-semibold text-white">
-        Environment-managed bots
-      </h2>
+    <section aria-label="Configured bots" className="space-y-3">
       <div className="grid items-start gap-4 lg:grid-cols-2">
         {systemBot?.runtimes.length ? (
           <SystemBotCard
@@ -202,10 +199,10 @@ function BotAnalyticsCard({
   const showSupport = supportSelected;
   return (
     <article className="rounded-lg border border-neutral-800 bg-neutral-950 p-3 shadow-sm">
-      {showSupport ? (
-        <SupportBotIdentity product="NEXELOQ" bot={support} />
-      ) : (
-        <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
+        {showSupport ? (
+          <SupportBotIdentity product="NEXELOQ" bot={support} />
+        ) : (
           <div className="flex min-w-0 items-start gap-3">
             <BotRuntimeAvatar
               type={appType}
@@ -232,9 +229,12 @@ function BotAnalyticsCard({
               </p>
             </div>
           </div>
+        )}
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="rounded-full border border-sky-800 bg-sky-950 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">ENV</span>
           {actions}
         </div>
-      )}
+      </div>
       <BotRuntimeEnvironmentTabs
         environment={environment}
         availableEnvironments={runtimes.map((item) => item.environment)}

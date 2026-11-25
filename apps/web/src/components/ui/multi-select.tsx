@@ -13,6 +13,8 @@ type MultiSelectOption = {
   value: string;
   label: string;
   selectedLabel?: string;
+  badge?: string;
+
   icon?: React.ReactNode; iconPresentation?: ResolvedEmoji;
   iconUrl?: string;
   iconEmoji?: string;
@@ -40,6 +42,7 @@ export function MultiSelect({
   loading = false,
   loadingLabel = "Loading options…",
   onOpen,
+  ariaLabel,
 }: {
   value: string[];
   onChange: (value: string[]) => void;
@@ -58,6 +61,7 @@ export function MultiSelect({
   loading?: boolean;
   loadingLabel?: string;
   onOpen?: () => void;
+  ariaLabel?: string;
 }) {
   const i18n = useOptionalI18n();
   const resolvedPlaceholder =
@@ -128,6 +132,7 @@ export function MultiSelect({
       <button
         ref={triggerRef}
         type="button"
+        aria-label={ariaLabel}
         disabled={disabled}
         onClick={() => {
           if (!open) onOpen?.();
@@ -188,6 +193,7 @@ export function MultiSelect({
                   />
                   <span className="truncate">
                     {option.selectedLabel ?? option.label}
+                    {option.badge && <span className="ml-1 rounded bg-amber-950 px-1 text-[10px] text-amber-200">{option.badge}</span>}
                   </span>
                 </span>
               ))
@@ -252,6 +258,7 @@ export function MultiSelect({
                           >
                             {option.label}
                           </span>
+                          {option.badge && <span className="shrink-0 rounded bg-amber-950 px-1.5 text-xs text-amber-200">{option.badge}</span>}
                         </span>
                         {checked ? (
                           <Check size={14} className="text-blue-300" />

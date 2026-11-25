@@ -1,8 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment -- Jest mocks intentionally use partial canonical sync results. */
 jest.mock('../../growth/ad-campaigns/ad-campaign-tracking-sync', () => ({
   attachNewCampaignTrackingLinks: jest.fn(),
+  loadDueCampaignInviteWindows: jest.fn().mockResolvedValue(new Map()),
 }));
 
+import { loadDueCampaignInviteWindows } from '../../growth/ad-campaigns/ad-campaign-tracking-sync';
+import { AdCampaignInviteWindowsService } from '../../growth/ad-campaigns/ad-campaign-invite-windows.service';
 import { TelegramWorkspaceFullSyncService } from './telegram-workspace-full-sync.service';
 
 function channel(
@@ -92,11 +95,17 @@ describe('TelegramWorkspaceFullSyncService', () => {
         { ...channel('destination', 'Destination', false), inviteLinks: [{ id: 'tracking-link' }] },
       ]) },
     };
+    jest.mocked(loadDueCampaignInviteWindows).mockResolvedValueOnce(new Map([
+      ['destination', { campaignId: 'campaign', inviteLinkId: 'tracking-link' }],
+    ]));
+    const refresh = jest.fn().mockResolvedValue([]);
     const service = new TelegramWorkspaceFullSyncService(prisma as never, {
       registerRequestByContextId: jest.fn(),
-      resolve: jest.fn().mockResolvedValue({ syncNow: canonicalSync }),
+      resolve: jest.fn((type: unknown) => Promise.resolve(type === AdCampaignInviteWindowsService ? { refresh } : { syncNow: canonicalSync })),
     } as never);
     await service.syncWorkspace({ workspaceId: 'workspace', actor: { type: 'SCHEDULED_TASK' } });
+    expect(refresh).toHaveBeenCalledWith('actor', 'campaign', ['tracking-link']);
+    expect(loadDueCampaignInviteWindows).toHaveBeenCalledWith(prisma, 'workspace', ['destination'], expect.any(Date));
     expect(canonicalSync).toHaveBeenCalledWith('actor', 'destination', {
       telegramUserAccountId: 'account-destination', saveSelection: false, syncIncludeInviteLinks: true,
     });

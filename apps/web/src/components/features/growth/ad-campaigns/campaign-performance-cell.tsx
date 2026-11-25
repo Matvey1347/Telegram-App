@@ -119,10 +119,11 @@ export function PerformanceCell({
   onOpenAdmissionAnalytics?: () => void;
   onOpenBotRequests?: () => void;
 }) {
-  const kpiTextClass = kpiMetricTextClass(kpiStatus);
-  const cardClass = performanceCardClass(kpiStatus);
+  const incomplete = campaign.periodCountsUnavailable === true;
+  const kpiTextClass = kpiMetricTextClass(incomplete ? "unknown" : kpiStatus);
+  const cardClass = performanceCardClass(incomplete ? "unknown" : kpiStatus);
   const shouldShowKpiTooltip =
-    kpiStatus === "good" || kpiStatus === "acceptable" || kpiStatus === "bad";
+    !incomplete && (kpiStatus === "good" || kpiStatus === "acceptable" || kpiStatus === "bad");
   const peakJoined = joined + Math.max(0, left);
   const unsubscribedPercent =
     peakJoined > 0 ? (Math.max(0, left) / peakJoined) * 100 : 0;
@@ -159,6 +160,8 @@ export function PerformanceCell({
     peakPrimaryCostPerJoined != null &&
     primaryCostPerJoined != null &&
     Math.abs(peakPrimaryCostPerJoined - primaryCostPerJoined) >= 0.005;
+  const shownJoined = incomplete ? campaign.analytics?.joinedCount : resolvedCurrentJoined;
+  const shownPending = incomplete ? campaign.analytics?.requestedCount : pending;
   const t = useCampaignText();
   const displayMode = moneySettings?.currencyDisplayMode ?? "code";
 
@@ -185,14 +188,6 @@ export function PerformanceCell({
     </button>
   ) : null;
 
-  if (campaign.periodCountsUnavailable)
-    return (
-      <div className="text-sm text-amber-400">
-        {t("Joined")}: {campaign.analytics?.joinedCount ?? "—"} ·{" "}
-        {t("Requests")}: {campaign.analytics?.requestedCount ?? "—"}
-        {botBadge && <div className="mt-1">{botBadge}</div>}
-      </div>
-    );
   return (
     <div
       data-testid="campaign-performance-card"
@@ -221,15 +216,15 @@ export function PerformanceCell({
             {t("Attributed")}
           </p>
           <p className={`text-sm font-semibold leading-snug ${kpiTextClass}`}>
-            {formatMetric(attributed)}
+            {incomplete ? "—" : formatMetric(attributed)}
           </p>
           <div className="mt-0.5 space-y-0.5 text-[11px] leading-snug text-slate-500">
             <p>
-              {t("Joined")} {formatMetric(resolvedCurrentJoined)}
+              {t("Joined")} {shownJoined == null ? "—" : formatMetric(shownJoined)}
             </p>
-            {pending > 0 ? (
+            {incomplete || pending > 0 ? (
               <p>
-                {t("Pending")} {formatMetric(pending)}
+                {t("Pending")} {shownPending == null ? "—" : formatMetric(shownPending)}
               </p>
             ) : null}
           </div>
@@ -238,14 +233,14 @@ export function PerformanceCell({
           <p className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
             CPA
           </p>
-          {costPerJoined != null ? (
+          {!incomplete && costPerJoined != null ? (
             <p className={`text-sm font-semibold leading-snug ${kpiTextClass}`}>
               {formatMoney(costPerJoined, currency, displayMode)}
             </p>
           ) : (
             <p className="text-sm text-slate-500">-</p>
           )}
-          {showPeakCost ? (
+          {!incomplete && showPeakCost ? (
             <div className="mt-0.5 space-y-0.5 text-[11px] leading-snug text-slate-500">
               <p>
                 {t("Peak")}{" "}
@@ -269,7 +264,7 @@ export function PerformanceCell({
       ) : null}
       <div className="mt-2 flex flex-wrap items-center gap-1 text-[11px]">
         <KpiStatusBadge
-          status={kpiStatus}
+          status={incomplete ? "unknown" : kpiStatus}
           onMouseEnter={(event) => {
             if (!shouldShowKpiTooltip) return;
             onShowKpiTooltip(campaign.telegramChannel, event.currentTarget);
@@ -281,7 +276,7 @@ export function PerformanceCell({
         />
         {campaign.inviteLinks?.length ? (
           <>
-            {showTrendDelta ? (
+            {!incomplete && showTrendDelta ? (
               <button
                 type="button"
                 onClick={onOpenHistory}
@@ -291,7 +286,7 @@ export function PerformanceCell({
                 {t("Peak")} {formatMetric(resolvedPeakAttributed)}
               </button>
             ) : null}
-            {historySummary != null || resolvedDropPercent > 0 ? (
+            {!incomplete && (historySummary != null || resolvedDropPercent > 0) ? (
               <button
                 type="button"
                 onClick={onOpenHistory}

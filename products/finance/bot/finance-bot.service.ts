@@ -157,6 +157,7 @@ export class FinanceBotService {
         botIntegrationId: context.bot.id,
         telegramBotUserId: user.id,
         payment: successfulPayment,
+        runtimeInstanceId: context.runtime.id,
       });
       await this.durable.enqueueSendMessage({
         workspaceId: context.bot.workspaceId,

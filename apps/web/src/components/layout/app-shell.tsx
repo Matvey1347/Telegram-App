@@ -23,6 +23,7 @@ import { useAppToast } from "@/providers/toast-provider";
 import { CustomSelect } from "@/components/ui/primitives";
 import { IconAvatar } from "@/components/icons/icon-avatar";
 import { SystemBrandLogo } from "@/components/layout/system-brand-logo";
+import { AppShellWorkspaceContext } from "@/providers/app-shell-workspace";
 import { AppNavigation } from "@/components/layout/app-navigation";
 import { GlobalSearchBox } from "@/components/layout/global-search-box";
 import { GlobalRefreshButton } from "@/components/layout/global-refresh-button";
@@ -154,7 +155,7 @@ export function AppShell({ children }: PropsWithChildren) {
   useEffect(() => {
     if (!mobileMenuOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileMenuOpen(false);
+      if (event.key === "Escape" && !event.defaultPrevented) setMobileMenuOpen(false);
     };
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKeyDown);
@@ -273,9 +274,9 @@ export function AppShell({ children }: PropsWithChildren) {
     }
   };
 
-  const toggleGroup = (key: string) => {
+  const toggleGroup = (key: string, open: boolean) => {
     setOpenGroups((prev) => {
-      const next = { ...prev, [key]: !prev[key] };
+      const next = { ...prev, [key]: open };
       localStorage.setItem("sidebar-open-groups", JSON.stringify(next));
       return next;
     });
@@ -519,7 +520,15 @@ export function AppShell({ children }: PropsWithChildren) {
           key={activeWorkspaceId || "no-workspace"}
           className="w-full min-w-0"
         >
-          {children}
+          <AppShellWorkspaceContext.Provider
+            value={activeWorkspace ? {
+              workspaceId: activeWorkspace.id,
+              availableWorkspaces: workspaces ?? [],
+              onSwitchWorkspace: switchWorkspace,
+            } : null}
+          >
+            {children}
+          </AppShellWorkspaceContext.Provider>
         </div>
       </main>
       <AppPwaNavigation

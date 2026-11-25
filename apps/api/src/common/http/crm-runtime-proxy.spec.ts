@@ -157,6 +157,24 @@ describe('CRM runtime owner proxy', () => {
     ).toBe('upstream');
   });
 
+  it('keeps only the read-only workspace export local when enabled', async () => {
+    const upstream = await listen((_req, res) => res.end('upstream'));
+    const path = '/api/telegram-crm/workspace-export';
+    const app = express();
+    app.use(createCrmRuntimeProxy(upstream, { localWorkspaceExport: true }));
+    app.use((_req, res) => res.send('local'));
+    expect((await supertest(app).get(path)).text).toBe('local');
+    expect((await supertest(app).options(path)).text).toBe('local');
+    expect((await supertest(app).post(path)).text).toBe('upstream');
+    expect((await supertest(app).get('/api/telegram-crm/contacts')).text).toBe(
+      'upstream',
+    );
+
+    const relay = express();
+    relay.use(createCrmRuntimeProxy(upstream));
+    expect((await supertest(relay).get(path)).text).toBe('upstream');
+  });
+
   it('rejects a second proxy hop before forwarding credentials again', async () => {
     const called = jest.fn();
     const upstream = await listen((_req, res) => {

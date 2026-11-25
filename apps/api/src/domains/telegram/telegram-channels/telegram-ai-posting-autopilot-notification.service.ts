@@ -1,9 +1,17 @@
+import { readAutopilotRunCosts } from './telegram-ai-posting-autopilot-costs';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ModuleRef } from '@nestjs/core';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AiPostingAutopilotNotificationsService } from '../../operations/notifications/ai-posting-autopilot-notifications.service';
 import { classifyAutopilotError } from './telegram-ai-posting-autopilot-error';
+
+import {
+  autopilotReportLines,
+  publicationNotificationChannel,
+  publicationNotificationChannelSelect,
+  publicationNotificationHtml,
+} from '../../operations/notifications/publication-notification-message';
 
 type RunNotificationSummary = {
   coverageDays: number;
@@ -20,6 +28,7 @@ type RunNotificationSummary = {
   timezone?: string;
   costs?: Record<string, string>;
   unknownCosts?: number;
+  costBreakdown?: Awaited<ReturnType<typeof readAutopilotRunCosts>>['costBreakdown'];
   spheres?: string[];
   rubrics?: string[];
 };
@@ -43,89 +52,47 @@ export class TelegramAiPostingAutopilotNotificationService {
       { strict: false },
     );
     try {
-      if (result.coverageDays < result.targetCoverageDays)
-        await service.notify({
-          workspaceId,
-          channelId,
-          runId,
-          event: 'LOW_SCHEDULE_COVERAGE',
-          title: 'Низкое покрытие расписания',
-          body: `Покрытие составляет ${result.coverageDays} дней.`,
-          metadata: { coverageDays: result.coverageDays },
-        });
-      if (result.readyDrafts < result.criticalDraftThreshold)
-        await service.notify({
-          workspaceId,
-          channelId,
-          runId,
-          event: 'CRITICAL_DRAFT_STOCK',
-          title: 'Критически малый запас черновиков',
-          body: `Готовых черновиков осталось ${result.readyDrafts}.`,
-          metadata: { readyDrafts: result.readyDrafts },
-          priority: 'HIGH',
-        });
-      if (result.errors.some((error) => /GENERATION|IMAGE/.test(error)))
-        await service.notify({
-          workspaceId,
-          channelId,
-          runId,
-          event: 'GENERATION_OR_IMAGE_FAILURE',
-          title: 'Ошибка генерации AI Posting',
-          body: 'Часть черновиков не удалось подготовить. Запуск сохранён для проверки.',
-          metadata: { errorCount: result.errors.length },
-          priority: 'HIGH',
-        });
-      if (result.errors.some((error) => /AI_API|BUDGET|QUOTA/.test(error)))
-        await service.notify({
-          workspaceId,
-          channelId,
-          runId,
-          event: 'AI_API_OR_BUDGET_FAILURE',
-          title: 'AI API недоступен или исчерпана квота',
-          body: 'Часть задач генерации не выполнена. Запуск сохранён для проверки.',
-          metadata: { errorCount: result.errors.length },
-          priority: 'HIGH',
-        });
-      if (
-        result.errors.some((error) => /PLANNING|PUBLICATION|SLOT/.test(error))
-      )
-        await service.notify({
-          workspaceId,
-          channelId,
-          runId,
-          event: 'PLANNING_OR_PUBLICATION_FAILURE',
-          title: 'Ошибка планирования AI Posting',
-          body: 'Не удалось заполнить часть календарных слотов. Запуск сохранён для проверки.',
-          metadata: { errorCount: result.errors.length },
-          priority: 'HIGH',
-        });
-      const labels: Record<string, string> = { planning: 'планирование', text: 'текст', search: 'проверка найденных изображений', image: 'генерация изображений', review: 'редакторская проверка' };
-      const costs = Object.entries(result.costs ?? {});
-      const total = costs.reduce((sum, [, cost]) => sum.plus(cost), new Prisma.Decimal(0));
-      const through = result.scheduledThrough && new Intl.DateTimeFormat('ru-RU', {
-        timeZone: result.timezone ?? 'Europe/Warsaw', dateStyle: 'medium', timeStyle: 'short',
-      }).format(new Date(result.scheduledThrough));
-      const body = [
-        `Создано черновиков: ${result.generated}. Запланировано публикаций: ${result.scheduled ?? 0}.`,
-        through ? `Крайний заполненный слот: ${through} (${result.timezone ?? 'Europe/Warsaw'}).` : '',
-        `Покрытие без пропусков: ${result.coverageDays} дн. Готовый запас: ${result.readyDrafts}.`,
-        result.spheres?.length ? `Сферы: ${result.spheres.join(', ')}.` : '',
-        result.rubrics?.length ? `Рубрики: ${result.rubrics.join(', ')}.` : '',
-        costs.length ? `Подтверждённый расход: $${total}. ${costs.map(([key, cost]) => `${labels[key] ?? key} $${cost}`).join(', ')}.` : '',
-        result.unknownCosts ? `Операций с неподтверждённой стоимостью: ${result.unknownCosts}.` : '',
-      ].filter(Boolean).join('\n');
+      const costs = Object.values(result.costs ?? {});
+      const total = costs.reduce(
+        (sum, cost) => sum.plus(cost),
+        new Prisma.Decimal(0),
+      );
+      const channel = await this.reportChannel(
+        workspaceId,
+        channelId,
+        result.channelTitle,
+      );
+      const lines = autopilotReportLines(channel, {
+        generated: result.generated,
+        scheduled: result.scheduled ?? 0,
+        coverageDays: result.coverageDays,
+        readyDrafts: result.readyDrafts,
+        errorCount: result.errors.length,
+        totalCost: costs.length || (result.costBreakdown && !result.unknownCosts) ? total.toString() : null,
+        unknownCosts: result.unknownCosts,
+        costBreakdown: result.costBreakdown,
+      });
       await service.notify({
         workspaceId,
         channelId,
         runId,
         event: 'WEEKLY_REPORT',
-        title: `AI Posting · ${result.channelTitle || 'Автопилот'}`,
-        body,
+        destination: await this.destination(
+          workspaceId,
+          result.errors.length > 0,
+        ),
+        ...(result.errors.length ? { priority: 'HIGH' as const } : {}),
+        title: channel.title,
+        body: lines
+          .slice(1)
+          .map(({ text }) => text)
+          .join('\n'),
         metadata: {
           coverageDays: result.coverageDays,
           readyDrafts: result.readyDrafts,
           scheduled: result.scheduled ?? 0,
           scheduleMode: result.scheduleMode,
+          telegramHtml: publicationNotificationHtml(lines),
         },
       });
     } catch (error) {
@@ -155,16 +122,52 @@ export class TelegramAiPostingAutopilotNotificationService {
         : errorType.includes('IMAGE')
           ? 'GENERATION_OR_IMAGE_FAILURE'
           : 'PLANNING_OR_PUBLICATION_FAILURE';
+    const channel = await this.reportChannel(workspaceId, channelId);
+    const receipt = await readAutopilotRunCosts(this.prisma, workspaceId, channelId, runId).catch(() => null);
+    const totalCost = receipt ? Object.values(receipt.costs).reduce((sum, cost) => sum.plus(cost), new Prisma.Decimal(0)).toString() : null;
+    const lines = autopilotReportLines(channel, {
+      generated: 0, scheduled: 0, coverageDays: null, readyDrafts: 0, errorCount: 1,
+      totalCost, unknownCosts: receipt?.unknownCosts, costBreakdown: receipt?.costBreakdown,
+    });
     await service.notify({
       workspaceId,
       channelId,
       runId,
       event,
-      title: 'Сбой Content Autopilot',
-      body: 'Запуск завершился ошибкой. Детали доступны в истории запусков.',
-      metadata: { errorType },
+      destination: await this.destination(workspaceId, true),
+      title: channel.title,
+      body: lines.slice(1).map(({ text }) => text).join('\n'),
+      metadata: {
+        errorType,
+        telegramHtml: publicationNotificationHtml(lines),
+      },
       priority: 'HIGH',
     });
+  }
+
+  private async destination(workspaceId: string, failure: boolean) {
+    const settings = await this.prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: {
+        autopilotNotificationDestination: true,
+        autopilotErrorNotificationDestination: true,
+      },
+    });
+    return failure
+      ? settings.autopilotErrorNotificationDestination
+      : settings.autopilotNotificationDestination;
+  }
+
+  private async reportChannel(
+    workspaceId: string,
+    id: string,
+    fallback = 'Канал',
+  ) {
+    const row = await this.prisma.telegramChannel.findFirst({
+      where: { workspaceId, id },
+      select: publicationNotificationChannelSelect,
+    });
+    return publicationNotificationChannel(row ?? { id, title: fallback });
   }
 
   private async recordNotificationFailure(runId: string, errorType: string) {

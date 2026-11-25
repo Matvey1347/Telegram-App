@@ -49,6 +49,7 @@ const PERSISTED_QUERY_KEYS = [
 ] as const;
 
 const workspaceScopedQueryKeys = new Set<string>([
+  "workspace-creatives",
   "crm-manual",
   "lead-discovery",
   "account-me",
@@ -56,7 +57,7 @@ const workspaceScopedQueryKeys = new Set<string>([
   "workspace-selected",
   "workspace-members",
   "telegram-channels",
-  "telegram-channel-reminders",
+  "publication-notifications",
   "telegram-channel-analytics",
   "telegram-channel-analytics-sources",
   "telegram-channel-posts",

@@ -3,7 +3,10 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
+  CalendarClock,
   CalendarDays,
+  ChartNoAxesCombined,
+  Trash2,
   ChevronDown,
   ChevronRight,
   Megaphone,
@@ -22,11 +25,11 @@ type NavigationItem = {
   adminOnly?: boolean;
   featureId?: string;
   featureIds?: readonly string[];
-  permissionId?: string;
+  permissionIds?: readonly string[];
 };
 
 type NavigationGroup = {
-  key: "telegram" | "growth";
+  key: "telegram" | "growth" | "settings";
   label: TranslationKey;
   icon: LucideIcon;
   children: readonly NavigationItem[];
@@ -44,15 +47,6 @@ const primaryItems: readonly NavigationItem[] = [
     href: "/finance",
     icon: workspaceFeatureIcons.finance,
     featureId: "finance",
-  },
-];
-
-const trailingItems: readonly NavigationItem[] = [
-  {
-    label: "navigation.workspaceSettings",
-    href: "/settings",
-    icon: Settings,
-    featureIds: ["workspace", "operations", "members"],
   },
 ];
 
@@ -107,19 +101,21 @@ const groups: readonly NavigationGroup[] = [
       },
     ],
   },
+  {
+    key: "settings",
+    label: "navigation.workspaceSettings",
+    icon: Settings,
+    children: [
+      { label: "navigation.workspaceGeneral", href: "/settings", icon: Settings, featureIds: ["workspace", "operations", "members"] },
+      { label: "navigation.aiUsage", href: "/settings/ai-usage", icon: ChartNoAxesCombined, permissionIds: ["operations.viewAiUsage", "operations.manageAi"] },
+      { label: "navigation.scheduledTasks", href: "/scheduled-tasks", icon: CalendarClock, featureId: "operations" },
+      { label: "navigation.trash", href: "/trash", icon: Trash2, featureId: "operations", permissionIds: ["operations.restoreTrash"] },
+    ],
+  },
 ];
 
 function routeIsActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
-  if (href === "/settings") {
-    return (
-      pathname === "/settings" ||
-      pathname.startsWith("/workspace-members") ||
-      pathname.startsWith("/roles") ||
-      pathname.startsWith("/trash") ||
-      pathname.startsWith("/scheduled-tasks")
-    );
-  }
+  if (href === "/" || href === "/settings") return pathname === href;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -161,7 +157,7 @@ export function AppNavigation({
 }: {
   pathname: string;
   openGroups: Record<string, boolean>;
-  onToggleGroup: (key: string) => void;
+  onToggleGroup: (key: string, open: boolean) => void;
   canViewAdmin: boolean;
   effectiveFeatureIds?: readonly string[];
   effectivePermissionKeys?: readonly string[];
@@ -177,12 +173,10 @@ export function AppNavigation({
           effectiveFeatureIds.includes(featureId),
         )));
   const permissionAllowed = (item: NavigationItem) =>
-    !item.permissionId ||
-    (effectivePermissionKeys
-      ? effectivePermissionKeys.includes(item.permissionId)
+    !item.permissionIds || (effectivePermissionKeys
+      ? item.permissionIds.some((id) => effectivePermissionKeys.includes(id))
       : canViewAdmin);
   const visiblePrimaryItems = primaryItems.filter(featureAllowed);
-  const visibleTrailingItems = trailingItems.filter(featureAllowed);
   const visibleGroups = groups
     .map((group) => ({
       ...group,
@@ -207,13 +201,10 @@ export function AppNavigation({
     .filter((group) => group.children.length > 0);
   const visibleItemCount =
     visiblePrimaryItems.length +
-    visibleTrailingItems.length +
     visibleGroups.reduce((total, group) => total + group.children.length, 0);
   const onlyVisibleItem =
     visibleItemCount === 1
-      ? (visiblePrimaryItems[0] ??
-        visibleGroups[0]?.children[0] ??
-        visibleTrailingItems[0])
+      ? (visiblePrimaryItems[0] ?? visibleGroups[0]?.children[0])
       : null;
 
   return (
@@ -245,7 +236,7 @@ export function AppNavigation({
               >
                 <button
                   type="button"
-                  onClick={() => onToggleGroup(group.key)}
+                  onClick={() => onToggleGroup(group.key, !open)}
                   aria-expanded={open}
                   aria-controls={panelId}
                   className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium uppercase tracking-wide transition hover:bg-neutral-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
@@ -279,13 +270,6 @@ export function AppNavigation({
         </div>
       ) : null}
 
-      {!onlyVisibleItem && visibleTrailingItems.length ? (
-        <div className="mt-3 space-y-1 border-t border-neutral-900 pt-3">
-          {visibleTrailingItems.map((item) => (
-            <ItemLink key={item.href} item={item} pathname={pathname} />
-          ))}
-        </div>
-      ) : null}
     </nav>
   );
 }

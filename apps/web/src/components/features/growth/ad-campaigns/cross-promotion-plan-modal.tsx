@@ -649,8 +649,8 @@ export function CrossPromotionPlanModal({
       );
       drafts.clearCurrentDraft();
       onClose();
-    } catch {
-      setError("Could not save this draft.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save this draft.");
     } finally {
       setSavingDraft(false);
     }

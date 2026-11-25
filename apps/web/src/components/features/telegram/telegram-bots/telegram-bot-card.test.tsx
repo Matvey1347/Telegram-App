@@ -324,7 +324,8 @@ describe("TelegramBotCard", () => {
     expect(screen.queryByText("@admissions_prod")).toBeNull();
     expect(screen.getByLabelText("Support bot avatar").querySelector("img"))
       .toHaveAttribute("src", "/brand/groshly-support.png");
-    expect(screen.queryByRole("button", { name: "Actions for Admissions bot" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Actions for Admissions bot" })).toBeVisible();
+    expect(screen.getByText("ENV")).toBeVisible();
     expect(screen.getByText("2 open · 1 awaiting reply")).toBeVisible();
     expect(screen.queryByRole("button", { name: "Open support inbox" })).toBeNull();
     await user.click(screen.getByRole("tab", { name: "Production" }));

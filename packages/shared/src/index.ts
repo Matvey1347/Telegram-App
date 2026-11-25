@@ -74,3 +74,16 @@ export * from "./types/telegram-invite-observations";
 export * from "./types/telegram-support";
 
 export * from "./types/ad-campaign-tracking";
+export * from "./types/workspace-creatives";
+
+export type * from "./types/dashboard-insights";
+export * from "./types/telegram-bot-ads";
+export { publicationNotificationDestinations } from './types/publication-notifications';
+export type {
+  PublicationNotificationDestination,
+  PublicationNotificationChannel,
+  PublicationNotificationLine,
+  PublicationNotificationPreview,
+  PublicationNotificationSettings,
+  PublicationNotificationSettingsView,
+} from './types/publication-notifications';

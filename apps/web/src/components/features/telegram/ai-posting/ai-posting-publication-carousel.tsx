@@ -211,7 +211,7 @@ export function AiPostingPublicationCarousel({
 
       <div className="grid min-w-0 gap-4 border-t border-neutral-800 pt-4">
         <div className="min-w-0">
-          <div className="mx-auto w-full max-w-[346px] font-[system-ui] [&_.telegram-preview-text]:text-[13px] [&_.telegram-preview-text]:leading-4">
+          <div className="mx-auto w-full max-w-[346px] [&_.telegram-preview-text]:text-[13px] [&_.telegram-preview-text]:leading-4">
             <TelegramPostPreview
               channelTitle={channelTitle}
               captionLengthMax={captionLengthMax}

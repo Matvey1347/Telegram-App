@@ -15,6 +15,8 @@ import { CrossPromotionPublicationPostResolverService } from './cross-promotion-
 import { publisherPlacements } from './cross-promotion-plan-input';
 import type { ScheduledPost as ScheduledPlacement } from './cross-promotion-placement-input';
 
+const acceptedStatuses = new Set(['SCHEDULED', 'PUBLISHING', 'PUBLISHED']);
+
 const json = <T>(value: unknown, fallback: T): T =>
   value && typeof value === 'object' ? (value as T) : fallback;
 
@@ -44,7 +46,7 @@ export class CrossPromotionPlanPlacementStore {
         'Placement channel is not part of this plan',
       );
     const managedPosts = dto.placements.length
-      ? await this.prisma.telegramManagedPost.count({
+      ? await this.prisma.telegramManagedPost.findMany({
           where: {
             workspaceId,
             OR: dto.placements.map((placement) => ({
@@ -52,9 +54,10 @@ export class CrossPromotionPlanPlacementStore {
               telegramChannelId: placement.telegramChannelId,
             })),
           },
+          select: { status: true },
         })
-      : 0;
-    if (managedPosts !== dto.placements.length)
+      : [];
+    if (managedPosts.length !== dto.placements.length)
       throw new BadRequestException(
         'One or more scheduled posts are unavailable',
       );
@@ -69,7 +72,8 @@ export class CrossPromotionPlanPlacementStore {
       data: {
         placementPostIds: dto.placements as unknown as Prisma.InputJsonValue,
         status:
-          dto.placements.length === expectedPlacements ? 'SCHEDULED' : 'DRAFT',
+          expectedPlacements > 0 && managedPosts.length === expectedPlacements &&
+          managedPosts.every(({ status }) => acceptedStatuses.has(status)) ? 'SCHEDULED' : 'DRAFT',
         lastError: dto.lastError ?? null,
       },
     });
@@ -339,6 +343,19 @@ export class CrossPromotionPlanPlacementStore {
     if (row.status !== 'DRAFT') {
       throw new BadRequestException('Only an incomplete promotion can resume');
     }
+    const placements = json<ScheduledPlacement[]>(row.placementPostIds, []);
+    const existing = placements.length ? await this.prisma.telegramManagedPost.findMany({
+      where: {
+        workspaceId,
+        OR: placements.map(({ managedPostId, telegramChannelId }) => ({ id: managedPostId, telegramChannelId })),
+      },
+      select: { id: true, status: true },
+    }) : [];
+    const statusById = new Map(existing.map((post) => [post.id, post.status]));
+    const pending = placements.filter(({ managedPostId }) => statusById.get(managedPostId) === 'DRAFT');
+    if (existing.some(({ status }) => status !== 'DRAFT' && !acceptedStatuses.has(status))) {
+      throw new BadRequestException('Check the failed Telegram publication before resuming this promotion');
+    }
     return {
       dto: {
         kind: row.kind,
@@ -353,7 +370,8 @@ export class CrossPromotionPlanPlacementStore {
         scheduledAt: row.scheduledAt.toISOString(),
         trackingEndsAt: row.trackingEndsAt?.toISOString() ?? null,
       } satisfies CreateCrossPromotionPlanDto,
-      placements: json<ScheduledPlacement[]>(row.placementPostIds, []),
+      placements: placements.filter(({ managedPostId }) => statusById.has(managedPostId)),
+      pendingPostIds: new Set(pending.map(({ managedPostId }) => managedPostId)),
     };
   }
 }

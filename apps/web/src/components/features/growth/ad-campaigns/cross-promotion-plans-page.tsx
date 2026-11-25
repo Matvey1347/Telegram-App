@@ -32,6 +32,7 @@ import { CrossPromotionPlanCard } from "./cross-promotion-plan-card";
 import { reconcileMutualPromotionFolder } from "./mutual-promotion/mutual-promotion-finance-cache";
 import { MutualPromotionFolderCard } from "./mutual-promotion/mutual-promotion-folder-card";
 import { PromoFormModal } from "./promo-form-modal";
+import { AdsHeaderActions } from "./ads-header-actions";
 import { adsSectionHeader } from "./ads-section-header";
 import { shouldUpdateHistoricalPromotion } from "./cross-promotion-plan-save-mode";
 import { useAppToast } from "@/providers/toast-provider";
@@ -510,15 +511,17 @@ export function CrossPromotionPlansPage({
         title={header.title}
         subtitle={header.subtitle}
         action={
-          <Button
-            onClick={() => {
-              setEditingPlan(null);
-              setSelectedCreationKind("DIRECT_MUTUAL");
-              setChoosingKind(true);
-            }}
-          >
-            <Plus size={16} /> {header.actionLabel}
-          </Button>
+          <AdsHeaderActions>
+            <Button
+              onClick={() => {
+                setEditingPlan(null);
+                setSelectedCreationKind("DIRECT_MUTUAL");
+                setChoosingKind(true);
+              }}
+            >
+              <Plus size={16} /> {header.actionLabel}
+            </Button>
+          </AdsHeaderActions>
         }
       />
       {sectionTabs}

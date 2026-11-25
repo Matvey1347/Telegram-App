@@ -66,6 +66,13 @@ describe("TabIdentityProvider", () => {
     expectEmojiFavicon("📊");
   });
 
+  it("uses a bell favicon on notification settings", async () => {
+    currentPathname = "/settings/notifications";
+    renderWithTabProvider();
+    await waitFor(() => expect(document.title).toBe("Notifications · Telegram System"));
+    expectEmojiFavicon("🔔");
+  });
+
   it("sets a calendar favicon for the publication calendar route", async () => {
     currentPathname = "/publication-calendar";
 

@@ -1,55 +1,67 @@
 import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  Put,
-  UseGuards,
-} from '@nestjs/common';
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsString,
+  MaxLength,
+} from 'class-validator';
+import { Body, Controller, Get, Param, Put, UseGuards } from '@nestjs/common';
+import {
+  publicationNotificationDestinations,
+  type PublicationNotificationDestination,
+} from '@telegram-system/shared';
 import {
   CurrentUser,
   type JwtUser,
 } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
-import {
-  ChannelReminderAssignmentsDto,
-  ChannelReminderTemplateDto,
-} from './telegram-channel-reminders.dto';
 import { TelegramChannelRemindersService } from './telegram-channel-reminders.service';
 
+class PublicationNotificationsDto {
+  @IsBoolean()
+  enabled!: boolean;
+
+  @IsIn(publicationNotificationDestinations)
+  coverageDestination!: PublicationNotificationDestination;
+
+  @IsIn(publicationNotificationDestinations)
+  autopilotDestination!: PublicationNotificationDestination;
+
+  @IsIn(publicationNotificationDestinations)
+  autopilotErrorDestination!: PublicationNotificationDestination;
+
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @ArrayUnique()
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  excludedChannelIds!: string[];
+}
+
 @UseGuards(JwtAuthGuard)
-@Controller('telegram/channel-reminders')
+@Controller('telegram/publication-notifications')
 export class TelegramChannelRemindersController {
   constructor(private readonly service: TelegramChannelRemindersService) {}
-  @Get() list(@CurrentUser() user: JwtUser) {
-    return this.service.list(user.sub);
+
+  @Get()
+  settings(@CurrentUser() user: JwtUser) {
+    return this.service.settings(user.sub);
   }
-  @Post('templates') create(
-    @CurrentUser() user: JwtUser,
-    @Body() dto: ChannelReminderTemplateDto,
-  ) {
-    return this.service.create(user.sub, dto);
+
+  @Put()
+  save(@CurrentUser() user: JwtUser, @Body() dto: PublicationNotificationsDto) {
+    return this.service.save(user.sub, dto);
   }
-  @Patch('templates/:id') update(
-    @CurrentUser() user: JwtUser,
-    @Param('id') id: string,
-    @Body() dto: ChannelReminderTemplateDto,
-  ) {
-    return this.service.update(user.sub, id, dto);
+
+  @Get('preview')
+  sample(@CurrentUser() user: JwtUser) {
+    return this.service.preview(user.sub);
   }
-  @Delete('templates/:id') remove(
-    @CurrentUser() user: JwtUser,
-    @Param('id') id: string,
-  ) {
-    return this.service.remove(user.sub, id);
-  }
-  @Put('assignments') assign(
-    @CurrentUser() user: JwtUser,
-    @Body() dto: ChannelReminderAssignmentsDto,
-  ) {
-    return this.service.assign(user.sub, dto);
+
+  @Get('preview/:channelId')
+  preview(@CurrentUser() user: JwtUser, @Param('channelId') channelId: string) {
+    return this.service.preview(user.sub, channelId);
   }
 }

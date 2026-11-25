@@ -40,6 +40,7 @@ import {
   type CrmContactAction,
 } from "./crm-contact-action-modal";
 import { CrmContactCard } from "./crm-contact-card";
+import { CrmWorkspaceExportButton } from "./crm-workspace-export-button";
 import {
   crmContactChatPreview,
   type CrmContactChatPreview,
@@ -287,12 +288,13 @@ export function CrmContactList({
   return (
     <section>
       <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <p className="text-sm font-medium text-neutral-300">
             {query.data
               ? `${(query.data.counts?.tagged ?? 0) + (query.data.counts?.untagged ?? 0)} all clients · ${query.data.counts?.tagged ?? 0} with tags · ${query.data.counts?.untagged ?? 0} without tags`
               : "All clients, clients with tags, and clients without tags"}
           </p>
+          <CrmWorkspaceExportButton />
         </div>
         <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row lg:max-w-2xl">
           <Select

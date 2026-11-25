@@ -5,7 +5,7 @@ import type {
   AiTokenUsage,
 } from '@telegram-system/shared';
 import { AiDeploymentConfig } from './ai-deployment-config.service';
-import { AiModelRegistry, TELEGRAM_POSTING_DRAFT_SCHEMA_ID, TELEGRAM_POSTING_REVIEW_SCHEMA_ID } from './ai-model-registry';
+import { AiModelRegistry, TELEGRAM_POSTCARD_REVIEW_SCHEMA_ID, TELEGRAM_POSTING_DRAFT_SCHEMA_ID, TELEGRAM_POSTING_REVIEW_SCHEMA_ID } from './ai-model-registry';
 import { aiRecord, parseUsage } from './ai-pricing';
 
 export type AiProviderOutcome = {
@@ -42,6 +42,7 @@ export class AiProvider {
     chatPlan = false,
     revisionDraft = false,
     postingImageSearch?: { domain?: string },
+    postingImageSize: '1024x1024' | '1024x1536' = '1024x1024',
   ): Promise<AiProviderOutcome> {
     let generationStarted = false;
     const controller = new AbortController();
@@ -155,12 +156,12 @@ export class AiProvider {
         generationStarted = true;
         const suffix = image ? '/images/edits' : '/images/generations';
         const body = image
-          ? this.imageEditBody(input, config.modelId, image)
+          ? this.imageEditBody(input, config.modelId, image, postingImageSize)
           : {
               model: config.modelId,
               prompt: input,
               n: 1,
-              size: '1024x1024',
+              size: postingImageSize,
               quality: 'medium',
               output_format: 'jpeg',
             };
@@ -202,7 +203,8 @@ export class AiProvider {
       }
       const postingDraft = config.schemaId === TELEGRAM_POSTING_DRAFT_SCHEMA_ID;
       const postingReview = config.schemaId === TELEGRAM_POSTING_REVIEW_SCHEMA_ID;
-      const schema = this.registry.schema(config.category, Boolean(image), chatPlan, revisionDraft, postingDraft, postingReview);
+      const postcardReview = config.schemaId === TELEGRAM_POSTCARD_REVIEW_SCHEMA_ID;
+      const schema = this.registry.schema(config.category, Boolean(image), chatPlan, revisionDraft, postingDraft, postingReview, postcardReview);
       const payload = {
         model: config.modelId,
         input: image
@@ -297,7 +299,7 @@ export class AiProvider {
       } catch {
         return { ...metadata, errorCategory: 'OUTPUT_INVALID_JSON' };
       }
-      if (!this.registry.validate(config.category, result, Boolean(image), chatPlan, revisionDraft, postingDraft, postingReview))
+      if (!this.registry.validate(config.category, result, Boolean(image), chatPlan, revisionDraft, postingDraft, postingReview, postcardReview))
         return { ...metadata, errorCategory: 'OUTPUT_SCHEMA_INVALID' };
       return { ...metadata, result, errorCategory: null };
     } catch {
@@ -324,12 +326,13 @@ export class AiProvider {
     prompt: string,
     model: string,
     image: { mime: 'image/jpeg'; data: Buffer },
+    size: string,
   ) {
     const form = new FormData();
     form.set('model', model);
     form.set('prompt', prompt);
     form.set('n', '1');
-    form.set('size', '1024x1024');
+    form.set('size', size);
     form.set('quality', 'medium');
     form.set('output_format', 'jpeg');
     form.set(

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Link2, Link2Off, RefreshCw } from "lucide-react";
+import { Bot, ExternalLink, Link2, Link2Off, RefreshCw, UsersRound } from "lucide-react";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/action-menu";
 import { AppShell } from "@/components/layout/app-shell";
 import {
@@ -13,6 +13,7 @@ import {
 import { authApi, telegramSystemBotApi } from "@/lib/api";
 import { authKeys, telegramSystemBotKeys } from "@/lib/query-keys";
 import { TelegramEntityAvatar } from "@/components/features/telegram/telegram/telegram-entity-avatar";
+import { PublicationNotificationSettings } from "./publication-notification-settings";
 import { useNotificationLinkWatch } from "./use-notification-link-watch";
 
 type LinkCode = {
@@ -42,18 +43,17 @@ export function NotificationSettingsPage() {
   useNotificationLinkWatch(workspaceId, "account", accountLink);
   const canManage =
     me.data?.workspace.access?.isOwner === true ||
-    me.data?.workspace.access?.featureIds.includes("workspace") === true ||
     me.data?.workspace.role === "owner" ||
     me.data?.workspace.role === "admin";
   const group = useQuery({
     queryKey: telegramSystemBotKeys.notificationGroup(workspaceId),
     queryFn: telegramSystemBotApi.notificationGroup,
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && canManage,
   });
   const account = useQuery({
     queryKey: telegramSystemBotKeys.notificationAccount(workspaceId),
     queryFn: telegramSystemBotApi.notificationAccount,
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && canManage,
   });
   const refreshGroup = () =>
     queryClient.invalidateQueries({
@@ -93,7 +93,7 @@ export function NotificationSettingsPage() {
       <div className="min-w-0 space-y-5">
         <PageHeader
           title="Notifications"
-          subtitle="Choose the workspace account and Telegram group for notifications."
+          subtitle="Настройте доставку уведомлений и подключите получателей в Telegram."
         />
         {me.isLoading ? (
           <LoadingState />
@@ -108,6 +108,7 @@ export function NotificationSettingsPage() {
           </p>
         ) : (
           <div className="space-y-4">
+            {workspaceId && <PublicationNotificationSettings key={workspaceId} workspaceId={workspaceId} />}
             <Card className="space-y-3">
               <div>
                 <h2 className="text-lg font-semibold text-white">
@@ -145,8 +146,8 @@ export function NotificationSettingsPage() {
               <Card className="min-w-0 space-y-3">
                 <header className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                      Личные уведомления
+                    <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-neutral-500">
+                      <Bot size={15} aria-hidden /> Личные уведомления
                     </p>
                     <h2 className="mt-2 flex items-center gap-2 truncate text-base font-semibold text-white">
                       {account.data?.connected && <TelegramEntityAvatar imageUrl={account.data.photoUrl} kind="person" alt={account.data.displayName || "Telegram"} size="sm" />}
@@ -250,8 +251,8 @@ export function NotificationSettingsPage() {
               <Card className="min-w-0 space-y-3">
                 <header className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                      Групповые уведомления
+                    <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-neutral-500">
+                      <UsersRound size={15} aria-hidden /> Групповые уведомления
                     </p>
                     <h2 className="mt-2 flex items-center gap-2 truncate text-base font-semibold text-white">
                       {group.data?.connected && <TelegramEntityAvatar imageUrl={group.data.photoUrl} kind="channel" alt={group.data.chatTitle || "Telegram"} size="sm" />}
@@ -262,8 +263,7 @@ export function NotificationSettingsPage() {
                           : "Группа не подключена"}
                     </h2>
                     <p className="mt-1 text-sm text-neutral-400">
-                      Срочные ошибки и уведомления о расписании отправляются в
-                      эту группу.
+                      Эта группа получает уведомления, для которых выбран способ «В Telegram-группу».
                     </p>
                   </div>
                   <ActionMenu label="Действия с группой уведомлений">

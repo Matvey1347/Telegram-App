@@ -19,13 +19,24 @@ describe("telegramCrmApi", () => {
     });
   });
 
-  it("uses a non-ambiguous endpoint for the full client export", async () => {
+  it("uses a non-ambiguous endpoint for the client list export", async () => {
     get.mockResolvedValue({ data: [] });
 
     await telegramCrmApi.exportContacts("TAGGED");
 
     expect(get).toHaveBeenCalledWith("/telegram-crm/contact-export", {
       params: { segment: "TAGGED" },
+    });
+  });
+
+  it("exports the entire accessible workspace without list filters", async () => {
+    const signal = new AbortController().signal;
+    get.mockResolvedValue({ data: "# Workspace export" });
+
+    await expect(telegramCrmApi.exportWorkspace(signal)).resolves.toBe("# Workspace export");
+    expect(get).toHaveBeenCalledWith("/telegram-crm/workspace-export", {
+      responseType: "text",
+      signal,
     });
   });
 

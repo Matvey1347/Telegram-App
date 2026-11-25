@@ -58,6 +58,8 @@ export function appendChannelEndingSignature(ending: string, channel: ChannelEnd
   const emoji = icon?.type === 'unicode' && /^\d{1,20}$/.test(icon.telegramCustomEmojiId || '')
     ? `![${fallback}](tg://emoji?id=${icon.telegramCustomEmojiId})`
     : fallback;
-  const title = (channel.title || channel.username || 'Канал').replace(/[\[\]\r\n]/g, ' ');
+  const title = (channel.title || channel.username || 'Канал')
+    .replace(/[#*0-9]\uFE0F?\u20E3|[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\uFE0E\uFE0F\u200D\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/[\[\]\s]+/gu, ' ').trim() || channel.username || 'Канал';
   return `${ending}${ending ? '\n\n' : ''}${emoji}  [${title}](${link})`;
 }

@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/primitives";
 import type {
   TelegramChannelsTab,
 } from "./telegram-channels-route-state";
-import { ChannelReminderAction } from "./channel-reminder-action";
 
 export function TelegramChannelsHeaderActions({
   tab,
@@ -34,7 +33,6 @@ export function TelegramChannelsHeaderActions({
   }
   return (
     <div className="flex flex-wrap justify-end gap-2">
-      <ChannelReminderAction />
       <Button
         type="button"
         onClick={onOpenTemplates}

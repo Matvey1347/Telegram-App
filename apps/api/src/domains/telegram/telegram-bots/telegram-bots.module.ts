@@ -111,8 +111,10 @@ import { FinanceCustomIconService } from '@consumer-finance/api/catalog/finance-
 import { ConfiguredBotAnalyticsService } from './core/configured-bot-analytics.service';
 import { SystemBotBrandingStartupService } from './core/system-bot-branding-startup.service';
 
+import { BotAdsModule } from '../telegram-bot-ads/bot-ads.module';
+
 @Module({
-  imports: [BotBillingModule, TelegramSupportModule],
+  imports: [BotBillingModule, TelegramSupportModule, BotAdsModule],
   controllers: [
     TelegramBotsController,
     TelegramBotRuntimeController,

@@ -31,6 +31,7 @@ export class ResponseCacheInterceptor implements NestInterceptor {
       !userId ||
       !method ||
       url.includes('/health') ||
+      /^\/(?:api\/)?workspace-creatives(?:\/|$)/.test(url) ||
       this.isAuthMutation(url)
     )
       return next.handle();

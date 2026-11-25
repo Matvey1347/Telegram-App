@@ -99,6 +99,7 @@ import { TelegramCrmConversationAttachService } from './telegram-crm-conversatio
 import { TelegramCrmSystemTagsService } from './telegram-crm-system-tags.service';
 import { TelegramCrmPurchaseFolderSyncService } from './telegram-crm-purchase-folder-sync.service';
 import { TelegramCrmContactExportService } from './telegram-crm-contact-export.service';
+import { TelegramCrmWorkspaceExportService } from './telegram-crm-workspace-export.service';
 import { ScheduledTaskLockService } from '../../operations/scheduled-tasks/scheduled-task-lock.service';
 import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.service';
 
@@ -172,6 +173,7 @@ import { TelegramCrmRuntimeLeaseService } from './telegram-crm-runtime-lease.ser
     TelegramCrmContactCommandService,
     TelegramCrmContactReadService,
     TelegramCrmContactExportService,
+    TelegramCrmWorkspaceExportService,
     TelegramCrmConversationService,
     TelegramCrmConversationAttachService,
     TelegramCrmSystemTagsService,

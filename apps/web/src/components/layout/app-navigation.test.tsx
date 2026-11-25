@@ -50,10 +50,7 @@ describe("AppNavigation permissions", () => {
         canViewAdmin
       />,
     );
-    expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(screen.queryByRole("link", { name: "Roles & access" })).toBeNull();
     expect(screen.getByText("Finance")).toBeInTheDocument();
   });
 
@@ -107,6 +104,17 @@ describe("AppNavigation permissions", () => {
     expect(screen.getByRole("link", { name: "CRM" })).toBeInTheDocument();
   });
 
+  it("keeps notifications, roles and the retired assets page out of the sidebar", () => {
+    const toggle = vi.fn();
+    render(<AppNavigation pathname="/settings/notifications" openGroups={{ settings: true }} onToggleGroup={toggle} canViewAdmin />);
+    expect(screen.queryByRole("link", { name: "Notifications" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Assets" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Roles" })).toBeNull();
+    expect(screen.getByRole("link", { name: "AI Usage" })).toHaveAttribute("href", "/settings/ai-usage");
+    screen.getByRole("button", { name: "Settings" }).click();
+    expect(toggle).toHaveBeenCalledWith("settings", false);
+  });
+
   it("consolidates Growth ads and Operations under Ads and Settings", () => {
     render(
       <AppNavigation
@@ -128,7 +136,7 @@ describe("AppNavigation permissions", () => {
       "page",
     );
     expect(screen.getAllByRole("link", { name: "ADS" })).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
     expect(screen.queryByText("Mutual promotion")).not.toBeInTheDocument();
     expect(screen.queryByText("System logs")).not.toBeInTheDocument();
     expect(screen.queryByText("Scheduled tasks")).not.toBeInTheDocument();
@@ -136,7 +144,7 @@ describe("AppNavigation permissions", () => {
     expect(screen.queryByText("Roles & access")).not.toBeInTheDocument();
 
     const growth = screen.getByRole("button", { name: /Growth/i });
-    const workspace = screen.getByRole("link", {
+    const workspace = screen.getByRole("button", {
       name: "Settings",
     });
     expect(

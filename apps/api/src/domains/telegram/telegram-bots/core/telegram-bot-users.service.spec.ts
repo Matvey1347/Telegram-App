@@ -14,6 +14,7 @@ function establishedUser(overrides: Record<string, unknown> = {}) {
     firstName: null,
     lastName: null,
     languageCode: null,
+    pendingAdActivation: {},
     startedAt: null,
     firstSeenAt: now,
     lastInteractionAt: now,

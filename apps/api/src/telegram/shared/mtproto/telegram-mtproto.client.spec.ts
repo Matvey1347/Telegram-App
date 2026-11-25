@@ -139,6 +139,7 @@ describe('TelegramMtprotoClient import resolution', () => {
             date: 1_735_689_600,
             usage: 3,
             requested: 1,
+            requestNeeded: true,
             permanent: true,
           },
           users: [creator],
@@ -188,6 +189,11 @@ describe('TelegramMtprotoClient import resolution', () => {
         link: 'https://t.me/+legacy',
       }),
     );
+    await expect(client.getChannelInviteLink({
+      apiId: '1', apiHash: 'hash', session: 'session',
+      channel: { telegramChatId: '123456', telegramAccessHash: '7' },
+      inviteLink: 'https://t.me/+legacy', preferLivePending: true,
+    })).resolves.toMatchObject({ requested: 3, requestedObserved: true });
     const previousInvoke = fakeClient.invoke.getMockImplementation()!;
     fakeClient.invoke.mockImplementation((request: unknown) => {
       if (

@@ -31,7 +31,9 @@ describe('TelegramManagedPostCommandService group assignment', () => {
       ),
     };
     const media = {
-      persistImageUrls: jest.fn().mockResolvedValue([]),
+      persistMediaUrls: jest
+        .fn()
+        .mockReturnValue({ imageUrls: [], mediaItems: [] }),
     };
     const revisions = {
       createManagedPostRevision: jest.fn().mockResolvedValue(undefined),

@@ -16,7 +16,6 @@ import { TimezoneSelect } from "@/components/ui/timezone-select";
 import { accountApi, authApi, workspacesApi } from "@/lib/api";
 import { accountKeys, workspaceKeys } from "@/lib/query-keys";
 import { WorkspaceMembersSection } from "@/components/features/workspace/workspace-members-section";
-import { WorkspaceTools } from "@/components/features/workspace/workspace-tools";
 
 const IconPicker = dynamic(() =>
   import("@/components/icons/icon-picker").then((module) => module.IconPicker),
@@ -96,10 +95,6 @@ export default function SettingsPage() {
       />
       {me.isLoading ? <LoadingState /> : null}
       <div className="space-y-4">
-        <WorkspaceTools
-          role={me.data?.workspace.role}
-          access={me.data?.workspace.access}
-        />
         {canViewMembers ? (
           <section>
             <WorkspaceMembersSection embedded />

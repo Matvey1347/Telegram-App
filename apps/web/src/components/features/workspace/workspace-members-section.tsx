@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   Camera,
@@ -99,6 +100,8 @@ export function WorkspaceMembersSection({
   const qc = useQueryClient();
   const { workspace } = useAuth();
   const currentRole = workspace?.role;
+  const canManageRoles = currentRole === "owner" ||
+    workspace?.access?.permissionKeys.includes("members.assignRoles");
   const canAdd = currentRole === "owner" || currentRole === "admin";
   const [open, setOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<WorkspaceMember | null>(
@@ -258,9 +261,14 @@ export function WorkspaceMembersSection({
               Roles, access and Telegram identity
             </p>
           </div>
-          {canAdd ? (
-            <Button onClick={() => setOpen(true)}>Add Member</Button>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {canManageRoles && (
+              <Link href="/roles" className="inline-flex items-center gap-2 rounded-lg bg-neutral-700 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-600">
+                <ShieldCheck size={16} aria-hidden /> Настроить роли
+              </Link>
+            )}
+            {canAdd && <Button onClick={() => setOpen(true)}>Add Member</Button>}
+          </div>
         </div>
       ) : (
         <PageHeader

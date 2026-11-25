@@ -177,6 +177,23 @@ export function crmLocalReactionAssetsEnabled(
   );
 }
 
+/** The development snapshot can serve read-only exports without the MTProto owner. */
+export function crmLocalWorkspaceExportEnabled(
+  environment: DeploymentEnvironment = process.env,
+) {
+  if (isProductionEnvironment(environment) || !environment.DATABASE_URL)
+    return false;
+  try {
+    const url = new URL(environment.DATABASE_URL);
+    return (
+      ['postgres:', 'postgresql:'].includes(url.protocol) &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Allow compatibility API hosts to avoid owning the shared CRM MTProto runtime. */
 export function crmRuntimeProxyOrigin(
   environment: DeploymentEnvironment = process.env,

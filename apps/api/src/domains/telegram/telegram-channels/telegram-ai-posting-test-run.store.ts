@@ -28,6 +28,9 @@ export type TestPublication = {
   text: string;
   imagePrompt: string;
   imageSearchQuery?: string;
+  cardWish?: string;
+  postcardOrdinal?: number;
+  occasionDate?: string;
   mediaMode?: 'found' | 'ai' | 'hybrid';
   mediaSearch?: TelegramAiPostingImageSearch;
   mediaPreference?: { id: string; name: string } | null;

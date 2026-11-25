@@ -80,6 +80,9 @@ export class AiGateway {
           replayed: true,
         };
       }
+      const imageOptions: [AiExecutionRequest['postingImageSearch']?, AiExecutionRequest['postingImageSize']?] =
+        request.postingImageSize ? [request.postingImageSearch, request.postingImageSize]
+          : request.postingImageSearch ? [request.postingImageSearch] : [];
       const outcome = await this.provider.execute(
         request.input,
         {
@@ -95,7 +98,7 @@ export class AiGateway {
         request.audio,
         request.chatPlan,
         request.revisionDraft,
-        ...(request.postingImageSearch ? [request.postingImageSearch] as const : []),
+        ...imageOptions,
       );
       let operation: AiOperation;
       try {

@@ -79,9 +79,10 @@ export async function createTelegramAiPostingSearchReviewSheet(
   reference: Buffer | null,
   candidates: Buffer[],
   grid?: TelegramAiPostingReferences['grid'],
+  letteringReview = false,
 ) {
-  const tileSize = 320;
-  const width = tileSize * 3;
+  const tileSize = letteringReview ? 600 : 320;
+  const width = tileSize * (letteringReview ? candidates.length : 3);
   const labelHeight = 32;
   const stripHeight = candidates.length ? tileSize + labelHeight : 0;
   const label = (value: string, labelWidth: number) => Buffer.from(

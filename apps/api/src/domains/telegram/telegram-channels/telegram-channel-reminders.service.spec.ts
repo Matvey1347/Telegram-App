@@ -1,131 +1,137 @@
 import { TelegramChannelRemindersService } from './telegram-channel-reminders.service';
 
-describe('channel reminder configuration', () => {
+const destinations = {
+  coverageDestination: 'TELEGRAM_GROUP',
+  autopilotDestination: 'TELEGRAM_GROUP',
+  autopilotErrorDestination: 'TELEGRAM_GROUP',
+} as const;
+
+describe('publication notification settings', () => {
   function setup() {
-    const tx = {
-      telegramChannel: {
-        count: jest.fn().mockResolvedValue(2),
-        findMany: jest.fn().mockResolvedValue([
-          { id: 'a', assignedMemberId: 'member' },
-          { id: 'b', assignedMemberId: 'member' },
-        ]),
-        updateMany: jest.fn(),
-      },
-      telegramChannelReminderTemplate: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'template' }),
-        count: jest.fn().mockResolvedValue(1),
-      },
-      telegramChannelReminderAssignment: {
-        createMany: jest.fn(),
-        updateMany: jest.fn(),
-        deleteMany: jest.fn(),
-        findMany: jest.fn().mockResolvedValue([]),
-      },
-      workspaceMember: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'member' }),
-        count: jest.fn().mockResolvedValue(1),
-      },
-    };
     const prisma = {
-      $transaction: jest.fn(async (fn) => fn(tx)),
-      icon: { findFirst: jest.fn().mockResolvedValue(null) },
-      telegramChannelReminderTemplate: {
-        findMany: jest.fn().mockResolvedValue([]),
-        create: jest.fn().mockResolvedValue({ id: "template", name: "Reminder", iconId: "icon", icon: { id: "icon", type: "emoji", emoji: "🔔", imageUrl: null }, daysBefore: [1], notifyEmpty: false }),
+      workspace: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          coverageNotificationDestination: destinations.coverageDestination,
+          autopilotNotificationDestination: destinations.autopilotDestination,
+          autopilotErrorNotificationDestination:
+            destinations.autopilotErrorDestination,
+          publicationNotificationsEnabled: false,
+          publicationNotificationExcludedChannelIds: [],
+        }),
+        update: jest.fn(),
       },
-      telegramChannel: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramChannel: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'one', title: '💌 One 💌' },
+          { id: 'two', title: 'Two' },
+        ]),
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'one', title: '💌 One 💌' }),
+      },
     };
     const workspace = {
       requireWorkspaceRole: jest
         .fn()
         .mockResolvedValue({ workspaceId: 'workspace' }),
-      resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace'),
     };
-    const authorization = { require: jest.fn().mockResolvedValue({ workspaceId: 'workspace' }) };
     return {
-      authorization,
-      tx,
-      prisma,
-      workspace,
       service: new TelegramChannelRemindersService(
         prisma as never,
         workspace as never,
-        authorization as never,
       ),
+      prisma,
+      workspace,
     };
   }
-  it('persists an available icon and returns its resolved presentation', async () => {
+
+  it('starts with every active channel selected and saves exclusions in this workspace', async () => {
     const { service, prisma } = setup();
-    prisma.icon.findFirst.mockResolvedValue({ id: 'icon' });
-    const result = await service.create('user', { name: 'Reminder', iconId: 'icon', daysBefore: [1], notifyEmpty: false });
-    expect(prisma.telegramChannelReminderTemplate.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ workspaceId: 'workspace', iconId: 'icon' }) }));
-    expect(result.iconPresentation).toEqual(expect.objectContaining({ type: 'unicode', value: '🔔' }));
-  });
-  it('rejects an icon from another workspace', async () => {
-    const { service, prisma } = setup();
-    await expect(service.create('user', { name: 'Reminder', iconId: 'outside', daysBefore: [1], notifyEmpty: false })).rejects.toThrow('Icon is unavailable in this workspace');
-    expect(prisma.icon.findFirst).toHaveBeenCalledWith({ where: { id: 'outside', OR: [{ workspaceId: 'workspace' }, { workspaceId: null }] }, select: { id: true } });
-  });
-  it('rejects reads without channel access', async () => {
-    const { service, authorization, prisma } = setup();
-    authorization.require.mockRejectedValue(new Error('forbidden'));
-    await expect(service.list('user')).rejects.toThrow('forbidden');
-    expect(prisma.telegramChannel.findMany).not.toHaveBeenCalled();
-  });
-  it('assigns a workspace template and member to the selected channels in one transaction', async () => {
-    const { service, tx } = setup();
-    tx.telegramChannel.findMany.mockResolvedValue([
-      { id: 'a', assignedMemberId: null },
-      { id: 'b', assignedMemberId: null },
-    ]);
-    await service.assign('user', {
-      channelIds: ['a', 'b'],
-      templateId: 'template',
-      memberId: 'member',
-    });
-    expect(tx.telegramChannel.updateMany).toHaveBeenCalledWith({
-      where: { workspaceId: 'workspace', id: { in: ['a', 'b'] } },
-      data: { assignedMemberId: 'member' },
+    const settings = await service.settings('user');
+    expect(settings).toMatchObject({
+      enabled: false,
+      excludedChannelIds: [],
+      channels: [{ title: 'One' }, { title: 'Two' }],
     });
     expect(
-      tx.telegramChannelReminderAssignment.createMany,
-    ).toHaveBeenCalledWith(
+      await service.save('user', {
+        ...destinations,
+        enabled: true,
+        excludedChannelIds: ['two'],
+      }),
+    ).toMatchObject({ enabled: true, excludedChannelIds: ['two'] });
+    expect(prisma.workspace.update).toHaveBeenCalledWith({
+      where: { id: 'workspace' },
+      data: expect.objectContaining({
+        publicationNotificationExcludedChannelIds: ['two'],
+        publicationNotificationDueAt: expect.any(Date),
+      }),
+    });
+  });
+
+  it('leaves an unchanged save idle', async () => {
+    const { service, prisma } = setup();
+    await service.save('user', {
+      ...destinations,
+      enabled: false,
+      excludedChannelIds: [],
+    });
+    expect(prisma.workspace.update).not.toHaveBeenCalled();
+  });
+
+  it('changes a report destination without resetting the coverage due time', async () => {
+    const { service, prisma } = setup();
+    await service.save('user', {
+      ...destinations,
+      autopilotDestination: 'TELEGRAM_PRIVATE',
+      enabled: false,
+      excludedChannelIds: [],
+    });
+    expect(prisma.workspace.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        skipDuplicates: true,
-        data: expect.arrayContaining([
-          expect.objectContaining({
-            workspaceId: 'workspace',
-            channelId: 'a',
-            templateId: 'template',
-          }),
-        ]),
+        data: expect.objectContaining({
+          autopilotNotificationDestination: 'TELEGRAM_PRIVATE',
+        }),
+      }),
+    );
+    expect(prisma.workspace.update.mock.calls[0][0].data).not.toHaveProperty(
+      'publicationNotificationDueAt',
+    );
+  });
+
+  it('rejects an exclusion or preview belonging to another workspace', async () => {
+    const { service, prisma } = setup();
+    await expect(
+      service.save('user', {
+        ...destinations,
+        enabled: true,
+        excludedChannelIds: ['foreign'],
+      }),
+    ).rejects.toThrow('unavailable');
+    expect(prisma.workspace.update).not.toHaveBeenCalled();
+    prisma.telegramChannel.findFirst.mockResolvedValueOnce(null);
+    await expect(service.preview('user', 'foreign')).rejects.toThrow(
+      'unavailable',
+    );
+    expect(prisma.telegramChannel.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace',
+          id: 'foreign',
+        }),
       }),
     );
   });
-  it('rejects channels outside the current workspace before changing any assignments', async () => {
-    const { service, tx } = setup();
-    tx.telegramChannel.count.mockResolvedValue(1);
-    await expect(
-      service.assign('user', {
-        channelIds: ['a', 'outside'],
-        templateId: 'template',
-      }),
-    ).rejects.toThrow('One or more channels not found');
-    expect(
-      tx.telegramChannelReminderAssignment.createMany,
-    ).not.toHaveBeenCalled();
-  });
-  it('rejects a member from a different workspace', async () => {
-    const { service, tx } = setup();
-    tx.workspaceMember.findFirst.mockResolvedValue(null);
-    tx.workspaceMember.count.mockResolvedValue(0);
-    await expect(
-      service.assign('user', {
-        channelIds: ['a', 'b'],
-        templateId: 'template',
-        memberId: 'outside',
-      }),
-    ).rejects.toThrow('Workspace member not found');
-    expect(tx.telegramChannel.updateMany).not.toHaveBeenCalled();
+
+  it('previews both report outcomes and coverage without writing settings', async () => {
+    const { service, prisma } = setup();
+    const preview = await service.preview('user', 'one');
+    expect(preview.autopilot[0].text).toBe('One');
+    expect(preview.autopilotError.at(-1)?.text).toBe('Ошибки · 6');
+    expect(preview.autopilotError.map(({ text }) => text)).toEqual(expect.arrayContaining([
+      'Готовые публикации · $0.16', 'Публикации с ошибками · $0.05', 'Всего · $0.22',
+    ]));
+    expect(preview.coverage[1].text).toBe('One');
+    expect(prisma.workspace.update).not.toHaveBeenCalled();
   });
 });

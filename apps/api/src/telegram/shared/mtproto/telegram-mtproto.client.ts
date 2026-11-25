@@ -618,6 +618,7 @@ export class TelegramMtprotoClient {
     joinedFrom?: Date | null;
     joinedUntil?: Date | null;
     includePendingSince?: boolean;
+    preferLivePending?: boolean;
   }): Promise<TelegramInviteLinksResult['links'][number]> {
     return this.inviteLinks.getChannelInviteLink(params);
   }

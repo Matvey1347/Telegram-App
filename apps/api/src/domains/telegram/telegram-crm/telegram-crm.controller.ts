@@ -6,8 +6,11 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { pipeline } from 'node:stream/promises';
 import { CurrentUser } from '../../../common/current-user.decorator';
 import type { JwtUser } from '../../../common/current-user.decorator';
 import { JwtAuthGuard } from '../../../common/jwt-auth.guard';
@@ -33,6 +36,7 @@ import { TelegramCrmPeerService } from './telegram-crm-peer.service';
 import { TelegramCrmSettingsService } from './telegram-crm-settings.service';
 import { TelegramCrmConversationAttachService } from './telegram-crm-conversation-attach.service';
 import { TelegramCrmContactExportService } from './telegram-crm-contact-export.service';
+import { TelegramCrmWorkspaceExportService } from './telegram-crm-workspace-export.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('telegram-crm')
@@ -46,6 +50,7 @@ export class TelegramCrmController {
     private readonly settings: TelegramCrmSettingsService,
     private readonly conversationAttach: TelegramCrmConversationAttachService,
     private readonly contactExport: TelegramCrmContactExportService,
+    private readonly workspaceExport: TelegramCrmWorkspaceExportService,
   ) {}
 
   @Get('contacts')
@@ -69,6 +74,19 @@ export class TelegramCrmController {
     @Query() query: CrmContactsQueryDto,
   ) {
     return this.contactExport.export(user.sub, query.segment);
+  }
+
+  @Get('workspace-export')
+  async exportWorkspace(
+    @CurrentUser() user: JwtUser,
+    @Res() response: Response,
+  ) {
+    const records = await this.workspaceExport.open(user.sub);
+    if (response.destroyed) return;
+    response
+      .type('text/plain; charset=utf-8')
+      .set('Cache-Control', 'private, no-store');
+    await pipeline(records, response);
   }
 
   @Get('analytics')

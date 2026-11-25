@@ -1,8 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Archive, ArchiveRestore, Pencil, Send, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  BarChart3,
+  Megaphone,
+  Pencil,
+  Send,
+  Trash2,
+} from "lucide-react";
 import { normalizeTelegramPostMediaItems } from "@telegram-system/shared";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import type { Promo } from "@/lib/api";
 import {
   CardActionsMenu,
@@ -17,10 +26,12 @@ export function PromoCard({
   onEdit,
   onDelete,
   onToggleArchive,
+  botActions,
 }: {
   promo: Promo;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
+  botActions?: { onPlace?: () => void; onAnalytics: () => void };
   onToggleArchive?: () => void;
 }) {
   const [quickSendOpen, setQuickSendOpen] = useState(false);
@@ -47,13 +58,24 @@ export function PromoCard({
   return (
     <article className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950/80 transition-colors hover:border-neutral-700">
       <div className="flex min-h-12 items-center justify-between gap-3 border-b border-neutral-800 px-3 py-2">
-        <p
-          className="min-w-0 truncate text-xs text-neutral-400"
-          title={`Created by ${creator}`}
-        >
-          Created by{" "}
-          <span className="font-medium text-neutral-200">{creator}</span>
-        </p>
+        {botActions ? (
+          <div className="flex min-w-0 items-center gap-2">
+            {promo.iconPresentation ? (
+              <IconAvatar icon={promo.iconPresentation} size="xs" decorative />
+            ) : null}
+            <p className="truncate text-sm font-medium" title={promo.title}>
+              {promo.title}
+            </p>
+          </div>
+        ) : (
+          <p
+            className="min-w-0 truncate text-xs text-neutral-400"
+            title={`Created by ${creator}`}
+          >
+            Created by{" "}
+            <span className="font-medium text-neutral-200">{creator}</span>
+          </p>
+        )}
         <div className="shrink-0">
           <CardActionsMenu label={`Actions for ${promo.title}`}>
             <CardMenuAction
@@ -61,11 +83,26 @@ export function PromoCard({
               icon={<Pencil size={16} />}
               onClick={onEdit}
             />
-            <CardMenuAction
-              label="Send to bot"
-              icon={<Send size={16} />}
-              onClick={() => setQuickSendOpen(true)}
-            />
+            {botActions?.onPlace ? (
+              <CardMenuAction
+                label="Create placement"
+                icon={<Megaphone size={16} />}
+                onClick={botActions.onPlace}
+              />
+            ) : null}
+            {botActions ? (
+              <CardMenuAction
+                label="View analytics"
+                icon={<BarChart3 size={16} />}
+                onClick={botActions.onAnalytics}
+              />
+            ) : (
+              <CardMenuAction
+                label="Send to bot"
+                icon={<Send size={16} />}
+                onClick={() => setQuickSendOpen(true)}
+              />
+            )}
             <CardMenuAction
               label={promo.archivedAt ? "Restore from archive" : "Archive"}
               icon={
@@ -77,12 +114,14 @@ export function PromoCard({
               }
               onClick={() => onToggleArchive?.()}
             />
-            <CardMenuAction
-              danger
-              label="Delete"
-              icon={<Trash2 size={16} />}
-              onClick={onDelete}
-            />
+            {onDelete ? (
+              <CardMenuAction
+                danger
+                label="Delete"
+                icon={<Trash2 size={16} />}
+                onClick={onDelete}
+              />
+            ) : null}
           </CardActionsMenu>
         </div>
       </div>

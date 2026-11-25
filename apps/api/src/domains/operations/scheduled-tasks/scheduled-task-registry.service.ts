@@ -266,9 +266,9 @@ export class ScheduledTaskRegistryService {
       },
       {
         key: 'telegram.channel_reminders.due',
-        name: 'Channel post reminders',
+        name: 'Publication coverage notifications',
         description:
-          'Checks configured channel post coverage and delivers reminders.',
+          'Checks publication coverage in subscribed workspaces and sends notifications.',
         scope: 'SYSTEM_MAINTENANCE',
         defaultSchedule: {
           frequency: 'INTERVAL',

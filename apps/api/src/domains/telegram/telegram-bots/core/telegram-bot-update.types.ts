@@ -15,6 +15,7 @@ export type TelegramBotWebhookUpdate = {
   update_id?: number | string;
   message?: {
     message_id?: number;
+    date?: number;
     chat?: { id?: number | string; type?: string };
     from?: TelegramBotUpdateActor;
     text?: string;
@@ -58,7 +59,7 @@ export type TelegramBotWebhookUpdate = {
   callback_query?: {
     id?: string;
     from?: TelegramBotUpdateActor;
-    message?: { chat?: { id?: number | string }; message_id?: number };
+    message?: { chat?: { id?: number | string; type?: string }; message_id?: number };
     data?: string;
   };
   chat_join_request?: {

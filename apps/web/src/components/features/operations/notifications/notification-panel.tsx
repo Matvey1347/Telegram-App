@@ -1,7 +1,8 @@
 "use client";
 
 import type { OperationsNotificationItem } from "@telegram-system/shared";
-import { Bell, X } from "lucide-react";
+import Link from "next/link";
+import { Bell, Settings, X } from "lucide-react";
 import { type CSSProperties, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/primitives";
@@ -131,6 +132,10 @@ export function NotificationPanel({
               Notifications
             </h2>
             <span className="text-xs text-neutral-400">{unread} unread</span>
+            <Link href="/settings/notifications" onClick={onClose} aria-label="Настройки уведомлений" title="Настройки уведомлений"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-400 hover:bg-neutral-800 hover:text-white">
+              <Settings size={16} aria-hidden />
+            </Link>
             <button
               type="button"
               onClick={onClose}

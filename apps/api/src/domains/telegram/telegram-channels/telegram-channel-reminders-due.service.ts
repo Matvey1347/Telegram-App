@@ -4,34 +4,29 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import { ChannelReminderDeliveryService } from '../../operations/notifications/channel-reminder-delivery.service';
 import {
+  coverageNotificationLines,
+  publicationNotificationChannel,
+  publicationNotificationChannelSelect,
+  publicationNotificationHtml,
+} from '../../operations/notifications/publication-notification-message';
+import {
   utcDateKey,
-  utcTimeKey,
   zonedDateTimeToUtc,
 } from '../telegram-ad-sales/domain/timezone';
 import { TelegramChannelBookingReadService } from './telegram-channel-booking-read.service';
-import { CHANNEL_REMINDERS_TASK_KEY } from './telegram-channel-reminders.service';
-import { storedTelegramIconText } from '@api/telegram/shared/bot/telegram-bot-icon-source';
+import {
+  activePublicationChannels,
+  CHANNEL_REMINDERS_TASK_KEY,
+} from './telegram-channel-reminders.service';
 
 const DAY = 86400000;
-const BATCH_SIZE = 500;
-const eligibleChannel = {
-  isActive: true,
-  archivedAt: null,
-  assignedMemberId: { not: null },
-} as const;
-function shiftDay(day: string, offset: number) {
-  return new Date(Date.parse(day + 'T00:00:00Z') + offset * DAY)
+const enabled = { publicationNotificationsEnabled: true } as const;
+
+function morningAfter(today: string, timezone: string) {
+  const tomorrow = new Date(Date.parse(today + 'T00:00:00Z') + DAY)
     .toISOString()
     .slice(0, 10);
-}
-function nextWake(now: Date, timezone: string, empty: boolean) {
-  const today = utcDateKey(now, timezone);
-  const times = empty ? ['09:00', '21:00'] : ['09:00'];
-  for (const time of times) {
-    const candidate = zonedDateTimeToUtc(today, time, timezone);
-    if (candidate.getTime() > now.getTime() + 60000) return candidate;
-  }
-  return zonedDateTimeToUtc(shiftDay(today, 1), '09:00', timezone);
+  return zonedDateTimeToUtc(tomorrow, '09:00', timezone);
 }
 
 @Injectable()
@@ -42,197 +37,145 @@ export class TelegramChannelRemindersDueService {
     @Inject(forwardRef(() => ChannelReminderDeliveryService))
     private readonly delivery: ChannelReminderDeliveryService,
   ) {}
+
   async nextDueAt() {
-    const row = await this.prisma.telegramChannelReminderAssignment.findFirst({
-      where: { channel: eligibleChannel },
-      orderBy: [{ nextDueAt: 'asc' }, { id: 'asc' }],
-      select: { nextDueAt: true },
+    const row = await this.prisma.workspace.findFirst({
+      where: { ...enabled, publicationNotificationDueAt: { not: null } },
+      orderBy: { publicationNotificationDueAt: 'asc' },
+      select: { publicationNotificationDueAt: true },
     });
-    return row?.nextDueAt ?? null;
+    return row?.publicationNotificationDueAt ?? null;
   }
+
   async processDueActions(now = new Date()) {
-    const rows = await this.prisma.telegramChannelReminderAssignment.findMany({
-      where: { nextDueAt: { lte: now }, channel: eligibleChannel },
-      orderBy: [{ nextDueAt: 'asc' }, { id: 'asc' }],
-      take: BATCH_SIZE,
-      include: {
-        template: true,
-        workspace: { select: { timezone: true } },
-        channel: {
-          select: {
-            title: true,
-            presentationIcon: { select: { emoji: true } },
-            isActive: true,
-            archivedAt: true,
-            assignedMemberId: true,
-          },
-        },
+    const workspaces = await this.prisma.workspace.findMany({
+      where: { ...enabled, publicationNotificationDueAt: { lte: now } },
+      orderBy: [{ publicationNotificationDueAt: 'asc' }, { id: 'asc' }],
+      take: 30,
+      select: {
+        id: true,
+        timezone: true,
+        coverageNotificationDestination: true,
+        coverageNotificationSentKeys: true,
+        publicationNotificationDueAt: true,
+        publicationNotificationExcludedChannelIds: true,
       },
     });
-    const workspaces = new Map<string, typeof rows>();
-    for (const row of rows) {
-      const group = workspaces.get(row.workspaceId) ?? [];
-      group.push(row);
-      workspaces.set(row.workspaceId, group);
-    }
-    let deliveryFailure: unknown;
-    for (const [workspaceId, group] of workspaces) {
-      const timezone = group[0].workspace.timezone || 'UTC';
+    let deliveryFailure: Error | undefined;
+    for (const workspace of workspaces) {
+      const timezone = workspace.timezone || 'UTC';
       const today = utcDateKey(now, timezone);
-      const summaries = await this.booking.summariesForChannels(
-        workspaceId,
-        group.map((row) => row.channelId),
-        now,
-        new Map(),
-        32,
-        true,
-        false,
-      );
-      const current =
-        await this.prisma.telegramChannelReminderAssignment.findMany({
-          where: {
-            workspaceId,
-            id: { in: group.map((row) => row.id) },
-            channel: eligibleChannel,
-          },
-          select: {
-            id: true,
-            templateId: true,
-            nextDueAt: true,
-            template: { select: { updatedAt: true } },
-            channel: { select: { assignedMemberId: true } },
-          },
+      const where = {
+        id: workspace.id,
+        ...enabled,
+        publicationNotificationDueAt: workspace.publicationNotificationDueAt,
+      };
+      try {
+        const member = await this.prisma.workspaceMember.findFirst({
+          where: { workspaceId: workspace.id, role: 'owner', isHidden: false },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { id: true },
         });
-      const fresh = new Map(current.map((row) => [row.id, row]));
-      const messages = new Map<
-        string,
-        {
-          memberId: string;
-          stage: string;
-          channels: { id: string; title: string }[];
-        }
-      >();
-      const next = new Map<number, typeof rows>();
-      for (const row of group) {
-        const live = fresh.get(row.id);
-        if (
-          !live ||
-          live.templateId !== row.templateId ||
-          live.nextDueAt.getTime() !== row.nextDueAt.getTime() ||
-          live.template.updatedAt.getTime() !==
-            row.template.updatedAt.getTime() ||
-          live.channel.assignedMemberId !== row.channel.assignedMemberId
-        )
-          continue;
-        const summary = summaries.get(row.channelId);
-        const empty = !summary?.hasPostsToday;
-        const days = summary?.bookedThroughDate
-          ? Math.round(
-              (Date.parse(summary.bookedThroughDate + 'T00:00:00Z') -
-                Date.parse(today + 'T00:00:00Z')) /
-                DAY,
-            )
-          : 0;
-        const stage =
-          empty && row.template.notifyEmpty
-            ? 'empty'
-            : row.template.daysBefore.includes(days)
-              ? String(days)
-              : null;
-        if (
-          stage &&
-          row.channel.assignedMemberId &&
-          row.channel.isActive &&
-          !row.channel.archivedAt
-        ) {
-          const key = row.channel.assignedMemberId + ':' + stage;
-          const message = messages.get(key) ?? {
-            memberId: row.channel.assignedMemberId,
-            stage,
-            channels: [],
-          };
-          message.channels.push({
-            id: row.channelId,
-            title: `${storedTelegramIconText(row.channel.presentationIcon?.emoji, '📢')} ${row.channel.title}`,
-          });
-          messages.set(key, message);
-        }
-        const wake = nextWake(
-          now,
-          timezone,
-          empty && row.template.notifyEmpty,
-        ).getTime();
-        const bucket = next.get(wake) ?? [];
-        bucket.push(row);
-        next.set(wake, bucket);
-      }
-      const failedChannels = new Set<string>();
-      for (const message of messages.values()) {
-        message.channels.sort((a, b) => a.id.localeCompare(b.id));
-        const slot =
-          message.stage === 'empty' && utcTimeKey(now, timezone) >= '15:00'
-            ? 'evening'
-            : 'morning';
-        const title =
-          message.stage === 'empty'
-            ? 'Нет запланированных постов на сегодня'
-            : `Посты запланированы ещё на ${message.stage} дн.`;
-        const chunks: Array<typeof message.channels> = [];
-        let chunk: typeof message.channels = [];
-        let size = 0;
-        for (const channel of message.channels) {
-          const length = Math.min(channel.title.length, 3400) + 3;
-          if (chunk.length && size + length > 3500) {
-            chunks.push(chunk);
-            chunk = [];
-            size = 0;
+        const channels = member
+          ? await this.prisma.telegramChannel.findMany({
+              where: {
+                workspaceId: workspace.id,
+                ...activePublicationChannels,
+                id: {
+                  notIn: workspace.publicationNotificationExcludedChannelIds,
+                },
+              },
+              orderBy: { id: 'asc' },
+              select: publicationNotificationChannelSelect,
+            })
+          : [];
+        if (member && channels.length) {
+          const summaries = await this.booking.summariesForChannels(
+            workspace.id,
+            channels.map(({ id }) => id),
+            now,
+            new Map(),
+            8,
+            true,
+            false,
+          );
+          if (
+            !(await this.prisma.workspace.findFirst({
+              where,
+              select: { id: true },
+            }))
+          )
+            continue;
+          const groups = new Map<
+            number,
+            ReturnType<typeof publicationNotificationChannel>[]
+          >();
+          for (const channel of channels) {
+            const summary = summaries.get(channel.id);
+            const days = summary?.bookedThroughDate
+              ? Math.round(
+                  (Date.parse(summary.bookedThroughDate) - Date.parse(today)) /
+                    DAY,
+                )
+              : 0;
+            const stage = summary?.hasPostsToday ? days : 0;
+            if (stage !== 0 && stage !== 3) continue;
+            const group = groups.get(stage) ?? [];
+            group.push(publicationNotificationChannel(channel));
+            groups.set(stage, group);
           }
-          chunk.push(channel);
-          size += length;
-        }
-        if (chunk.length) chunks.push(chunk);
-        for (const channels of chunks) {
-          const hash = createHash('sha256')
-            .update(channels.map((channel) => channel.id).join(','))
-            .digest('hex')
-            .slice(0, 16);
-          try {
-            await this.delivery.deliver({
-              workspaceId,
-              memberId: message.memberId,
-              sourceKey: `channel-reminder:${today}:${slot}:${message.stage}:${hash}`,
-              title,
-              body: channels
-                .map((channel) => `• ${channel.title.slice(0, 3400)}`)
-                .join('\n'),
-            });
-          } catch (error) {
-            deliveryFailure ??= error;
-            for (const channel of message.channels)
-              failedChannels.add(channel.id);
-            break;
+          for (const [days, group] of groups) {
+            for (let offset = 0; offset < group.length; offset += 15) {
+              const batch = group.slice(offset, offset + 15);
+              const hash = createHash('sha256')
+                .update(batch.map(({ id }) => id).join(','))
+                .digest('hex')
+                .slice(0, 16);
+              const lines = coverageNotificationLines(days, batch);
+              const sourceKey = `publication-coverage:${today}:${days}:${hash}`;
+              const telegram =
+                workspace.coverageNotificationDestination !== 'IN_APP';
+              const receiptKey = `${today}:${workspace.coverageNotificationDestination}:${days}:${hash}`;
+              if (
+                telegram &&
+                workspace.coverageNotificationSentKeys.includes(receiptKey)
+              )
+                continue;
+              const sent = await this.delivery.deliver({
+                workspaceId: workspace.id,
+                memberId: member.id,
+                sourceKey,
+                title: lines[0].text,
+                destination: workspace.coverageNotificationDestination,
+                body: batch.map(({ title }) => title).join('\n'),
+                telegramHtml: publicationNotificationHtml(lines),
+              });
+              if (telegram && sent)
+                await this.prisma.$executeRaw`
+                UPDATE "Workspace"
+                SET "coverageNotificationSentKeys" = ARRAY(
+                  SELECT DISTINCT value
+                  FROM unnest("coverageNotificationSentKeys" || ARRAY[${receiptKey}]::text[]) AS item(value)
+                  WHERE left(value, 10) = ${today}
+                )
+                WHERE id = ${workspace.id}
+              `;
+            }
           }
         }
-      }
-      for (const [timestamp, assignments] of next) {
-        const completed = assignments.filter(
-          (row) => !failedChannels.has(row.channelId),
-        );
-        if (!completed.length) continue;
-        await this.prisma.telegramChannelReminderAssignment.updateMany({
-          where: {
-            workspaceId,
-            OR: completed.map((row) => ({
-              id: row.id,
-              nextDueAt: row.nextDueAt,
-            })),
-          },
-          data: { nextDueAt: new Date(timestamp) },
+        await this.prisma.workspace.updateMany({
+          where,
+          data: { publicationNotificationDueAt: morningAfter(today, timezone) },
         });
+      } catch (error) {
+        deliveryFailure ??=
+          error instanceof Error
+            ? error
+            : new Error('Publication notification delivery failed');
       }
     }
     notifyScheduledTaskDueWorkChanged(CHANNEL_REMINDERS_TASK_KEY);
     if (deliveryFailure) throw deliveryFailure;
-    return { processed: rows.length };
+    return { processed: workspaces.length };
   }
 }

@@ -1004,7 +1004,14 @@ model PasswordResetToken {
   @@index([expiresAt])
 }
 
+enum PublicationNotificationDestination {
+  IN_APP
+  TELEGRAM_GROUP
+  TELEGRAM_PRIVATE
+}
+
 model Workspace {
+  creatives                       WorkspaceCreative[]
   telegramSupportTickets TelegramSupportTicket[]
   id                              String              @id @default(cuid())
   name                            String
@@ -1015,6 +1022,13 @@ model Workspace {
   currencyDisplayMode             CurrencyDisplayMode @default(code)
   avatarIconId                    String?
   systemNetworkExcludedChannelIds String[]            @default([])
+  publicationNotificationsEnabled          Boolean  @default(false)
+  publicationNotificationExcludedChannelIds String[] @default([])
+  publicationNotificationDueAt             DateTime?
+  coverageNotificationDestination          PublicationNotificationDestination @default(TELEGRAM_GROUP)
+  coverageNotificationSentKeys             String[] @default([])
+  autopilotNotificationDestination         PublicationNotificationDestination @default(TELEGRAM_GROUP)
+  autopilotErrorNotificationDestination    PublicationNotificationDestination @default(TELEGRAM_GROUP)
   telegramNotificationChatId                    String?
   telegramNotificationChatTitle                 String?
   telegramNotificationLinkTokenHash             String?             @unique
@@ -1163,7 +1177,7 @@ model Workspace {
 
   leadQualifications TelegramLeadQualification[]
   leadCandidateDrafts TelegramLeadCandidateDraft[]
-
+  @@index([publicationNotificationDueAt])
 }
 
 model TelegramUserAccountIntegration {
@@ -1824,6 +1838,8 @@ model TelegramChannel {
   createdAt                     DateTime                                      @default(now())
   updatedAt                     DateTime                                      @updatedAt
 
+  botAdLinks BotAdLink[]
+
   @@index([workspaceId, username])
   @@index([workspaceId, telegramChatId])
   @@index([workspaceId, assignedMemberId])
@@ -2128,6 +2144,8 @@ model TelegramAiPostingNotificationDelivery {
   claimOwner          String?
   claimExpiresAt      DateTime?
   notificationId     String?
+  telegramMessage    String?
+  telegramParseMode  String?
   lastErrorType      String?
   lastErrorMessage   String?
   sentAt              DateTime?
@@ -4275,6 +4293,9 @@ model TelegramBotRuntimeInstance {
   deliveries     TelegramBotDelivery[]
   users          TelegramBotUser[]
 
+  adPromos       BotAdPromo[]
+  adLinks        BotAdLink[]
+
   @@unique([botIntegrationId, environment])
   @@unique([id, workspaceId, botIntegrationId])
   @@index([workspaceId, botIntegrationId])
@@ -4328,6 +4349,7 @@ model TelegramBotUser {
   firstName               String?
   lastName                String?
   languageCode            String?
+  pendingAdActivation Json      @default("{}")
   startedAt               DateTime?
   firstSeenAt             DateTime  @default(now())
   lastInteractionAt       DateTime  @default(now())
@@ -4351,6 +4373,8 @@ model TelegramBotUser {
   billingCouponRedemptions     BotCouponRedemption[]
   providerCustomers            BotProviderCustomer[]
   financeProposals             FinancePendingProposal[]
+
+  adAttributions BotAdAttribution[]
 
   /// A person belongs to the logical bot, not to a local or production runtime.
   @@unique([botIntegrationId, telegramUserId])
@@ -5818,6 +5842,7 @@ model BotBillingEvent {
   workspaceId      String
   botIntegrationId String
   subscriptionId   String?
+  runtimeInstanceId String?
   provider         BotBillingProvider?
   mode             BotBillingProviderMode?
   providerEventId  String?
@@ -6095,6 +6120,8 @@ model TelegramManagedPost {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  botAdLink BotAdLink?
 
   @@unique([workspaceId, telegramChannelId, jsonImportKey], map: "TelegramManagedPost_workspaceId_telegramChannelId_jsonImportKey")
   // Enforced by a partial unique index in the baseline migration. Prisma's
@@ -6506,6 +6533,8 @@ model Icon {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  botAdPromos BotAdPromo[]
 
   @@unique([workspaceId, type, name])
   @@index([workspaceId, name, type])
@@ -7084,4 +7113,107 @@ model TelegramSupportMessage {
   @@unique([ticketId, replyId], map: "TelegramSupportMessage_reply_key")
   @@index([ticketId, telegramMessageId], map: "TelegramSupportMessage_telegram_idx")
   @@index([ticketId, createdAt, id], map: "TelegramSupportMessage_thread_idx")
+}
+
+enum CreativeSection {
+  good
+  bad
+  attempt
+  mentor
+}
+
+enum CreativeTarget {
+  externalProduct
+  channel
+}
+
+model WorkspaceCreative {
+  id          String                       @id @default(cuid())
+  workspaceId String
+  section     CreativeSection
+  target      CreativeTarget?
+  title       String
+  text        String
+  sourceUrl   String?
+  post        Json?
+  workspace   Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  attachment  WorkspaceCreativeAttachment?
+  comments    WorkspaceCreativeComment[]
+
+  @@index([workspaceId, section, id])
+}
+
+model WorkspaceCreativeAttachment {
+  creativeId String            @id
+  name       String
+  mimeType   String
+  bytes      Bytes
+  creative   WorkspaceCreative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+}
+
+model WorkspaceCreativeComment {
+  id         String            @id @default(cuid())
+  creativeId String
+  text       String
+  createdAt  DateTime          @default(now())
+  creative   WorkspaceCreative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+
+  @@index([creativeId, createdAt, id])
+}
+
+model BotAdPromo {
+  id                String   @id @default(cuid())
+  runtimeInstanceId String
+  title             String
+  post              Json
+  iconId            String?
+  archivedAt        DateTime?
+  createdAt         DateTime @default(now())
+
+  runtime TelegramBotRuntimeInstance @relation(fields: [runtimeInstanceId], references: [id], onDelete: Cascade)
+  icon    Icon?                       @relation(fields: [iconId], references: [id], onDelete: SetNull)
+  links   BotAdLink[]
+
+  @@index([runtimeInstanceId, archivedAt, createdAt])
+}
+
+model BotAdLink {
+  id                String   @id @db.Uuid
+  runtimeInstanceId String
+  title             String
+  promoId           String?
+  telegramChannelId String?
+  managedPostId     String?  @unique
+  publicationIntent String?
+  campaignId        String?  @db.Uuid
+  campaignDetails   Json?
+  clicks            BigInt   @default(0)
+  tracked           Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  runtime      TelegramBotRuntimeInstance @relation(fields: [runtimeInstanceId], references: [id], onDelete: Cascade)
+  promo        BotAdPromo?                @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  channel      TelegramChannel?           @relation(fields: [telegramChannelId], references: [id], onDelete: SetNull)
+  managedPost  TelegramManagedPost?       @relation(fields: [managedPostId], references: [id], onDelete: SetNull)
+  attributions BotAdAttribution[]
+
+  @@unique([id, runtimeInstanceId])
+  @@index([runtimeInstanceId, createdAt])
+  @@index([runtimeInstanceId, campaignId])
+  @@index([promoId])
+}
+
+model BotAdAttribution {
+  runtimeInstanceId String
+  telegramBotUserId String
+  linkId            String   @db.Uuid
+  startedAt         DateTime @default(now())
+  activatedAt       DateTime?
+  retainedAt        DateTime?
+
+  link BotAdLink       @relation(fields: [linkId, runtimeInstanceId], references: [id, runtimeInstanceId], onDelete: Cascade)
+  user TelegramBotUser @relation(fields: [telegramBotUserId], references: [id], onDelete: Cascade)
+
+  @@id([runtimeInstanceId, telegramBotUserId])
+  @@index([linkId])
 }

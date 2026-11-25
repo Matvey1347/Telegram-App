@@ -234,6 +234,9 @@ export function resolveRouteTabIdentity({
     }
     return { title: pageTitle("Ad Sales"), emoji: "💼", color: "#0f766e" };
   }
+  if (pathname === "/settings/notifications") {
+    return { title: pageTitle("Notifications"), emoji: "🔔", color: "#1d4ed8" };
+  }
   if (pathname === "/settings") {
     return { title: pageTitle("Settings"), emoji: "⚙️", color: "#4b5563" };
   }

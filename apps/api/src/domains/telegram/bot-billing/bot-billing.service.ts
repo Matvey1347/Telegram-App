@@ -543,6 +543,7 @@ export class BotBillingService {
 
   processStarsPayment(input: {
     botIntegrationId: string;
+    runtimeInstanceId?: string;
     telegramBotUserId: string;
     payment: {
       invoice_payload?: string;

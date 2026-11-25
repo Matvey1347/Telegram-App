@@ -30,6 +30,7 @@ import { adsSectionHeader } from "@/components/features/growth/ad-campaigns/ads-
 import { HypothesisFormModal } from "@/components/features/growth/ad-campaigns/hypothesis-form-modal";
 import { CampaignModal } from "@/components/features/growth/ad-campaigns/campaign-form-modal";
 import { useAdsWorkspaceReads } from "./use-ads-workspace-reads";
+import { AdsHeaderActions } from "./ads-header-actions";
 import { PromosSection } from "./ads-workspace-promos";
 import { CampaignSelectRow, HypothesesSection, HypothesisCampaignsModal, HypothesisInviteLinkHistoryModal } from "./ads-workspace-hypotheses";
 
@@ -245,11 +246,11 @@ const requestedPromoId = searchParams.get("promoId") || "";
         title={sectionHeader.title}
         subtitle={sectionHeader.subtitle}
         action={
-          <div className="flex items-center gap-2">
+          <AdsHeaderActions>
             <Button onClick={openCreateForCurrentView}>
               {sectionHeader.actionLabel}
             </Button>
-          </div>
+          </AdsHeaderActions>
         }
       />
       {sectionTabs}

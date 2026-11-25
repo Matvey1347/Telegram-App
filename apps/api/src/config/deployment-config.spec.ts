@@ -2,6 +2,7 @@ import {
   apiPort,
   crmRuntimeEnabled,
   crmLocalReactionAssetsEnabled,
+  crmLocalWorkspaceExportEnabled,
   crmRuntimeProxyOrigin,
   publicApiOrigin,
   publicWebOrigin,
@@ -68,6 +69,21 @@ describe('deployment config', () => {
     expect(() =>
       crmRuntimeEnabled({ CRM_RUNTIME_OWNER_API_PORT: 'invalid' }),
     ).toThrow('valid TCP port');
+  });
+  it('serves CRM export from a loopback development database only', () => {
+    const local = { DATABASE_URL: 'postgresql://127.0.0.1:5432/app' };
+    expect(crmLocalWorkspaceExportEnabled(local)).toBe(true);
+    expect(
+      crmLocalWorkspaceExportEnabled({ ...local, NODE_ENV: 'production' }),
+    ).toBe(false);
+    expect(
+      crmLocalWorkspaceExportEnabled({
+        DATABASE_URL: 'postgresql://db.example/app',
+      }),
+    ).toBe(false);
+    expect(crmLocalWorkspaceExportEnabled({ DATABASE_URL: 'invalid' })).toBe(
+      false,
+    );
   });
   it('uses FRONTEND_URL as the single public web origin', () => {
     expect(publicWebOrigin({ FRONTEND_URL: ' https://web.example/ ' })).toBe(

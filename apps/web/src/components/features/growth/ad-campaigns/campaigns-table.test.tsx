@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { AdCampaignsTable } from "@/components/features/growth/ad-campaigns/campaigns-table";
@@ -42,6 +42,22 @@ describe("AdCampaignsTable admission view analytics", () => {
       "w-fit",
       "max-w-full",
     );
+  });
+
+  it("keeps the standard results card with whichever Telegram counter is confirmed", () => {
+    renderTable([campaign({
+      periodCountsUnavailable: true,
+      analytics: {
+        joinedCount: null, requestedCount: 104, attributedCount: null,
+        leftCount: 0, netGrowth: 0,
+        costPerJoinedSubscriber: null, costPerNetSubscriber: null,
+      },
+    })]);
+    const card = within(screen.getByTestId("campaign-performance-card"));
+    expect(card.getByText("Spend")).toBeInTheDocument();
+    expect(card.getByText("Joined —")).toBeInTheDocument();
+    expect(card.getByText("Pending 104")).toBeInTheDocument();
+    expect(card.getByText("CPA")).toBeInTheDocument();
   });
 
   it("shows the latest streamed invite-link refresh progress beside the campaign action", () => {

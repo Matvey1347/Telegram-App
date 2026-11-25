@@ -40,7 +40,10 @@ function endToEndHeaders(headers: IncomingHttpHeaders): IncomingHttpHeaders {
 /** Install before body parsers: one trusted owner handles CRM HTTP and SSE. */
 export function createCrmRuntimeProxy(
   origin: string,
-  options: { localReactionAssets?: boolean } = {},
+  options: {
+    localReactionAssets?: boolean;
+    localWorkspaceExport?: boolean;
+  } = {},
 ): RequestHandler {
   const target = new URL(origin);
   if (
@@ -56,6 +59,12 @@ export function createCrmRuntimeProxy(
   return (req, res, next) => {
     const path = req.originalUrl || req.url;
     if (!/^\/api\/telegram-crm(?:\/|\?|$)/.test(path)) return next();
+    if (
+      options.localWorkspaceExport &&
+      (req.method === 'GET' || req.method === 'OPTIONS') &&
+      /^\/api\/telegram-crm\/workspace-export\/?(?:\?|$)/.test(path)
+    )
+      return next();
     if (
       options.localReactionAssets &&
       req.method === 'POST' &&

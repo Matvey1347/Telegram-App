@@ -2,6 +2,7 @@ import { hasBothInviteCounters } from './telegram-invite-counter-observations';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type {
   CrossPromotionTargetInput,
+  DashboardTrafficKind,
   TelegramChannelTrafficAttributionDetail,
   TelegramChannelTrafficAttributionItem,
   TelegramChannelTrafficAttributionPreview,
@@ -29,7 +30,7 @@ type PreparedAttribution = {
   previews: Map<string, TelegramChannelTrafficAttributionPreview>;
   itemsByChannel: Map<string, TelegramChannelTrafficAttributionItem[]>;
   linksByChannel: Map<string, TrafficAttributionInviteLinkRow[]>;
-  linkKinds: Map<string, TelegramChannelTrafficSourceKind>;
+  linkKinds: Map<string, DashboardTrafficKind>;
   currency: string;
 };
 
@@ -199,9 +200,23 @@ export class TelegramChannelTrafficAttributionService {
     };
   }
 
+  async periodLinkActivity(workspaceId: string, channelIds: string[], from: Date, to: Date) {
+    const prepared = await this.prepare(workspaceId, channelIds, true);
+    const links = [...prepared.linksByChannel.values()].flat();
+    const activity = await this.reads.periodActivity(workspaceId, links.map((link) => link.id), from, to);
+    const activityByLink = new Map(activity.map((row) => [row.inviteLinkId, row]));
+    return links.map((link) => ({
+      kind: link.botRequestTrackingCampaigns?.length
+        ? 'BOT' as const
+        : prepared.linkKinds.get(link.id) ?? 'OTHER' as const,
+      activity: activityByLink.get(link.id),
+    }));
+  }
+
   private async prepare(
     workspaceId: string,
     channelIds: string[],
+    periodReport = false,
   ): Promise<PreparedAttribution> {
     const ids = unique(channelIds);
     if (!ids.length) {
@@ -221,7 +236,9 @@ export class TelegramChannelTrafficAttributionService {
       plans,
       planBoundaryCounters,
       currency,
-    } = await this.reads.batch(workspaceId, ids);
+    } = periodReport
+      ? await this.reads.batch(workspaceId, ids, true)
+      : await this.reads.batch(workspaceId, ids);
     const storedPrimarySpend = (value: unknown) => {
       const amount = Number(value);
       return Number.isFinite(amount) && amount >= 0 ? amount : null;
@@ -255,7 +272,7 @@ export class TelegramChannelTrafficAttributionService {
       return storedPrimarySpend(legacyPrimaryAmount);
     };
     const campaignSpendById = new Map(
-      await Promise.all(
+      periodReport ? [] : await Promise.all(
         campaigns.map(
           async (campaign) =>
             [
@@ -270,7 +287,7 @@ export class TelegramChannelTrafficAttributionService {
       ),
     );
     const participantSpendById = new Map(
-      await Promise.all(
+      periodReport ? [] : await Promise.all(
         participants.map(
           async (participant) =>
             [
@@ -284,6 +301,14 @@ export class TelegramChannelTrafficAttributionService {
         ),
       ),
     );
+    const configuredLinkKinds = new Map<string, DashboardTrafficKind>();
+    if (periodReport) {
+      for (const channel of channels) {
+        if (channel.broadcastInviteLinkId) configuredLinkKinds.set(channel.broadcastInviteLinkId, 'BROADCAST');
+        if (channel.botInviteLinkId) configuredLinkKinds.set(channel.botInviteLinkId, 'BOT');
+        if (channel.audienceTransferInviteLinkId) configuredLinkKinds.set(channel.audienceTransferInviteLinkId, 'AUDIENCE_TRANSFER');
+      }
+    }
     const channelIdSet = new Set(ids);
     const currentSubscribersByChannel = new Map(
       channels.map((channel) => [
@@ -315,14 +340,14 @@ export class TelegramChannelTrafficAttributionService {
       string,
       TelegramChannelTrafficAttributionItem[]
     >();
-    const linkKinds = new Map<string, TelegramChannelTrafficSourceKind>();
+    const linkKinds = new Map<string, DashboardTrafficKind>();
     const addItem = (
       channelId: string,
       item: TelegramChannelTrafficAttributionItem,
     ) => {
       addToMap(itemsByChannel, channelId, item);
       for (const linkId of item.inviteLinkIds) {
-        if (!linkKinds.has(linkId)) linkKinds.set(linkId, item.kind);
+        if (item.kind !== 'UNATTRIBUTED' && !linkKinds.has(linkId)) linkKinds.set(linkId, item.kind);
       }
     };
     const claimedByAnotherKind = (
@@ -334,7 +359,12 @@ export class TelegramChannelTrafficAttributionService {
     };
 
     for (const campaign of campaigns) {
-      const campaignLinks = linksByCampaign.get(campaign.id) ?? [];
+      const campaignLinks = [...(linksByCampaign.get(campaign.id) ?? [])];
+      const legacyLink = periodReport && campaign.telegramInviteLinkId
+        ? linkById.get(campaign.telegramInviteLinkId)
+        : undefined;
+      if (legacyLink && legacyLink.telegramChannelId === campaign.telegramChannelId &&
+          !legacyLink.adCampaignId) campaignLinks.push(legacyLink);
       const current = campaignLinks.length
         ? campaignLinks.reduce(
             (sum, link) => sum + link.joinedCount + link.requestedCount,
@@ -525,7 +555,7 @@ export class TelegramChannelTrafficAttributionService {
       previews,
       itemsByChannel,
       linksByChannel,
-      linkKinds,
+      linkKinds: new Map([...linkKinds, ...configuredLinkKinds]),
       currency,
     };
   }

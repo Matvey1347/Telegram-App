@@ -1,3 +1,5 @@
+import type { CreativeSection } from "@telegram-system/shared";
+
 export const authKeys = {
   root: ["auth"] as const,
   me: () => ["auth", "me"] as const,
@@ -12,6 +14,13 @@ export const workspaceKeys = {
   roleRegistry: () => ["workspace-roles", "registry"] as const,
   telegramCustomEmojiPacks: () =>
     ["workspace", "telegram-custom-emoji-packs"] as const,
+};
+
+export const workspaceCreativeKeys = {
+  list: (workspaceId: string, section: CreativeSection) =>
+    ["workspace-creatives", workspaceId, "list", section] as const,
+  detail: (workspaceId: string, id: string | null) =>
+    ["workspace-creatives", workspaceId, "detail", id] as const,
 };
 
 export const currencyKeys = {
@@ -384,6 +393,18 @@ export const botBillingKeys = {
   workspaceFinanceAi: () => ["bot-billing", "workspace", "finance-ai"] as const,
 };
 
-export const channelReminderKeys = {
-  settings: () => ["telegram-channel-reminders", "settings"] as const,
+export const botAdsKeys = {
+  placementPromos: (workspaceId: string, botId: string, environment: string) =>
+    ["bot-ads", workspaceId, botId, environment, "placement-promos"] as const,
+  channels: (workspaceId: string, botId: string, environment: string, kind: string) =>
+    ["bot-ads", workspaceId, botId, environment, "channels", kind] as const,
+  promos: (workspaceId: string, botId: string, environment: string) =>
+    ["bot-ads", workspaceId, botId, environment, "promos"] as const,
+  links: (workspaceId: string, botId: string, environment: string) =>
+    ["bot-ads", workspaceId, botId, environment, "links"] as const,
+};
+
+export const publicationNotificationKeys = {
+  settings: (workspaceId: string) => ["publication-notifications", workspaceId, "settings"] as const,
+  preview: (workspaceId: string, channelId: string) => ["publication-notifications", workspaceId, "preview", channelId] as const,
 };

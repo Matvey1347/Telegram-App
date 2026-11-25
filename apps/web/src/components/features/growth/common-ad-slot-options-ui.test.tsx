@@ -59,6 +59,24 @@ describe("CommonAdSlotOptions", () => {
     expect(load).toHaveBeenCalledTimes(1);
   });
 
+  it("uses one instant for channels with different time zones when a display zone is supplied", async () => {
+    const shared = {
+      slotId: "shared", scheduledAt: "2026-09-22T10:00:00.000Z",
+      title: "Advertising", kind: "AD", state: "AVAILABLE",
+    };
+    load.mockResolvedValue({
+      a: [{ ...shared, time: "10:00", timezone: "UTC" }],
+      b: [{ ...shared, time: "13:00", timezone: "Europe/Kyiv" }],
+    });
+    const select = vi.fn();
+    render(<QueryClientProvider client={new QueryClient()}>
+      <CommonAdSlotOptions channelIds={["a", "b"]} date="2026-09-22"
+        displayTimezone="Europe/Warsaw" selectedTime="" onSelect={select} />
+    </QueryClientProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: /12:00.*Available in all channels/ }));
+    expect(select).toHaveBeenCalledWith("12:00");
+  });
+
   it("shows a retry action when slot availability cannot be loaded", async () => {
     load
       .mockRejectedValueOnce(new Error("Offline"))

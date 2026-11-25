@@ -665,6 +665,7 @@ export class BotBillingCheckout {
 
   async processStarsPayment(input: {
     botIntegrationId: string;
+    runtimeInstanceId?: string;
     telegramBotUserId: string;
     payment: {
       invoice_payload?: string;
@@ -734,6 +735,7 @@ export class BotBillingCheckout {
           mode: 'LIVE',
           providerEventId: chargeId,
           type: 'PAYMENT_SUCCEEDED',
+          runtimeInstanceId: input.runtimeInstanceId,
           amountMinor: input.payment.total_amount,
           currency: 'XTR',
         },

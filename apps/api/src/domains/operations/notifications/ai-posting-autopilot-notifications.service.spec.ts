@@ -91,7 +91,9 @@ describe('AiPostingAutopilotNotificationsService', () => {
         .mockRejectedValueOnce(new Error('temporary'))
         .mockResolvedValueOnce({ status: 'SENT' }),
     };
-    const moduleRef: any = { resolve: jest.fn().mockResolvedValue(botNotifications) };
+    const moduleRef: any = {
+      resolve: jest.fn().mockResolvedValue(botNotifications),
+    };
     const email: any = { send: jest.fn() };
     const service = new AiPostingAutopilotNotificationsService(
       prisma,
@@ -122,6 +124,73 @@ describe('AiPostingAutopilotNotificationsService', () => {
     expect(publisher.publish).toHaveBeenCalledTimes(1);
     expect(delivery.status).toBe('SENT');
     expect(delivery.attempts).toBe(2);
+  });
+
+  it('persists and retries a private report independently of the in-app inbox', async () => {
+    const route = {
+      id: 'delivery',
+      status: 'FAILED',
+      attempts: 1,
+      workspaceId: 'ws',
+      runId: 'run',
+      eventKey: 'WEEKLY_REPORT',
+      transport: 'TELEGRAM_PRIVATE',
+      telegramMessage: '<b>Editorial</b>',
+      telegramParseMode: 'HTML',
+    };
+    const ledger = {
+      createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findMany: jest.fn().mockResolvedValue([route]),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    };
+    const prisma = {
+      workspaceMember: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'member' }]),
+      },
+      telegramAiPostingNotificationDelivery: ledger,
+      $transaction: jest.fn(),
+    };
+    const delivery = {
+      sendToWorkspaceAccount: jest.fn().mockResolvedValue({ status: 'SENT' }),
+      sendToWorkspace: jest.fn(),
+    };
+    const service = new AiPostingAutopilotNotificationsService(
+      prisma as never,
+      {} as never,
+      {} as never,
+      { canReceive: () => true, has: () => true } as never,
+      {} as never,
+      { resolve: async () => delivery } as never,
+    );
+    await expect(
+      service.notify({
+        workspaceId: 'ws',
+        channelId: 'channel',
+        runId: 'run',
+        event: 'WEEKLY_REPORT',
+        title: 'Editorial',
+        body: 'Summary',
+        metadata: { telegramHtml: route.telegramMessage },
+        destination: 'TELEGRAM_PRIVATE',
+      }),
+    ).resolves.toMatchObject({ failed: 0, delivered: 1 });
+    expect(ledger.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: [
+          expect.objectContaining({
+            transport: route.transport,
+            telegramMessage: route.telegramMessage,
+          }),
+        ],
+      }),
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(delivery.sendToWorkspace).not.toHaveBeenCalled();
+    expect(delivery.sendToWorkspaceAccount).toHaveBeenCalledWith(
+      'ws',
+      route.telegramMessage,
+      'HTML',
+    );
   });
 
   it('does not deliver to members without notification permission', async () => {

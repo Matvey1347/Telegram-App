@@ -1,9 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import {
-  normalizeTelegramPostMediaItems,
-  type TelegramPostMediaItem,
-} from '@telegram-system/shared';
+import type { TelegramPostMediaItem } from '@telegram-system/shared';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { normalizeTelegramPostButtonRows } from '@api/telegram/shared/markup/telegram-inline-keyboard';
@@ -19,6 +16,7 @@ import { TelegramManagedPostMediaStorageService } from './telegram-managed-post-
 import { TelegramManagedPostRevisionStore } from './telegram-managed-post-revision.store';
 import { TelegramPostGroupsService } from './telegram-post-groups.service';
 import {
+  telegramChannelNotFound,
   telegramPostsBadRequest,
   telegramPostsNotFound,
 } from './telegram-posts.errors';
@@ -198,30 +196,31 @@ export class TelegramManagedPostCommandService {
       );
     }
     await this.telegramChannelCatalogService.findOne(userId, channelId);
+    return this.prepareDraftFields(
+      workspaceId,
+      assignedMemberId,
+      channelId,
+      dto,
+    );
+  }
+
+  private prepareDraftFields(
+    workspaceId: string,
+    assignedMemberId: string,
+    channelId: string,
+    dto: CreateTelegramManagedPostDto,
+  ) {
     const title = dto.title.trim();
     if (!title)
       throw telegramPostsBadRequest(
         'TELEGRAM_POST_TITLE_REQUIRED',
         'Title is required',
       );
-    const persistMediaUrls =
-      this.telegramManagedPostMediaStorageService.persistMediaUrls;
-    const { imageUrls, mediaItems } = persistMediaUrls
-      ? persistMediaUrls.call(
-          this.telegramManagedPostMediaStorageService,
-          dto.mediaItems,
-          dto.imageUrls,
-        )
-      : {
-          imageUrls:
-            await this.telegramManagedPostMediaStorageService.persistImageUrls(
-              dto.imageUrls ?? [],
-            ),
-          mediaItems: normalizeTelegramPostMediaItems(
-            dto.mediaItems,
-            dto.imageUrls,
-          ),
-        };
+    const { imageUrls, mediaItems } =
+      this.telegramManagedPostMediaStorageService.persistMediaUrls(
+        dto.mediaItems,
+        dto.imageUrls,
+      );
     return {
       workspaceId,
       channelId,
@@ -236,11 +235,75 @@ export class TelegramManagedPostCommandService {
     };
   }
 
+  private async createDraftWithRevision(
+    tx: Prisma.TransactionClient,
+    data: Parameters<
+      TelegramManagedPostCommandService['createManagedPostRecord']
+    >[1],
+    userId: string,
+  ) {
+    const draft = await this.createManagedPostRecord(tx, data);
+    await this.telegramManagedPostRevisionStore.createManagedPostRevision(
+      tx,
+      draft,
+      'created',
+      userId,
+    );
+    return draft;
+  }
+
+  async createManagedPostDrafts(
+    userId: string,
+    entries: {
+      channelId: string;
+      dto: Omit<CreateTelegramManagedPostDto, 'assignedMemberId'>;
+    }[],
+    onCreated: (
+      tx: Prisma.TransactionClient,
+      postIds: string[],
+    ) => Promise<void>,
+  ) {
+    const { workspaceId, assignedMemberId } =
+      await this.workspaceService.resolveAssignedMemberId(userId);
+    if (!assignedMemberId) {
+      throw telegramPostsBadRequest(
+        'TELEGRAM_POST_ASSIGNED_MEMBER_REQUIRED',
+        'Assigned member is required',
+      );
+    }
+    const ids = [...new Set(entries.map(({ channelId }) => channelId))];
+    const available = await this.prisma.telegramChannel.count({
+      where: { workspaceId, id: { in: ids } },
+    });
+    if (available !== ids.length) throw telegramChannelNotFound();
+    const prepared = entries.map(({ channelId, dto }) =>
+      this.prepareDraftFields(workspaceId, assignedMemberId, channelId, dto),
+    );
+    await this.prisma.$transaction(
+      async (tx) => {
+        const postIds: string[] = [];
+        for (const entry of prepared) {
+          const created = await this.createDraftWithRevision(tx, entry, userId);
+          postIds.push(created.id);
+        }
+        await onCreated(tx, postIds);
+      },
+      { timeout: 15000 },
+    );
+  }
+
   async createManagedPost(
     userId: string,
     channelId: string,
     dto: CreateTelegramManagedPostDto,
-    options: { groupId?: string | null; editorial?: TelegramUnifiedImportEditorial } = {},
+    options: {
+      groupId?: string | null;
+      editorial?: TelegramUnifiedImportEditorial;
+      onCreated?: (
+        tx: Prisma.TransactionClient,
+        postId: string,
+      ) => Promise<void>;
+    } = {},
   ) {
     const prepared = await this.prepareManagedPostCreate(
       userId,
@@ -252,20 +315,23 @@ export class TelegramManagedPostCommandService {
       groupId?: string | null,
       groupPosition?: number | null,
     ) => {
-      const created = await this.createManagedPostRecord(client, {
-        ...prepared,
-        ...(options.editorial && await resolveImportedEditorial(
-          client, prepared.workspaceId, channelId, options.editorial,
-        )),
-        groupId,
-        groupPosition,
-      });
-      await this.telegramManagedPostRevisionStore.createManagedPostRevision(
+      const created = await this.createDraftWithRevision(
         client,
-        created,
-        'created',
+        {
+          ...prepared,
+          ...(options.editorial &&
+            (await resolveImportedEditorial(
+              client,
+              prepared.workspaceId,
+              channelId,
+              options.editorial,
+            ))),
+          groupId,
+          groupPosition,
+        },
         userId,
       );
+      await options.onCreated?.(client, created.id);
       return created;
     };
     const requestedGroupId = options.groupId?.trim() || null;

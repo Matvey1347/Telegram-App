@@ -119,6 +119,48 @@ describe('TelegramAiPostingImageService', () => {
     ]);
   });
 
+  it('rechecks the same artwork after an unreadable review and stores it with a typeset greeting', async () => {
+    gateway.execute.mockResolvedValueOnce(aiResponse(imageBytes.toString('base64')))
+      .mockResolvedValueOnce({
+        operation: { ...operation(), category: 'TELEGRAM_POSTING_REVIEW' },
+        result: null,
+      })
+      .mockResolvedValueOnce({
+        operation: { ...operation(), category: 'TELEGRAM_POSTING_REVIEW' },
+        result: { candidateIndex: 1, candidateObservation: 'Night scene', embeddedGreeting: false, visibleGreeting: '' },
+      });
+    const result = await service.resolve({
+      ...request('ai'),
+      postcard: { profile: 'daily', wish: 'Мирного вечора!', ordinal: 1 },
+    });
+    expect(result.readiness).toBe('READY');
+    expect(result.searchOperations).toHaveLength(2);
+    expect(gateway.execute.mock.calls.map(([input]) => input.category)).toEqual([
+      'TELEGRAM_POSTING_IMAGE', 'TELEGRAM_POSTING_REVIEW', 'TELEGRAM_POSTING_REVIEW',
+    ]);
+    const [stored] = media.persistImageBytes.mock.calls[0][0];
+    expect(stored.contentType).toBe('image/jpeg');
+    expect(stored.bytes).not.toEqual(imageBytes);
+  });
+
+  it('rejects a generated postcard with unusable lettering after one retry', async () => {
+    const review = {
+      operation: { ...operation(), category: 'TELEGRAM_POSTING_REVIEW' },
+      result: { candidateIndex: 0, rejectionReason: 'Unexpected lettering' },
+    };
+    gateway.execute
+      .mockResolvedValueOnce(aiResponse(imageBytes.toString('base64')))
+      .mockResolvedValueOnce(review)
+      .mockResolvedValueOnce(aiResponse(imageBytes.toString('base64')))
+      .mockResolvedValueOnce(review);
+    const result = await service.resolve({
+      ...request('ai'),
+      postcard: { profile: 'loved', wish: 'Добраніч!', ordinal: 1 },
+    });
+    expect(result).toEqual(expect.objectContaining({ readiness: 'FAILED', failureCode: 'AI_POSTING_IMAGE_QUALITY_INVALID' }));
+    expect(media.persistImageBytes).not.toHaveBeenCalled();
+  });
+
   it('does not store an image whose bytes already appeared in this run', async () => {
     const fingerprint = createHash('sha256').update(imageBytes).digest('hex');
     const result = await service.resolve({

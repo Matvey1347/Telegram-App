@@ -67,6 +67,34 @@ Realtime events patch the affected Message, Conversation, Contact, Inbox, or
 unread cache; there is no API polling or root-wide CRM invalidation. After a
 bounded stream reconnect, only the active surface is revalidated.
 
+### Workspace CRM export for AI
+
+The Clients toolbar action requests `GET /telegram-crm/workspace-export`
+and copies the response as plain text. If clipboard access fails, the
+browser downloads the same text. The document starts with a Russian guide
+for reviewing unanswered chats and overdue follow-ups. The browser checks
+the final record before copying.
+
+A development API connected to a loopback PostgreSQL snapshot serves this
+read directly, including when the CRM runtime proxy is configured. The
+export uses the same workspace and ownership checks on the local snapshot.
+
+The export reads active and archived Contacts in the active workspace under
+the ordinary CRM ownership policy, independent of list filters and pagination.
+CRM view-any access includes conversations without a Contact, and view-own
+access limits Conversations to owned Contacts. Deals also obey the independent
+Sales view and assignment policy. Conversation and Deal records carry Contact
+IDs. Protected and deleted Messages contribute timestamps and status.
+Attachment metadata describes stored files.
+
+Each click issues one HTTP request with `Cache-Control: private, no-store`.
+The API streams Contacts, Deals, and Conversations in batches of 50 and
+Messages in batches of 500. Message reads share each Conversation batch.
+Work scales with the workspace's actual CRM records and placements, including
+when it has 100 channels. CPU, memory, and egress accrue during the request.
+There are no idle reads, writes, jobs, Telegram calls, AI calls, or server-side
+export retention.
+
 Manual Message composition replies
 through the Conversation's fixed MTProto account, uses an idempotency key for
 optimistic reconciliation and retry, and becomes read-only when permission or

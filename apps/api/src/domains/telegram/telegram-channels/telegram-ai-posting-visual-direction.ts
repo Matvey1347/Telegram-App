@@ -1,3 +1,4 @@
+import { postcardGenerationInstruction, type PostcardLettering } from './telegram-ai-posting-postcard';
 const directions = {
   'still-life': 'A real editorial STILL LIFE where one or two specific objects dominate. Vary materials, angles and backgrounds. Avoid repeating a notebook and cup on a wooden table. No visible person or hands.',
   illustration: 'An unmistakably drawn ILLUSTRATION with visible ink, block print, graphic cut paper or gouache. Draw an expressive scene or character. Reject photographic realism, faux photo renderings, and any teacup-and-notebook composition.',
@@ -73,27 +74,28 @@ export function buildTelegramAiPostingImagePrompt(
     revisionDirection?: string;
     language?: string;
     visualDirection?: TelegramAiPostingVisualDirection;
+    postcard?: PostcardLettering;
   },
   hasReference: boolean,
   singleReference = false,
 ) {
-  const candid = !input.visualDirection && prefersColorEditorialImages(input);
+  const candid = !input.postcard && !input.visualDirection && prefersColorEditorialImages(input);
   return [
     `Create one new editorial visual for a Telegram post about ${input.topic}.`,
     input.revisionDirection && `Required revision for this image: ${input.revisionDirection}. This specifies the scene and takes priority over prior briefs and references.`,
-    input.visualDirection && `Required visual form: ${telegramAiPostingVisualBrief(input.visualDirection)} ${telegramAiPostingVisualQuality} The visual form outranks any conflicting subject, setting or style described anywhere else in this brief. Replace a conflicting scene with a concrete subject in the required form that echoes the post. Do not render a known person’s likeness.`,
+    !input.postcard && input.visualDirection && `Required visual form: ${telegramAiPostingVisualBrief(input.visualDirection)} ${telegramAiPostingVisualQuality} The visual form outranks any conflicting subject, setting or style described anywhere else in this brief. Replace a conflicting scene with a concrete subject in the required form that echoes the post. Do not render a known person’s likeness.`,
     hasReference
       ? `Treat the attached ${singleReference ? 'reference photograph or artwork' : 'reference sheet'} as the primary visual direction. Match its recurring framing, camera distance, movement, light, color or monochrome treatment, contrast, texture and mood. Use the closest coherent reference as the main guide. Use the reference only for visual treatment. The new scene must directly represent this post. Change the location, subject and action of the reference. Preserve only visual attributes such as light, framing and grain. Render one frame. Do not replicate a reference, copy faces or reproduce text.`
       : '',
     candid && 'Use natural color. A black-and-white reference guides composition and expression only. Keep the new image in color.',
     input.visualPreference ? `Selected visual direction: ${input.visualPreference}` : '',
     input.generationDescription ? `Generation brief, including required framing and exclusions: ${input.generationDescription}` : '',
-    !input.revisionDirection && (input.visualDirection ? `Optional subject inspiration, only if compatible with the required form: ${input.prompt}` : `Required subject and action for this topic: ${input.prompt}`),
+    !input.revisionDirection && (input.visualDirection && !input.postcard ? `Optional subject inspiration, only if compatible with the required form: ${input.prompt}` : `Required subject and action for this topic: ${input.prompt}`),
     !hasReference && !input.visualPreference && !input.generationDescription
       ? candid
         ? 'For photographic directions, use an unposed, everyday documentary frame with available light, natural skin texture and gestures that fit the idea. Avoid model poses, glamour and stock-photo staging. Keep explicitly requested non-photographic styles.'
         : 'For photographic directions, use natural light and plausible anatomy.'
       : 'The visual direction governs the look. The topic governs the subject; avoid generic lifestyle scenes disconnected from the post.',
-    `Do not add dialogue bubbles, chat interfaces, captions, text overlays or watermarks. Compose ordinary photographs without readable lettering. If the brief explicitly requires natural lettering within the scene, use only ${input.language || 'the language of the post'}.`,
+    input.postcard ? postcardGenerationInstruction(input.postcard) : `Do not add dialogue bubbles, chat interfaces, captions, text overlays or watermarks. Compose ordinary photographs without readable lettering. If the brief explicitly requires natural lettering within the scene, use only ${input.language || 'the language of the post'}.`,
   ].filter(Boolean).join(' ');
 }

@@ -119,6 +119,7 @@ export function CommonAdSlotOptions({
   loading = false,
   action,
   hideHeading = false,
+  displayTimezone,
 }: {
   channelIds: string[];
   date?: string;
@@ -130,6 +131,7 @@ export function CommonAdSlotOptions({
   loading?: boolean;
   action?: ReactNode;
   hideHeading?: boolean;
+  displayTimezone?: string;
 }) {
   const ids = useMemo(() => [...new Set(channelIds)].sort(), [channelIds]);
   const selectedDates = useMemo(
@@ -148,11 +150,24 @@ export function CommonAdSlotOptions({
       selectedDates.length > 0 && selectedDates.every((item) => /^\d{4}-\d{2}-\d{2}$/.test(item)),
     staleTime: 60_000,
   });
+  const occurrences = useMemo(() => {
+    const source = occurrencesByChannel ?? query.data ?? {};
+    if (!displayTimezone) return source;
+    const format = new Intl.DateTimeFormat("en-GB", {
+      timeZone: displayTimezone, hour: "2-digit", minute: "2-digit",
+    });
+    return Object.fromEntries(Object.entries(source).map(([id, items]) => [
+      id,
+      items.map((item) => ({
+        ...item, timezone: displayTimezone, time: format.format(new Date(item.scheduledAt)),
+      })),
+    ]));
+  }, [displayTimezone, occurrencesByChannel, query.data]);
   const options = useMemo(
     () => isSharedDates
-      ? commonAdSlotOptionsForDates(ids, selectedDates, occurrencesByChannel ?? query.data ?? {})
-      : commonAdSlotOptions(ids, selectedDates[0] ?? "", occurrencesByChannel ?? query.data ?? {}),
-    [ids, isSharedDates, selectedDates, occurrencesByChannel, query.data],
+      ? commonAdSlotOptionsForDates(ids, selectedDates, occurrences)
+      : commonAdSlotOptions(ids, selectedDates[0] ?? "", occurrences),
+    [ids, isSharedDates, selectedDates, occurrences],
   );
   const availableOptions = options.filter(
     (option) => option.state === "AVAILABLE",

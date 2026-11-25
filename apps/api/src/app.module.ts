@@ -29,6 +29,7 @@ import { AccountModule } from './domains/identity/account/account.module';
 import { TelegramSyncModule } from './domains/telegram/telegram-sync/telegram-sync.module';
 import { TelegramUserAccountsModule } from './domains/telegram/telegram-user-accounts/telegram-user-accounts.module';
 import { TelegramBotsModule } from './domains/telegram/telegram-bots/telegram-bots.module';
+import { WorkspaceCreativesModule } from './domains/workspace/workspace-creatives/workspace-creatives.module';
 import { WorkspacesModule } from './domains/workspace/workspaces/workspaces.module';
 import { IconsModule } from './domains/operations/icons/icons.module';
 import { ResponseCacheInterceptor } from './common/response-cache.interceptor';
@@ -84,6 +85,7 @@ import { TelegramChannelMessageTemplatesModule } from './domains/telegram/telegr
     TelegramUserAccountsModule,
     TelegramBotsModule,
     WorkspacesModule,
+    WorkspaceCreativesModule,
     IconsModule,
     TelegramAdSalesModule,
     TelegramCrmModule,

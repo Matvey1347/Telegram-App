@@ -57,6 +57,8 @@ export function PromoFormModal({
   title,
   initial,
   channels,
+  botAdsScope,
+  saving,
 }: {
   open: boolean;
   onClose: () => void;
@@ -64,6 +66,8 @@ export function PromoFormModal({
   title: string;
   initial?: Promo;
   channels: TelegramChannel[];
+  botAdsScope?: string;
+  saving?: boolean;
 }) {
   const [iconId, setIconId] = useState<string | null>(null);
   const [assignedMemberId, setAssignedMemberId] = useState<string | null>(null);
@@ -119,7 +123,7 @@ export function PromoFormModal({
         draftIconPresentation ??
         iconToResolvedEmoji(autoIcon) ??
         (iconId === initial?.iconId
-          ? iconToResolvedEmoji(initial?.icon)
+          ? initial?.iconPresentation ?? iconToResolvedEmoji(initial?.icon)
           : null),
     }),
     [
@@ -128,6 +132,7 @@ export function PromoFormModal({
       iconId,
       initial?.icon,
       initial?.iconId,
+      initial?.iconPresentation,
       titleValue,
     ],
   );
@@ -150,7 +155,7 @@ export function PromoFormModal({
     [],
   );
   const drafts = useWorkspaceModalDrafts<PromoModalDraft>({
-    namespace: "ads:promo:draft",
+    namespace: botAdsScope ? `bot-ads:${botAdsScope}:promo` : "ads:promo:draft",
     workspaceId: selectedWorkspaceDraftScope(),
     schemaVersion: 1,
     open,
@@ -192,7 +197,7 @@ export function PromoFormModal({
 
   const botFlow = useTelegramSystemBotPostFlow({
     mode: "single",
-    recoveryKey: "promo-form",
+    recoveryKey: botAdsScope ? `bot-promo:${botAdsScope}` : "promo-form",
     importContext: "Promo",
     workspaceId: connectionQuery.data?.currentWorkspaceId,
     botUsername: connectionQuery.data?.botUsername,
@@ -296,7 +301,7 @@ export function PromoFormModal({
   };
 
   const submit = async () => {
-    if (!channelId || !titleValue.trim()) return;
+    if (saving || (!botAdsScope && !channelId) || !titleValue.trim()) return;
     if (inviteLinkId && !selectedInvite) {
       setError(
         "The selected invite link is no longer available for this channel. Choose a current link.",
@@ -332,6 +337,8 @@ export function PromoFormModal({
     <PromoFormView
       open={open}
       modalTitle={title}
+      botAds={Boolean(botAdsScope)}
+      saving={saving}
       initial={initial}
       channels={channels}
       pendingDrafts={drafts.pendingDrafts}
@@ -339,7 +346,7 @@ export function PromoFormModal({
       icon={
         draftIconPresentation ??
         autoIcon ??
-        (iconId === initial?.iconId ? (initial.icon ?? null) : null)
+        (iconId === initial?.iconId ? (initial.iconPresentation ?? initial.icon ?? null) : null)
       }
       assignedMemberId={assignedMemberId}
       channelId={channelId}

@@ -11,6 +11,12 @@ describe("channel ending signature", () => {
   it("appends real custom emoji markup and channel link preserving user text", () => {
     expect(appendChannelEndingSignature("Авторский текст  ", channel)).toBe("Авторский текст  \n\n![📣](tg://emoji?id=123456789)  [Science](https://t.me/science_news)");
   });
+  it("strips emoji clusters from the linked title and keeps the selected custom emoji", () => {
+    const title = "🇺🇦  Листівки 👩🏽‍🎨  щодня  1️⃣ 💝";
+    expect(appendChannelEndingSignature("", { ...channel, title }))
+      .toBe("![📣](tg://emoji?id=123456789)  [Листівки щодня](https://t.me/science_news)");
+  });
+
   it("never duplicates a signature or an existing channel link", () => {
     const ending = appendChannelEndingSignature("", channel);
     expect(appendChannelEndingSignature(ending, channel)).toBe(ending);

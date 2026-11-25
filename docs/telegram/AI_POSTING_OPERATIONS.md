@@ -59,7 +59,7 @@ pnpm dev:nexeloq
 
 Open AI Posting → Autopilot and review the assigned publication plan. Activation requires saved audience and editorial settings and active CONTENT slots. Autopilot schedules ready drafts even if automatic AI generation is disabled in Operations → AI. The AI gateway applies existing workspace, category and configured channel limits when automatic generation is available.
 
-The reserve is approximately 50 days at the midpoint of the assigned plan minimum and maximum, capped at 150 ready drafts. Required slots are used daily, and optional slots every second local day. Complete editor drafts with text and images are eligible alongside approved AI drafts. Autopilot fills empty CONTENT slots when the next 10 days contain a gap, with a persistent refill horizon of up to 20 days ahead. The canonical slot reservation and publication path keeps existing ads, mutual promotions and occupied slots intact. Each due run starts at most 10 new posts and attempts at most 40 slot assignments for one channel. While replenishing, another run can start after two hours. Fully stocked channels are checked daily and failed work backs off. Stop prevents new work once the active operation returns. Drafts and accepted schedules stay in place.
+The reserve is approximately 50 days at the midpoint of the assigned plan minimum and maximum, capped at 150 ready drafts. Required slots are used daily, and optional slots every second local day. Complete editor drafts with text and images are eligible alongside approved AI drafts. Autopilot fills empty CONTENT slots when the next 10 days contain a gap, with a persistent refill horizon of up to 20 days ahead. The canonical slot reservation and publication path keeps existing ads, mutual promotions and occupied slots intact. Each channel refill attempts its calculated stock deficit in sequential batches of up to 10 within one lease and emits one report. A batch with no ready posts or a budget rejection stops further generation. The stock target is capped at 150 and a run attempts at most 40 slot assignments. While replenishing, another run can start after two hours. Fully stocked channels are checked daily and failed work backs off. Stop prevents new work once the active operation returns. Drafts and accepted schedules stay in place.
 
 The worker weights underrepresented editorial categories using up to 300 recent reviewed drafts and published/scheduled posts. It uses normalized engagement from comparable organic posts when a rubric has enough observations. Performance can move a rubric up or down one place in the usage counts. Unsubscribes are not attributed to individual posts. The group report identifies the channel, created and scheduled counts, latest filled slot, covered days, rubrics, spheres and the confirmed cost by stage. Search cost covers paid search calls, model tokens and the visual review based on the existing AI ledger. The report marks operations with unknown pricing separately. A workspace can enable multiple channels, each with its own report.
 
@@ -252,3 +252,48 @@ ten-slot run therefore adds at most 20 visual checks. One such batch across
 100 opted-in channels adds at most 2,000 checks, subject to existing admission
 and budgets. Idle workloads, storage retention and publication scheduling
 use their existing paths.
+
+### Telegram message preview
+
+Open **Settings → Notifications → Предпросмотр сообщений** and choose a
+channel. The preview shows the coverage notification and both autopilot
+outcomes using the delivery formatter and the channel's saved custom emoji.
+It uses sample metrics and never sends a message.
+
+The Telegram group receives one compact summary per autopilot run, with
+totals for drafts, scheduling and coverage. If items failed, the summary
+includes a warning and the error count. Detailed alerts remain in the app
+and run history. The coverage switch applies to all active channels,
+including newly added channels, except those explicitly excluded. Workspaces
+that used active reminder assignments are subscribed by the migration.
+
+### Greeting-card channels
+
+The two Ukrainian greeting-card channels use separate art directions and
+one bundled Lora typeface. The image model produces original full-bleed art.
+Visual review uses structured fields to check the subject, detail, composition,
+text-free artwork and room for the greeting. The reference review passes
+palette, lighting and texture guidance to generation as text. The server typesets the exact Ukrainian wish over a
+locally shaded area before applying the optional avatar watermark. Original
+image generation is the recommended media setting for these channels.
+
+A definitive quality failure allows one new image, with a simpler composition.
+An unreadable or failed review can be repeated once on the same image while
+the gateway permits it. Budget, disabled-provider and uncertain-settlement
+states still stop the media path. A failed image slot can be repaired from
+the test run while its reviewed draft text stays available.
+
+The work runs inside the existing per-publication pipeline. It adds no idle
+polling, retention or database writes for unchanged state. For 100 channels,
+requests scale only with active image slots. In original-generation mode each
+slot uses up to one reference review, two image calls and four image reviews
+in the worst case. Typical successful slots use one image and one review, with
+an optional reference review. Portrait outputs carry more image bytes than
+square outputs. The bundled font is local, and the existing media semaphore
+bounds Railway image-processing concurrency.
+
+The `Святкові листівки` rubric uses a local calendar rather than a model's
+guessed dates. In a manual batch of three or more, the planner can add one
+upcoming occasion with its local date. Confirm the date when scheduling the
+draft. A holiday suggestion does not create a calendar slot or change a
+publication already scheduled.

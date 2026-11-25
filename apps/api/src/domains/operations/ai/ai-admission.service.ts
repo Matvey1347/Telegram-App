@@ -14,7 +14,7 @@ import type {
 } from '@telegram-system/shared';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
-import { AiModelRegistry, TELEGRAM_POSTING_DRAFT_SCHEMA_ID, TELEGRAM_POSTING_REVIEW_SCHEMA_ID } from './ai-model-registry';
+import { AiModelRegistry, TELEGRAM_POSTCARD_REVIEW_SCHEMA_ID, TELEGRAM_POSTING_DRAFT_SCHEMA_ID, TELEGRAM_POSTING_REVIEW_SCHEMA_ID } from './ai-model-registry';
 import { AiDeploymentConfig } from './ai-deployment-config.service';
 import { budgetPeriods, reservationCost } from './ai-pricing';
 import { aiTranscriptionWavSeconds } from './ai-transcription-audio';
@@ -32,7 +32,9 @@ export type AiExecutionRequest = {
   revisionDraft?: boolean;
   postingDraft?: boolean;
   postingReview?: boolean;
+  postcardReview?: boolean;
   postingImageSearch?: { domain?: string };
+  postingImageSize?: '1024x1536';
   audio?: { mime: 'audio/wav'; data: Buffer };
   /** Restricts this experimental manual media batch to one approved source. */
   mediaPilotSourceId?: string;
@@ -65,6 +67,8 @@ export const operationFingerprint = (request: AiExecutionRequest) =>
         request.chatPlan === true,
         request.revisionDraft === true,
         ...(request.postingDraft ? [TELEGRAM_POSTING_DRAFT_SCHEMA_ID] : []),
+        ...(request.postcardReview ? [TELEGRAM_POSTCARD_REVIEW_SCHEMA_ID] : []),
+        ...(request.postingImageSize ? [request.postingImageSize] : []),
         ...(request.postingReview ? [TELEGRAM_POSTING_REVIEW_SCHEMA_ID] : []),
         ...(request.postingImageSearch ? [AI_POSTING_SEARCH_PROMPT_VERSION, request.postingImageSearch.domain ?? null] : []),
         request.businessObjectId ?? null,
@@ -201,6 +205,8 @@ export class AiAdmissionService {
       request.image || request.audio || request.chatPlan || request.revisionDraft || request.postingDraft
     ))
       throw new BadRequestException('AI_POSTING_REVIEW_CATEGORY_INVALID');
+    if (request.postcardReview && (request.category !== 'TELEGRAM_POSTING_REVIEW' || !request.aiPosting || !request.image))
+      throw new BadRequestException('AI_POSTCARD_REVIEW_CATEGORY_INVALID');
     const audioInvalid =
       request.audio !== undefined &&
       (request.category !== 'TELEGRAM_POSTING_PLAN' ||
@@ -359,9 +365,9 @@ export class AiAdmissionService {
               ? {
                   ...configured,
                   modelId: 'gpt-5.4-mini-2026-03-17',
-                  schemaId: this.registry.schema(request.category, true).id,
-                  promptVersion: 'telegram-posting-visual-review-v1',
-                  maxOutputTokens: Math.min(configured.maxOutputTokens, 180),
+                  schemaId: request.postcardReview ? TELEGRAM_POSTCARD_REVIEW_SCHEMA_ID : this.registry.schema(request.category, true).id,
+                  promptVersion: request.postcardReview ? 'telegram-postcard-visual-review-v1' : 'telegram-posting-visual-review-v1',
+                  maxOutputTokens: Math.min(configured.maxOutputTokens, request.postcardReview ? 240 : 180),
                 }
               : request.postingDraft
                 ? { ...configured, schemaId: TELEGRAM_POSTING_DRAFT_SCHEMA_ID, promptVersion: 'telegram-posting-draft-v1' }

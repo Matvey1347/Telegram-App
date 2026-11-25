@@ -1,3 +1,4 @@
+import { readStoredPostcardLettering, telegramAiPostingPostcardProfile } from './telegram-ai-posting-postcard';
 import { validateBotWatermark } from './telegram-ai-posting-bot-watermark';
 import {
   BadGatewayException,
@@ -487,9 +488,7 @@ export class TelegramAiPostingTestRunService {
       if (item.text.length > imageTextLimit)
         throw new ConflictException('AI_POSTING_TELEGRAM_LENGTH_WITH_IMAGE');
       const preference = resolveTelegramAiPostingMediaPreference(config, item);
-      let resolved: Awaited<
-        ReturnType<TelegramAiPostingImageService['resolve']>
-      >;
+      let resolved: Awaited<ReturnType<TelegramAiPostingImageService['resolve']>>;
       try {
         resolved = await this.images.resolve({
           userId,
@@ -497,8 +496,9 @@ export class TelegramAiPostingTestRunService {
           channelId,
           topic: item.topic,
           language: telegramAiPostingLanguageName(typeof config.language === 'string' ? config.language : undefined),
+          postcard: readStoredPostcardLettering(settings.telegramChannel?.title, item, index),
           publicationText: item.text.slice(0, 950),
-          imageMode: preference?.purpose === 'SEARCH' && item.editorialMetadata?.sphere ? 'found' : item.mediaMode ?? (!item.imageUrl && item.mediaReadiness === 'MISSING' && config.imageMode === 'hybrid'
+          imageMode: config.imageMode === 'ai' && Boolean(telegramAiPostingPostcardProfile(settings.telegramChannel?.title)) ? 'ai' : preference?.purpose === 'SEARCH' && item.editorialMetadata?.sphere ? 'found' : item.mediaMode ?? (!item.imageUrl && item.mediaReadiness === 'MISSING' && config.imageMode === 'hybrid'
             ? 'found'
             : config.imageMode === 'hybrid' || config.imageMode === 'found' ? config.imageMode : 'ai'),
           imageSearchSources: config.imageSearchSources ?? [],
@@ -720,7 +720,7 @@ export class TelegramAiPostingTestRunService {
           where: {
             workspaceId,
             aiPostingTestRunId: run.id,
-            aiPostingPublicationIndex: index,
+            aiPostingPublicationIndex: item.publicationIndex ?? index,
           },
           data: { aiPostingManagedPostId: post.id },
         });

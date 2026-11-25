@@ -7,6 +7,7 @@ import { TelegramChannelNetworkOptionsService } from './telegram-channel-network
 
 @Module({
   imports: [TelegramChannelsModule],
+  exports: [TelegramChannelNetworkOptionsService],
   controllers: [TelegramChannelNetworksController],
   providers: [
     TelegramChannelNetworksService,

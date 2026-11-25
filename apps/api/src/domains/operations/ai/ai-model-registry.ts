@@ -80,6 +80,16 @@ const POSTING_REVIEW_SCHEMA = shape({
   approved: { type: 'boolean' },
   reasons: { type: 'array', items: { type: 'string' } },
 });
+export const TELEGRAM_POSTCARD_REVIEW_SCHEMA_ID = 'telegram_postcard_visual_review_v1';
+const POSTCARD_REVIEW_SCHEMA = shape({
+  candidateIndex: { type: 'integer' },
+  candidateObservation: text,
+  embeddedGreeting: { type: 'boolean' },
+  visibleGreeting: text,
+  referenceIndex: { type: 'integer' },
+  referenceDirection: text,
+  rejectionReason: text,
+});
 export const TELEGRAM_POSTING_DRAFT_SCHEMA_ID = 'telegram_posting_draft_v1';
 const POSTING_DRAFT_SCHEMA = shape({
   title: { type: 'string' },
@@ -131,6 +141,7 @@ export class AiModelRegistry {
       sourceUrl: 'https://developers.openai.com/api/docs/pricing',
     };
   }
+  private readonly postcardReviewValidator = new Ajv({ strict: true }).compile(POSTCARD_REVIEW_SCHEMA);
   private readonly postingReviewValidator = new Ajv({ strict: true }).compile(POSTING_REVIEW_SCHEMA);
   private readonly postingDraftValidator = new Ajv({ strict: true }).compile(POSTING_DRAFT_SCHEMA);
   private readonly revisionDraftValidator = new Ajv({ strict: true }).compile(REVISION_DRAFT_SCHEMA);
@@ -155,7 +166,12 @@ export class AiModelRegistry {
     const imageModel = modelId.startsWith('gpt-image-');
     return category === 'TELEGRAM_POSTING_IMAGE' ? imageModel : !imageModel;
   }
-  schema(category: AiCategory, media = false, chatPlan = false, revisionDraft = false, postingDraft = false, postingReview = false) {
+  schema(category: AiCategory, media = false, chatPlan = false, revisionDraft = false, postingDraft = false, postingReview = false, postcardReview = false) {
+    if (postcardReview) {
+      if (category !== 'TELEGRAM_POSTING_REVIEW' || !media)
+        throw new Error('AI_POSTCARD_REVIEW_CATEGORY_INVALID');
+      return { id: TELEGRAM_POSTCARD_REVIEW_SCHEMA_ID, jsonSchema: structuredClone(POSTCARD_REVIEW_SCHEMA) };
+    }
     if (postingReview) {
       if (category !== 'TELEGRAM_POSTING_REVIEW' || media || chatPlan || revisionDraft || postingDraft)
         throw new Error('AI_POSTING_REVIEW_CATEGORY_INVALID');
@@ -194,7 +210,9 @@ export class AiModelRegistry {
       jsonSchema: structuredClone(SCHEMAS[category]),
     };
   }
-  validate(category: AiCategory, value: unknown, media = false, chatPlan = false, revisionDraft = false, postingDraft = false, postingReview = false): boolean {
+  validate(category: AiCategory, value: unknown, media = false, chatPlan = false, revisionDraft = false, postingDraft = false, postingReview = false, postcardReview = false): boolean {
+    if (postcardReview)
+      return category === 'TELEGRAM_POSTING_REVIEW' && media && this.postcardReviewValidator(value) === true;
     if (postingReview)
       return category === 'TELEGRAM_POSTING_REVIEW' && !media && !chatPlan && !revisionDraft && !postingDraft && this.postingReviewValidator(value) === true;
     if (postingDraft)
