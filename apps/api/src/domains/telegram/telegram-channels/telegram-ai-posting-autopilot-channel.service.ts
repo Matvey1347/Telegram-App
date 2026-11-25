@@ -206,7 +206,8 @@ export class TelegramAiPostingAutopilotChannelService {
       }
     };
 
-    const canGenerate = (slots.length > 0 || readyBefore < cadence.targetReadyDrafts) &&
+    const needsRefill = readyBefore < cadence.targetReadyDrafts + slots.length;
+    const canGenerate = needsRefill &&
       await lease() &&
       await automaticPostingAiAvailable(this.prisma, workspaceId);
     // Keep capacity for fresh posts without waiting on AI to secure all slots.

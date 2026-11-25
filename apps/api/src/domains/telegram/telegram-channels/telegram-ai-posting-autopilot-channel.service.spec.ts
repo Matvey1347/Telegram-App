@@ -259,6 +259,21 @@ describe('AI Posting Autopilot channel execution', () => {
     ]);
   });
 
+  it('fills all due vacancies from existing drafts when no generation is needed', async () => {
+    const { service, prisma, generator, publication, calendar } = make();
+    const slots = [slot(1), slot(2), slot(3), slot(4)];
+    calendar.occurrencesByChannels.mockResolvedValue({ channel: slots });
+    prisma.telegramManagedPost.count.mockResolvedValueOnce(54).mockResolvedValueOnce(50);
+    prisma.telegramManagedPost.findMany.mockResolvedValueOnce(
+      slots.map((_, index) => ({ id: `ready-${index + 1}` })),
+    );
+
+    await expect(service.run('workspace', 'channel', 'run', 'worker'))
+      .resolves.toMatchObject({ scheduled: 4, generated: 0, readyDrafts: 50 });
+    expect(generator.generate).not.toHaveBeenCalled();
+    expect(publication.scheduleManagedPost).toHaveBeenCalledTimes(4);
+  });
+
   it('does no generation or scheduling when inventory is full and only later slots are vacant', async () => {
     const { service, prisma, generator, publication, calendar } = make();
     prisma.telegramManagedPost.count.mockResolvedValue(50);
