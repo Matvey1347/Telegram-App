@@ -231,9 +231,9 @@ export class TelegramAiPostingAutopilotChannelService {
             requested: amount,
             stockTarget: cadence.targetReadyDrafts,
           });
-          // Reuse the bounded generator under the same channel lease and report.
-          // Count attempted slots so a provider outage cannot trigger an open-ended retry loop.
-          for (let attempted = 0; attempted < amount; ) {
+          // Allow one extra batch of attempts to replace failures during the same run.
+          const attemptLimit = amount + Math.min(amount, MAX_TELEGRAM_AI_POSTING_BATCH_SIZE);
+          for (let attempted = 0; attempted < attemptLimit && freshIds.length < amount; ) {
             const current = await lease();
             if (!current) {
               stopped = true;
@@ -251,8 +251,13 @@ export class TelegramAiPostingAutopilotChannelService {
                 break;
               }
             }
-            const count = Math.min(MAX_TELEGRAM_AI_POSTING_BATCH_SIZE, amount - attempted);
+            const count = Math.min(
+              MAX_TELEGRAM_AI_POSTING_BATCH_SIZE,
+              amount - freshIds.length,
+              attemptLimit - attempted,
+            );
             attempted += count;
+            const readyBeforeBatch = freshIds.length;
             const generated = await this.generator.generate(userId, telegramChannelId, count, 'AUTOMATIC', runId);
             if (reviewOnly) reviewDrafts = {
               testRunId: generated.runId,
@@ -304,7 +309,7 @@ export class TelegramAiPostingAutopilotChannelService {
             const failures = generated.failures.map(({ code }) => classifyAutopilotError(new Error(code)));
             summary.errors.push(...failures);
             if (stopped || reviewOnly || failures.includes('AI_BUDGET_OR_QUOTA') ||
-                !generated.generated.some((item) => item.mediaReadiness === 'READY' && item.imageUrl))
+                freshIds.length === readyBeforeBatch)
               break;
           }
         } catch (error) {

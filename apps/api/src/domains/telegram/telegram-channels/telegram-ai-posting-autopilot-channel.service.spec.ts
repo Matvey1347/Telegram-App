@@ -207,6 +207,32 @@ describe('AI Posting Autopilot channel execution', () => {
     expect(result).toMatchObject({ generated: 16, readyDrafts: 50, errors: [] });
   });
 
+  it('replaces recoverable failures within the same run to reach the draft target', async () => {
+    const { service, prisma, calendar, generator, testRuns } = make();
+    calendar.occurrencesByChannels.mockResolvedValue({ channel: [] });
+    prisma.telegramManagedPost.count.mockResolvedValueOnce(46).mockResolvedValueOnce(50);
+    const ready = { imageUrl: 'stored', mediaReadiness: 'READY' };
+    generator.generate.mockReset()
+      .mockResolvedValueOnce({
+        generated: [ready, ready], failures: [{ code: 'AI_POSTING_IMAGE_PROVIDER_FAILED' }],
+        runId: 'first-batch', version: 1,
+      })
+      .mockResolvedValueOnce({
+        generated: [ready, ready], failures: [], runId: 'replacement-batch', version: 1,
+      });
+    testRuns.reviewPublication.mockReset().mockImplementation((_user, _channel, run, index: number, version: number) =>
+      Promise.resolve({
+        version: version + 1,
+        publications: Array.from({ length: index + 1 }, (_, i) => ({ savedPostId: `${run}-${i}` })),
+      }));
+
+    const result = await service.run('workspace', 'channel', 'run', 'worker');
+    expect(generator.generate.mock.calls.map((args) => args.slice(2))).toEqual([
+      [4, 'AUTOMATIC', 'run'], [2, 'AUTOMATIC', 'run'],
+    ]);
+    expect(result).toMatchObject({ generated: 4, readyDrafts: 50, status: 'PARTIAL' });
+  });
+
   it('schedules complete editor drafts while automatic AI is disabled', async () => {
     const { service, prisma, publication, generator } = make();
     prisma.aiWorkspaceConfig.findUnique.mockResolvedValue({
