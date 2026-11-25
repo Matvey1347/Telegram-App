@@ -307,12 +307,17 @@ export class TelegramSystemBotHandlerService {
     parseMode?: string;
   }) {
     if (!this.config.token) return { status: 'NOT_CONFIGURED' as const };
-    await this.api.sendMessage(this.config.token, {
+    const message = await this.api.sendMessage(this.config.token, {
       chat_id: input.chatId,
       text: input.text,
       ...(input.parseMode ? { parse_mode: input.parseMode } : {}),
     });
-    return { status: 'SENT' as const };
+    return {
+      status: 'SENT' as const,
+      ...(input.parseMode === 'HTML' && {
+        customEmojiCount: message?.entities?.filter(({ type }) => type === 'custom_emoji').length ?? 0,
+      }),
+    };
   }
 
   async completeConnection(input: {

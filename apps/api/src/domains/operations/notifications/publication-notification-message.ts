@@ -1,4 +1,4 @@
-import type { PublicationNotificationChannel, PublicationNotificationLine, ResolvedEmoji } from '@telegram-system/shared';
+import type { PublicationNotificationChannel, PublicationNotificationLine, PublicationNotificationPart, ResolvedEmoji } from '@telegram-system/shared';
 import { iconToResolvedEmoji, type ResolvedEmojiIconSource } from '../../../common/icons/resolved-emoji';
 
 const iconSelect = { id: true, type: true, name: true, emoji: true, imageUrl: true } as const;
@@ -19,16 +19,18 @@ type ChannelSource = {
   username?: string | null;
   avatarEmojiIcon?: ResolvedEmojiIconSource | null;
   presentationIcon?: ResolvedEmojiIconSource | null;
-  publicInviteLink?: { url: string; isRevoked: boolean } | null;
-  defaultInviteLink?: { url: string; isRevoked: boolean } | null;
+  publicInviteLink?: { url: string; isRevoked?: boolean } | null;
+  defaultInviteLink?: { url: string; isRevoked?: boolean } | null;
 };
 
 const unicode = (value: string): ResolvedEmoji => ({ type: 'unicode', value });
 
-export function publicationNotificationChannel(channel: ChannelSource) {
-  const iconPresentation = [channel.presentationIcon, channel.avatarEmojiIcon]
-    .map((icon) => iconToResolvedEmoji(icon))
-    .find((icon) => icon?.type === 'unicode' && icon.telegramCustomEmojiId) ?? null;
+export function publicationNotificationChannel(channel: ChannelSource, includeOtherIcons = false) {
+  const icons = [channel.presentationIcon, channel.avatarEmojiIcon]
+    .map((icon) => iconToResolvedEmoji(icon));
+  const iconPresentation = icons.find((icon) => icon?.type === 'unicode' && icon.telegramCustomEmojiId)
+    ?? (includeOtherIcons ? icons.find((icon) => icon !== null) : null)
+    ?? null;
   const title = channel.title
     .replace(/[#*0-9]\uFE0F?\u20E3|[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}\uFE0F\u200D\u{E0020}-\u{E007F}]/gu, '')
     .replace(/\s+/g, ' ').trim().slice(0, 160) || 'Канал';
@@ -100,12 +102,22 @@ function escape(value: string) {
 }
 
 export function publicationNotificationHtml(lines: PublicationNotificationLine[]) {
-  return lines.map(({ text, icon, href, strong }) => {
-    const alt = icon?.type === 'unicode' ? escape(icon.value) : '';
+  return lines.map(({ text, icon, iconFallback, href, strong, parts }) => {
+    const alt = escape(icon?.type === 'unicode' ? icon.value : iconFallback ?? '');
     const custom = icon?.type === 'unicode' && icon.telegramCustomEmojiId;
     const prefix = custom && /^\d+$/u.test(custom) ? `<tg-emoji emoji-id="${custom}">${alt}</tg-emoji>` : alt;
-    const title = escape(text);
-    const content = href ? `<a href="${escape(href)}">${title}</a>` : title;
-    return `${prefix ? prefix + ' ' : ''}${strong ? `<b>${content}</b>` : content}`;
+    const content = parts ? parts.map(partHtml).join('') : lineContent(text, href, strong);
+    return `${prefix ? prefix + ' ' : ''}${content}`;
   }).join('\n');
+}
+
+function lineContent(text: string, href?: string, strong?: boolean) {
+  const content = partHtml({ text, href });
+  return strong ? `<b>${content}</b>` : content;
+}
+
+function partHtml({ text, href, strong }: PublicationNotificationPart) {
+  const escaped = escape(text);
+  const content = strong ? `<b>${escaped}</b>` : escaped;
+  return href ? `<a href="${escape(href)}">${content}</a>` : content;
 }

@@ -18,6 +18,7 @@ export function CrossPromotionPlanCard({
   onDelete,
   onResume,
   onSendToBot,
+  sendingToBot,
   onOpenPromo,
   onRefreshInviteLinks,
   refreshingInviteLinks = false,
@@ -27,6 +28,7 @@ export function CrossPromotionPlanCard({
   onDelete: () => void;
   onResume?: (plan: CrossPromotionPlan) => void;
   onSendToBot?: (plan: CrossPromotionPlan) => void;
+  sendingToBot?: boolean;
   onOpenPromo?: (promoId: string) => void;
   onRefreshInviteLinks?: (plan: CrossPromotionPlan) => void;
   refreshingInviteLinks?: boolean;
@@ -107,9 +109,10 @@ export function CrossPromotionPlanCard({
                   onClick={() => onResume(plan)}
                 />
               ) : null}
-              {onSendToBot ? (
+              {onSendToBot && plan.status !== "DRAFT" ? (
                 <CardMenuAction
-                  label="Send schedule to bot"
+                  label="Send confirmation to bot"
+                  disabled={sendingToBot}
                   icon={<Send size={16} />}
                   onClick={() => onSendToBot(plan)}
                 />

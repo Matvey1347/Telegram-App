@@ -3,7 +3,7 @@ import { MutualPromotionBotNotificationService } from './mutual-promotion-bot-no
 const channel = {
   id: 'channel-1',
   title: '🧪 Test',
-  presentationIcon: { emoji: '🧪' },
+  presentationIcon: { id: 'icon', type: 'emoji' as const, emoji: '🧪' },
   publicInviteLink: { url: 'https://t.me/test_channel' },
   defaultInviteLink: null,
 };

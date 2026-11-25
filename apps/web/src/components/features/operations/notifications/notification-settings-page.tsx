@@ -108,7 +108,16 @@ export function NotificationSettingsPage() {
           </p>
         ) : (
           <div className="space-y-4">
-            {workspaceId && <PublicationNotificationSettings key={workspaceId} workspaceId={workspaceId} />}
+            {workspaceId && (
+              <PublicationNotificationSettings
+                key={workspaceId}
+                workspaceId={workspaceId}
+                botUsername={group.data?.botUsername}
+                accountName={account.data?.connected
+                  ? account.data.displayName || account.data.telegramUsername?.replace(/^@?/, "@")
+                  : undefined}
+              />
+            )}
             <Card className="space-y-3">
               <div>
                 <h2 className="text-lg font-semibold text-white">

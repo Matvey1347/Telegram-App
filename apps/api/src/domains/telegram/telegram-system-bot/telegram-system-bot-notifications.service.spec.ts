@@ -3,7 +3,7 @@ import { TelegramBotApiError } from '@api/telegram/shared/bot/telegram-bot-api.c
 
 describe('TelegramSystemBotNotificationsService', () => {
   const customText =
-    '<a href="https://t.me/news"><tg-emoji emoji-id="42">📢</tg-emoji> News</a>';
+    '<tg-emoji emoji-id="42">📢</tg-emoji> <a href="https://t.me/news">News</a>';
   const rejected = (
     message = 'Bad Request: CUSTOM_EMOJI_NOT_ALLOWED',
     errorCode = 400,
@@ -49,7 +49,7 @@ describe('TelegramSystemBotNotificationsService', () => {
     await expect(send()).resolves.toEqual({ status: 'SENT' });
     expect(handler.sendSystemMessage).toHaveBeenCalledTimes(2);
     expect(handler.sendSystemMessage.mock.calls[1][0].text).toBe(
-      '<a href="https://t.me/news">📢 News</a>',
+      '📢 <a href="https://t.me/news">News</a>',
     );
   });
 
@@ -113,6 +113,48 @@ describe('TelegramSystemBotNotificationsService', () => {
       text: 'Urgent issue',
       parseMode: undefined,
     });
+  });
+
+  it('routes scheduled and published confirmations to their configured recipients', async () => {
+    const prisma = {
+      workspace: {
+        findUnique: jest.fn().mockResolvedValue({
+          scheduledConfirmationDestination: 'TELEGRAM_PRIVATE',
+          publishedConfirmationDestination: 'TELEGRAM_GROUP',
+          telegramNotificationUserChatId: 'personal',
+          telegramNotificationChatId: 'group',
+        }),
+      },
+    };
+    const handler = {
+      sendSystemMessage: jest.fn().mockResolvedValue({ status: 'SENT', customEmojiCount: 1 }),
+    };
+    const service = new TelegramSystemBotNotificationsService(prisma as never, handler as never);
+    for (const publicationState of ['scheduled', 'published'] as const) {
+      await expect(service.sendToWorkspaceUser({
+        workspaceId: 'workspace-a', userId: 'actor', publicationState,
+        text: customText, parseMode: 'HTML',
+      })).resolves.toEqual({ status: 'SENT', customEmojiCount: 1 });
+    }
+    expect(handler.sendSystemMessage.mock.calls.map(([message]) => message.chatId))
+      .toEqual(['personal', 'group']);
+  });
+
+  it('does not fall back to a different recipient when the route is disabled or disconnected', async () => {
+    const handler = { sendSystemMessage: jest.fn() };
+    const service = new TelegramSystemBotNotificationsService({
+      workspace: { findUnique: jest.fn().mockResolvedValue({
+        scheduledConfirmationDestination: 'TELEGRAM_GROUP',
+        publishedConfirmationDestination: 'DISABLED',
+        telegramNotificationUserChatId: 'personal',
+      }) },
+    } as never, handler as never);
+    const input = { workspaceId: 'workspace-a', userId: 'actor', text: customText };
+    await expect(service.sendToWorkspaceUser({ ...input, publicationState: 'scheduled' }))
+      .resolves.toEqual({ status: 'NOT_CONNECTED' });
+    await expect(service.sendToWorkspaceUser({ ...input, publicationState: 'published' }))
+      .resolves.toEqual({ status: 'DISABLED' });
+    expect(handler.sendSystemMessage).not.toHaveBeenCalled();
   });
 
   it('delivers scheduled task failures once to the workspace group and suppresses success noise', async () => {

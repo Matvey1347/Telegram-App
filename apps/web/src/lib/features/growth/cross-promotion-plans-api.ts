@@ -3,8 +3,10 @@ import type {
   CrossPromotionPlan,
   CrossPromotionPlanKind,
   CrossPromotionSchedulingProgress,
+  PublicationConfirmationDelivery,
 } from "@telegram-system/shared";
 import { api, streamProgressAction } from "@/lib/api";
+import { silentFeedbackConfig } from "@/lib/http/api-client";
 
 const basePath = "/cross-promotion-plans";
 
@@ -142,17 +144,9 @@ export const crossPromotionPlansApi = {
       onProgress,
     ),
   sendToBot: async (id: string) =>
-    (
-      await api.post<{ status: "SENT" | "NOT_CONNECTED" }>(
-        `${basePath}/${id}/send-to-bot`,
-      )
-    ).data,
-  previewBotNotification: async (id: string) =>
-    (
-      await api.get<{ text: string }>(
-        `${basePath}/${id}/bot-notification-preview`,
-      )
-    ).data,
+    (await api.post<PublicationConfirmationDelivery>(
+      `${basePath}/${id}/send-to-bot`, undefined, silentFeedbackConfig,
+    )).data,
   updateCompleted: async (
     id: string,
     payload: CreateCrossPromotionPlanPayload,

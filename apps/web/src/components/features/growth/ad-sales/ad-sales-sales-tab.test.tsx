@@ -1,4 +1,6 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type {
   TelegramAdSale,
@@ -9,6 +11,16 @@ import {
   advertiserAvatarUrl,
   SalesTab,
 } from "./ad-sales-sales-tab";
+import { ToastProvider } from "@/providers/toast-provider";
+import { telegramAdSalesApi } from "@/lib/api";
+
+function renderSales(tab: ReactElement) {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <ToastProvider>{tab}</ToastProvider>
+    </QueryClientProvider>,
+  );
+}
 
 vi.mock("@/components/icons/icon-avatar", () => ({
   IconAvatar: ({ label, icon }: { label?: string; icon?: { url?: string } }) => (
@@ -58,7 +70,8 @@ describe("SalesTab", () => {
     ).toBe("astrakarmaved");
   });
 
-  it("shows the buyer, channel preview, and received amount without legacy status fields", () => {
+  it("shows deal details and sends the bot confirmation in one action", async () => {
+    const send = vi.spyOn(telegramAdSalesApi, "sendToBot").mockResolvedValue({ status: "SENT" });
     const onOpenSale = vi.fn();
     const sale = {
       id: "sale-1",
@@ -136,7 +149,7 @@ describe("SalesTab", () => {
       ],
     } as unknown as TelegramAdSale;
 
-    render(
+    renderSales(
       <SalesTab
         sales={[sale, {
           ...sale,
@@ -215,9 +228,11 @@ describe("SalesTab", () => {
     expect(screen.queryByText("Fulfillment status")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Actions for Buyer" }));
     expect(screen.getByRole("menuitem", { name: "Edit deal" })).toBeTruthy();
-    expect(
-      screen.getByRole("menuitem", { name: "Bot confirmation" }),
-    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Send confirmation to bot" }));
+    await waitFor(() => expect(send).toHaveBeenCalledWith(sale.id, expect.anything()));
+    expect(screen.queryByRole("dialog", { name: "Preview bot confirmation" })).toBeNull();
+    send.mockRestore();
+    fireEvent.click(screen.getByRole("button", { name: "Actions for Buyer" }));
     expect(screen.getByRole("menuitem", { name: "Delete deal" })).toBeTruthy();
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete deal" }));
     expect(
@@ -256,7 +271,7 @@ describe("SalesTab", () => {
       })),
     } as unknown as TelegramAdSale;
 
-    render(
+    renderSales(
       <SalesTab
         sales={[sale]}
         channels={[

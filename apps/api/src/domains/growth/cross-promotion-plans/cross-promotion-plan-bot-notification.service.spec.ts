@@ -9,6 +9,7 @@ describe('CrossPromotionPlanBotNotificationService', () => {
       {
         crossPromotionPlan: {
           findFirst: jest.fn().mockResolvedValue({
+            status: 'SCHEDULED',
             title: 'ВП <тест>',
             workspace: { timezone: 'Europe/Kyiv' },
             partnerChannelIds: ['partner'],
@@ -47,14 +48,14 @@ describe('CrossPromotionPlanBotNotificationService', () => {
               id: 'channel',
               title: 'Жіноча сила',
               publicInviteLink: { url: 'https://t.me/women_power' },
-              presentationIcon: { emoji: '🍃' },
+              presentationIcon: { id: 'icon', type: 'emoji' as const, emoji: '🍃' },
             },
             {
               id: 'fallback-channel',
               title: '💝 Листівки 💝',
               publicInviteLink: null,
               defaultInviteLink: { url: 'https://t.me/cards' },
-              presentationIcon: { emoji: '💌' },
+              presentationIcon: { id: 'icon', type: 'emoji' as const, emoji: '💌' },
             },
           ]),
         },
@@ -79,10 +80,10 @@ describe('CrossPromotionPlanBotNotificationService', () => {
     expect(text).toContain('<b>Пост «Перший пост»:</b>');
     expect(text).toContain('<b>Пост «Другий пост»:</b>');
     expect(text).toContain(
-      '<a href="https://t.me/women_power">🍃 <b>Жіноча сила</b></a>',
+      '🍃 <a href="https://t.me/women_power"><b>Жіноча сила</b></a>',
     );
     expect(text).toContain(
-      '<a href="https://t.me/cards">💌 <b>Листівки</b></a>',
+      '💌 <a href="https://t.me/cards"><b>Листівки</b></a>',
     );
     expect(text).not.toContain('💝 Листівки');
     expect(text).toContain('через 48 год');
@@ -105,7 +106,7 @@ describe('CrossPromotionPlanBotNotificationService', () => {
               title: 'Жіноча сила',
               publicInviteLink: { url: 'https://t.me/women_power' },
               defaultInviteLink: null,
-              presentationIcon: { emoji: '🍃' },
+              presentationIcon: { id: 'icon', type: 'emoji' as const, emoji: '🍃' },
             },
           ]),
         },
@@ -182,7 +183,7 @@ describe('CrossPromotionPlanBotNotificationService', () => {
               title: '🍃 Жіноча сила 🍃',
               publicInviteLink: { url: 'https://t.me/women_power' },
               defaultInviteLink: null,
-              presentationIcon: { emoji: '💌' },
+              presentationIcon: { id: 'icon', type: 'emoji' as const, emoji: '💌' },
             },
           ]),
         },
@@ -211,6 +212,6 @@ describe('CrossPromotionPlanBotNotificationService', () => {
     expect(preview.text).toContain(
       '— <a href="https://t.me/women_power/123">Пост</a>',
     );
-    expect(preview.text).toContain('💌 <b>Жіноча сила</b>');
+    expect(preview.text).toContain('💌 <a href="https://t.me/women_power"><b>Жіноча сила</b></a>');
   });
 });

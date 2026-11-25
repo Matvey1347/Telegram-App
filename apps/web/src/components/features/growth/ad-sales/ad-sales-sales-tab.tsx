@@ -13,10 +13,7 @@ import {
   ErrorState,
   ConfirmDeleteModal,
   Input,
-  Skeleton,
   TableLoadingState,
-  Button,
-  Modal,
 } from "@/components/ui/primitives";
 import {
   currenciesApi,
@@ -27,6 +24,7 @@ import { nativeAdSalePayment } from "./ad-sale-native-payment";
 import { AdSalePostMetrics } from "./ad-sale-post-metrics";
 import { AdSalePlacementLifecyclePreview } from "./ad-sale-placement-lifecycle-preview";
 import { hasLinkedPlacementPost } from "./ad-placement-lifecycle";
+import { useSendPublicationConfirmation } from "../use-send-publication-confirmation";
 
 const panelClass = "rounded-[18px] border border-neutral-800 bg-[#111111]";
 
@@ -97,11 +95,7 @@ export function SalesTab(props: {
     null,
   );
   const [now, setNow] = useState(() => Date.now());
-  const [botConfirmationSale, setBotConfirmationSale] =
-    useState<TelegramAdSaleListItem | null>(null);
-  const [botText, setBotText] = useState<string | null>(null);
-  const [botError, setBotError] = useState(false);
-  const [sendingBotConfirmation, setSendingBotConfirmation] = useState(false);
+  const botConfirmation = useSendPublicationConfirmation(telegramAdSalesApi.sendToBot);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menuSaleId) return;
@@ -118,21 +112,6 @@ export function SalesTab(props: {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [menuSaleId]);
-  useEffect(() => {
-    if (!botConfirmationSale) return;
-    let active = true;
-    telegramAdSalesApi
-      .previewBotNotification(botConfirmationSale.id)
-      .then((result) => {
-        if (active) setBotText(result.text);
-      })
-      .catch(() => {
-        if (active) setBotError(true);
-      });
-    return () => {
-      active = false;
-    };
-  }, [botConfirmationSale]);
   useEffect(() => {
     const hasCountdown = props.sales.some((sale) =>
       sale.placements.some(
@@ -353,14 +332,13 @@ export function SalesTab(props: {
                                 type="button"
                                 role="menuitem"
                                 className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800"
+                                disabled={botConfirmation.isPending}
                                 onClick={() => {
                                   setMenuSaleId(null);
-                                  setBotText(null);
-                                  setBotError(false);
-                                  setBotConfirmationSale(sale);
+                                  botConfirmation.mutate(sale.id);
                                 }}
                               >
-                                <Bot size={16} /> Bot confirmation
+                                <Bot size={16} /> Send confirmation to bot
                               </button>
                               <button
                                 type="button"
@@ -391,53 +369,6 @@ export function SalesTab(props: {
         </div>
       ) : null}
 
-      <Modal
-        open={Boolean(botConfirmationSale)}
-        onClose={() => {
-          if (!sendingBotConfirmation) setBotConfirmationSale(null);
-        }}
-        title="Preview bot confirmation"
-      >
-        <div className="space-y-4">
-          {!botText && !botError ? <BotConfirmationPreviewSkeleton /> : null}
-          {botError ? (
-            <ErrorState text="Could not prepare the bot confirmation." />
-          ) : null}
-          {botText ? (
-            <div
-              className="max-h-[55dvh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-neutral-800 bg-neutral-950/55 p-4 text-sm text-neutral-200 [&_a]:text-blue-300 [&_a]:underline"
-              dangerouslySetInnerHTML={{ __html: botText }}
-            />
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={sendingBotConfirmation}
-              onClick={() => setBotConfirmationSale(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={!botText || sendingBotConfirmation}
-              onClick={async () => {
-                if (!botConfirmationSale) return;
-                setSendingBotConfirmation(true);
-                try {
-                  await telegramAdSalesApi.sendToBot(botConfirmationSale.id);
-                  setBotConfirmationSale(null);
-                } finally {
-                  setSendingBotConfirmation(false);
-                }
-              }}
-            >
-              {sendingBotConfirmation ? "Sending…" : "Send to bot"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
       {props.pagination ? (
         <Pagination
           page={props.pagination.page}
@@ -462,28 +393,6 @@ export function SalesTab(props: {
           setDeleteSale(null);
         }}
       />
-    </div>
-  );
-}
-
-function BotConfirmationPreviewSkeleton() {
-  return (
-    <div
-      aria-label="Loading bot confirmation preview"
-      className="space-y-5 rounded-xl border border-neutral-800 bg-neutral-950/55 p-4"
-    >
-      <Skeleton className="h-5 w-44" />
-      <Skeleton className="h-4 w-52" />
-      <div className="space-y-3 pt-1">
-        <Skeleton className="h-5 w-3/4" />
-        <Skeleton className="h-4 w-64 max-w-full" />
-        <Skeleton className="h-4 w-56 max-w-full" />
-      </div>
-      <div className="space-y-2 border-l-2 border-sky-500/40 pl-3">
-        <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-4 w-3/5" />
-        <Skeleton className="h-4 w-2/5" />
-      </div>
     </div>
   );
 }

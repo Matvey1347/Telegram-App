@@ -20,7 +20,28 @@ export class TelegramSystemBotNotificationsService {
     userId: string;
     text: string;
     parseMode?: string;
+    publicationState?: 'scheduled' | 'published';
   }) {
+    if (input.publicationState) {
+      const workspace = await this.prisma.workspace.findUnique({
+        where: { id: input.workspaceId },
+        select: {
+          scheduledConfirmationDestination: true,
+          publishedConfirmationDestination: true,
+          telegramNotificationChatId: true,
+          telegramNotificationUserChatId: true,
+        },
+      });
+      const destination = input.publicationState === 'scheduled'
+        ? workspace?.scheduledConfirmationDestination
+        : workspace?.publishedConfirmationDestination;
+      if (destination === 'DISABLED') return { status: 'DISABLED' as const };
+      const chatId = destination === 'TELEGRAM_GROUP'
+        ? workspace?.telegramNotificationChatId
+        : workspace?.telegramNotificationUserChatId;
+      if (!chatId) return { status: 'NOT_CONNECTED' as const };
+      return this.sendMessage({ chatId, text: input.text, parseMode: input.parseMode });
+    }
     return this.sendToWorkspaceAccount(
       input.workspaceId,
       input.text,

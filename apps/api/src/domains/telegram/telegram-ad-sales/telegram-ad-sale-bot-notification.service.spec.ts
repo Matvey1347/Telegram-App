@@ -22,7 +22,7 @@ const sale = {
       telegramChannel: {
         id: 'test-channel',
         title: '💝 Test 💝',
-        presentationIcon: { emoji: '🧪' },
+        presentationIcon: { id: 'icon', type: 'emoji' as const, emoji: '🧪' },
         publicInviteLink: { url: 'https://t.me/test_channel' },
         defaultInviteLink: null,
       },
@@ -60,7 +60,7 @@ describe('TelegramAdSaleBotNotificationService', () => {
       }),
     );
     const text = notifications.sendToWorkspaceUser.mock.calls[0][0].text;
-    expect(text).toContain('🧪 <b>Test</b>');
+    expect(text).toContain('🧪 <a href="https://t.me/test_channel"><b>Test</b></a>');
     expect(text).toContain('Формат — <b>Автовидалення через 48 годин</b>');
     expect(text).toContain(
       '📅 Дата — <b>01.10</b>; 🕒 Час — <b>13:00</b>\n🗑️ Формат — <b>Автовидалення через 48 годин</b>',

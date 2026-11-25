@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, Bot, Eye, UsersRound } from "lucide-react";
+import { Bell, BellOff, Bot, Eye, UsersRound } from "lucide-react";
 import {
+  publicationConfirmationDestinations,
   publicationNotificationDestinations,
+  type PublicationConfirmationDestination,
   type PublicationNotificationDestination,
   type PublicationNotificationPreview,
   type PublicationNotificationLine,
+  type PublicationNotificationPart,
   type PublicationNotificationSettings as Settings,
 } from "@telegram-system/shared";
 import { IconAvatar } from "@/components/icons/icon-avatar";
@@ -22,6 +25,18 @@ import {
 import { publicationNotificationsApi } from "@/lib/features/operations/publication-notifications-api";
 import { publicationNotificationKeys } from "@/lib/query-keys";
 
+type Destination = PublicationNotificationDestination | PublicationConfirmationDestination;
+
+function MessagePart({ text, href, strong }: PublicationNotificationPart) {
+  return href ? (
+    <a href={href} target="_blank" rel="noreferrer" className="font-semibold text-sky-300 underline">
+      {text}
+    </a>
+  ) : (
+    <span className={strong ? "font-semibold" : undefined}>{text}</span>
+  );
+}
+
 function MessagePreview({
   title,
   lines,
@@ -29,40 +44,31 @@ function MessagePreview({
 }: {
   title: string;
   lines: PublicationNotificationLine[];
-  destination?: PublicationNotificationDestination;
+  destination?: Destination;
 }) {
   return (
     <div>
       <h3 className="mb-2 text-sm font-medium text-neutral-300">{title}</h3>
       {destination && (
         <p className="mb-2 flex items-center gap-1.5 text-xs text-neutral-400">
-          {destinationOptions.find(({ value }) => value === destination)?.icon}{" "}
+          {destinationOptions[destination].icon}
           {destinationLabels[destination]}
         </p>
       )}
       <div
         className={`space-y-1 rounded-xl p-3 text-sm leading-6 text-white ${destination === "IN_APP" ? "border border-neutral-700 bg-neutral-900" : "bg-[#1e2c3b]"}`}
       >
-        {lines.map(({ text, href, icon, strong }, index) => (
+        {lines.map(({ icon, parts, ...part }, index) => (
           <div
             key={index}
-            className="flex items-center gap-1.5 break-words [overflow-wrap:anywhere]"
+            className="flex min-h-5 items-start gap-1.5 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
           >
             {icon && <IconAvatar icon={icon} size="xs" decorative />}
-            {href ? (
-              <a
-                href={href}
-                target="_blank"
-                rel="noreferrer"
-                className="font-semibold text-sky-300 underline"
-              >
-                {text}
-              </a>
-            ) : (
-              <span className={strong ? "font-semibold" : undefined}>
-                {text}
-              </span>
-            )}
+            <div className="min-w-0">
+              {(parts ?? [part]).map((item, partIndex) => (
+                <MessagePart key={partIndex} {...item} />
+              ))}
+            </div>
           </div>
         ))}
       </div>
@@ -70,48 +76,77 @@ function MessagePreview({
   );
 }
 
-const destinationLabels: Record<PublicationNotificationDestination, string> = {
+const destinationLabels: Record<Destination, string> = {
   IN_APP: "В приложении",
   TELEGRAM_GROUP: "В Telegram-группу",
   TELEGRAM_PRIVATE: "Лично через системного бота",
+  DISABLED: "Выключено",
 };
 
 const destinationIcons = {
   IN_APP: Bell,
   TELEGRAM_GROUP: UsersRound,
   TELEGRAM_PRIVATE: Bot,
+  DISABLED: BellOff,
 };
-const destinationOptions = publicationNotificationDestinations.map((value) => {
+function destinationOption(value: Destination) {
   const Icon = destinationIcons[value];
   return {
     value,
     label: destinationLabels[value],
     icon: <Icon size={16} aria-hidden />,
   };
-});
+}
+const reportOptions = publicationNotificationDestinations.map(destinationOption);
+const confirmationOptions = publicationConfirmationDestinations.map(destinationOption);
+const destinationOptions = {
+  IN_APP: destinationOption("IN_APP"),
+  TELEGRAM_GROUP: destinationOption("TELEGRAM_GROUP"),
+  TELEGRAM_PRIVATE: destinationOption("TELEGRAM_PRIVATE"),
+  DISABLED: destinationOption("DISABLED"),
+};
 
 const messageTypes = [
+  {
+    field: "scheduledConfirmationDestination",
+    preview: "scheduledConfirmation",
+    title: "Публикация запланирована",
+    options: confirmationOptions,
+  },
+  {
+    field: "publishedConfirmationDestination",
+    preview: "publishedConfirmation",
+    title: "Публикация опубликована",
+    options: confirmationOptions,
+  },
   {
     field: "coverageDestination",
     preview: "coverage",
     title: "Запас публикаций",
+    options: reportOptions,
   },
   {
     field: "autopilotDestination",
     preview: "autopilot",
     title: "Отчёт автопилота AI Posting",
+    options: reportOptions,
   },
   {
     field: "autopilotErrorDestination",
     preview: "autopilotError",
     title: "Отчёт AI Posting с ошибками",
+    options: reportOptions,
   },
 ] as const;
 
 export function PublicationNotificationSettings({
   workspaceId,
+  botUsername,
+  accountName,
 }: {
   workspaceId: string;
+  botUsername?: string | null;
+  accountName?: string | null;
 }) {
   const client = useQueryClient();
   const [draft, setDraft] = useState<Settings | null>(null);
@@ -127,7 +162,9 @@ export function PublicationNotificationSettings({
   const channels = settings.data?.channels ?? [];
   const selectedChannelId = channels.some(({ id }) => id === channelId)
     ? channelId
-    : (channels[0]?.id ?? "");
+    : (channels.find(({ iconPresentation }) =>
+        iconPresentation?.type === "unicode" && iconPresentation.telegramCustomEmojiId,
+      )?.id ?? channels[0]?.id ?? "");
   const preview = useQuery({
     queryKey: publicationNotificationKeys.preview(
       workspaceId,
@@ -153,6 +190,8 @@ export function PublicationNotificationSettings({
       coverageDestination: persisted.coverageDestination,
       autopilotDestination: persisted.autopilotDestination,
       autopilotErrorDestination: persisted.autopilotErrorDestination,
+      scheduledConfirmationDestination: persisted.scheduledConfirmationDestination ?? "TELEGRAM_PRIVATE",
+      publishedConfirmationDestination: persisted.publishedConfirmationDestination ?? "TELEGRAM_PRIVATE",
     });
 
   return (
@@ -185,7 +224,7 @@ export function PublicationNotificationSettings({
       )}
       {value && (
         <>
-          {messageTypes.map(({ field, preview, title }) => (
+          {messageTypes.map(({ field, preview, title, options }) => (
             <div
               key={field}
               className="flex flex-wrap items-end gap-2 rounded-lg border border-neutral-800 p-3"
@@ -196,14 +235,18 @@ export function PublicationNotificationSettings({
                   ariaLabel={title}
                   className="mt-1"
                   value={value[field]}
-                  options={destinationOptions}
+                  options={options.map((option) =>
+                    option.value === "TELEGRAM_PRIVATE" && accountName
+                      ? { ...option, label: `${option.label} · ${accountName}` }
+                      : option,
+                  )}
                   searchable={false}
                   disabled={save.isPending}
                   onChange={(destination) =>
                     setDraft({
                       ...value,
                       [field]:
-                        destination as PublicationNotificationDestination,
+                        destination as Destination,
                     })
                   }
                 />
@@ -317,6 +360,16 @@ export function PublicationNotificationSettings({
           <p className="text-sm text-neutral-400">
             Цифры в предпросмотре приведены для примера.
           </p>
+          {botUsername && accountName && (
+            previewOpen === "all" ||
+            (previewOpen === "scheduledConfirmation" && value?.scheduledConfirmationDestination === "TELEGRAM_PRIVATE") ||
+            (previewOpen === "publishedConfirmation" && value?.publishedConfirmationDestination === "TELEGRAM_PRIVATE")
+          ) && (
+            <p className="flex items-center gap-2 text-sm text-neutral-300">
+              <Bot size={16} aria-hidden />
+              @{botUsername.replace(/^@/, "")} → {accountName}
+            </p>
+          )}
           {preview.isLoading && <LoadingState />}
           {preview.isError && (
             <p role="alert" className="text-sm text-rose-300">
@@ -340,7 +393,8 @@ export function PublicationNotificationSettings({
               {messageTypes
                 .filter(
                   (type) =>
-                    previewOpen === "all" || type.preview === previewOpen,
+                    (previewOpen === "all" || type.preview === previewOpen) &&
+                    Boolean(preview.data[type.preview]),
                 )
                 .map(({ title, preview: key, field }) => (
                   <MessagePreview

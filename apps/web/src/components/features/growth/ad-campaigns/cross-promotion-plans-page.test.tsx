@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CrossPromotionPlan } from "@telegram-system/shared";
 import { telegramChannelNetworksApi, telegramChannelsApi } from "@/lib/api";
 import { crossPromotionPlansApi } from "@/lib/features/growth/cross-promotion-plans-api";
 import { mutualPromotionFoldersApi } from "@/lib/features/growth/mutual-promotion-folders-api";
@@ -15,7 +16,7 @@ vi.mock("@/components/layout/app-shell", () => ({
   AppShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock("@/providers/toast-provider", () => ({
-  useAppToast: () => ({ startOperation: vi.fn() }),
+  useAppToast: () => ({ startOperation: vi.fn(), pushToast: vi.fn() }),
 }));
 vi.mock("./cross-promotion-plan-modal", () => ({
   CrossPromotionPlanModal: ({
@@ -55,7 +56,10 @@ vi.mock("./promo-form-modal", () => ({
   PromoFormModal: () => null,
 }));
 vi.mock("./cross-promotion-plan-card", () => ({
-  CrossPromotionPlanCard: () => null,
+  CrossPromotionPlanCard: ({ plan, onSendToBot }: {
+    plan: CrossPromotionPlan;
+    onSendToBot: (plan: CrossPromotionPlan) => void;
+  }) => <button onClick={() => onSendToBot(plan)}>Send confirmation to bot</button>,
 }));
 
 describe("CrossPromotionPlansPage query loading", () => {
@@ -77,6 +81,21 @@ describe("CrossPromotionPlansPage query loading", () => {
     vi.spyOn(crossPromotionPlansApi, "listAll").mockResolvedValue([]);
     vi.spyOn(telegramChannelsApi, "select").mockResolvedValue([]);
     vi.spyOn(telegramChannelNetworksApi, "listOptions").mockResolvedValue([]);
+  });
+
+  it("sends the confirmation from the card action without opening a preview", async () => {
+    const plan = { id: "scheduled-plan", kind: "DIRECT_MUTUAL", status: "SCHEDULED" } as CrossPromotionPlan;
+    vi.mocked(crossPromotionPlansApi.listAll).mockResolvedValue([plan]);
+    const send = vi.spyOn(crossPromotionPlansApi, "sendToBot").mockResolvedValue({ status: "SENT" });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <CrossPromotionPlansPage kind="DIRECT_MUTUAL" sectionTabs={null} />
+      </QueryClientProvider>,
+    );
+    await userEvent.click(screen.getByRole("tab", { name: /Scheduled/i }));
+    await userEvent.click(await screen.findByRole("button", { name: "Send confirmation to bot" }));
+    await waitFor(() => expect(send).toHaveBeenCalledWith(plan.id, expect.anything()));
+    expect(screen.queryByRole("dialog", { name: "Preview bot confirmation" })).toBeNull();
   });
 
   it("waits to fetch channel and network catalogs until a plan editor opens", async () => {

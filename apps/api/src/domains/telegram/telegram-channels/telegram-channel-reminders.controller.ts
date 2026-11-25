@@ -4,12 +4,15 @@ import {
   IsArray,
   IsBoolean,
   IsIn,
+  IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
 import { Body, Controller, Get, Param, Put, UseGuards } from '@nestjs/common';
 import {
+  publicationConfirmationDestinations,
   publicationNotificationDestinations,
+  type PublicationConfirmationDestination,
   type PublicationNotificationDestination,
 } from '@telegram-system/shared';
 import {
@@ -31,6 +34,14 @@ class PublicationNotificationsDto {
 
   @IsIn(publicationNotificationDestinations)
   autopilotErrorDestination!: PublicationNotificationDestination;
+
+  @IsOptional()
+  @IsIn(publicationConfirmationDestinations)
+  scheduledConfirmationDestination?: PublicationConfirmationDestination;
+
+  @IsOptional()
+  @IsIn(publicationConfirmationDestinations)
+  publishedConfirmationDestination?: PublicationConfirmationDestination;
 
   @IsArray()
   @ArrayMaxSize(1000)

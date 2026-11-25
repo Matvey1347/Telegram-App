@@ -1010,6 +1010,12 @@ enum PublicationNotificationDestination {
   TELEGRAM_PRIVATE
 }
 
+enum PublicationConfirmationDestination {
+  TELEGRAM_PRIVATE
+  TELEGRAM_GROUP
+  DISABLED
+}
+
 model Workspace {
   creatives                       WorkspaceCreative[]
   telegramSupportTickets TelegramSupportTicket[]
@@ -1029,6 +1035,8 @@ model Workspace {
   coverageNotificationSentKeys             String[] @default([])
   autopilotNotificationDestination         PublicationNotificationDestination @default(TELEGRAM_GROUP)
   autopilotErrorNotificationDestination    PublicationNotificationDestination @default(TELEGRAM_GROUP)
+  scheduledConfirmationDestination        PublicationConfirmationDestination @default(TELEGRAM_PRIVATE)
+  publishedConfirmationDestination        PublicationConfirmationDestination @default(TELEGRAM_PRIVATE)
   telegramNotificationChatId                    String?
   telegramNotificationChatTitle                 String?
   telegramNotificationLinkTokenHash             String?             @unique

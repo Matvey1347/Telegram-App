@@ -13,6 +13,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { TelegramSystemBotNotificationsService } from '../telegram-system-bot/telegram-system-bot-notifications.service';
 import { renderPublicationConfirmation } from '../telegram-system-bot/telegram-system-bot-publication-confirmation';
+import { publicationNotificationChannelSelect } from '../../operations/notifications/publication-notification-message';
 
 @Injectable()
 export class TelegramAdSaleBotNotificationService {
@@ -30,10 +31,11 @@ export class TelegramAdSaleBotNotificationService {
 
   async send(userId: string, saleId: string) {
     const workspaceId = await this.workspaces.resolveWorkspaceIdForUser(userId);
-    const message = await this.messageFor(workspaceId, saleId);
+    const message = await this.messageFor(workspaceId, saleId, true);
     return this.notifications.sendToWorkspaceUser({
       workspaceId,
       userId,
+      publicationState: message.state,
       text: message.text,
       parseMode: 'HTML',
     });
@@ -51,6 +53,7 @@ export class TelegramAdSaleBotNotificationService {
     const delivery = await this.notifications.sendToWorkspaceUser({
       workspaceId,
       userId,
+      publicationState: 'scheduled',
       text: message,
       parseMode: 'HTML',
     });
@@ -77,6 +80,7 @@ export class TelegramAdSaleBotNotificationService {
     const delivery = await this.notifications.sendToWorkspaceUser({
       workspaceId: sale.workspaceId,
       userId: sale.createdByUserId,
+      publicationState: 'published',
       text: message,
       parseMode: 'HTML',
     });
@@ -87,16 +91,19 @@ export class TelegramAdSaleBotNotificationService {
     });
   }
 
-  private async messageFor(workspaceId: string, saleId: string) {
+  private async messageFor(
+    workspaceId: string,
+    saleId: string,
+    requireConfirmed = false,
+  ): Promise<{ state: 'scheduled' | 'published'; text: string }> {
     const sale = await this.sale(workspaceId, saleId);
     if (!sale.placements.length)
       throw new BadRequestException('This deal has no scheduled channels');
-    return {
-      text: this.render(
-        sale,
-        isFullyPublished(sale.placements) ? 'published' : 'scheduled',
-      ),
-    };
+    const state = isFullyPublished(sale.placements) ? 'published' : 'scheduled';
+    if (requireConfirmed && state === 'scheduled' && !isFullyScheduled(sale.placements)) {
+      throw new BadRequestException('Schedule all placements before sending a confirmation');
+    }
+    return { state, text: this.render(sale, state) };
   }
 
   private sale(workspaceId: string, id: string) {
@@ -124,15 +131,7 @@ export class TelegramAdSaleBotNotificationService {
                   telegramMessageUrls: true,
                 },
               },
-              telegramChannel: {
-                select: {
-                  id: true,
-                  title: true,
-                  publicInviteLink: { select: { url: true } },
-                  defaultInviteLink: { select: { url: true } },
-                  presentationIcon: { select: { emoji: true } },
-                },
-              },
+              telegramChannel: { select: publicationNotificationChannelSelect },
             },
           },
         },

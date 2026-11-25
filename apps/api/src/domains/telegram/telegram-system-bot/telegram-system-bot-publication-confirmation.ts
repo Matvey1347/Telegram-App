@@ -1,12 +1,10 @@
-import { storedTelegramIconHtml } from '@api/telegram/shared/bot/telegram-bot-icon-source';
+import type { PublicationNotificationLine, PublicationNotificationPart } from '@telegram-system/shared';
+import {
+  publicationNotificationChannel,
+  publicationNotificationHtml,
+} from '../../operations/notifications/publication-notification-message';
 
-export type PublicationConfirmationChannel = {
-  id: string;
-  title: string;
-  publicInviteLink: { url: string } | null;
-  defaultInviteLink: { url: string } | null;
-  presentationIcon: { emoji: string | null } | null;
-};
+export type PublicationConfirmationChannel = Parameters<typeof publicationNotificationChannel>[0];
 
 export type PublicationConfirmationPlacement = {
   telegramChannelId: string;
@@ -24,14 +22,20 @@ export type PublicationConfirmationGroup = {
   placements: PublicationConfirmationPlacement[];
 };
 
-/** Shared Telegram System Bot presentation for every scheduled publication flow. */
-export function renderPublicationConfirmation(input: {
+type PublicationConfirmation = {
   state: 'scheduled' | 'published';
   groups: PublicationConfirmationGroup[];
   channels: PublicationConfirmationChannel[];
   /** IANA timezone of the workspace receiving this confirmation. */
   timezone: string;
-}) {
+};
+
+export function renderPublicationConfirmation(input: PublicationConfirmation) {
+  return publicationNotificationHtml(publicationConfirmationLines(input));
+}
+
+/** One presentation for the website preview and every System Bot confirmation. */
+export function publicationConfirmationLines(input: PublicationConfirmation): PublicationNotificationLine[] {
   const channels = new Map(
     input.channels.map((channel) => [channel.id, channel]),
   );
@@ -45,24 +49,21 @@ export function renderPublicationConfirmation(input: {
       ),
     }))
     .filter((group) => group.placements.length);
-  const sections = visibleGroups
-    .map((group) =>
-      renderGroup(
-        group.title,
-        group.placements,
-        channels,
-        input.state,
-        input.timezone,
-      ),
-    )
-    .filter((section): section is string => Boolean(section));
   return [
-    input.state === 'published'
-      ? '✅ <b>Пости опубліковано</b>'
-      : '✅ <b>Пост заплановано</b>',
-    `🕓 Часовий пояс: <b>${escapeHtml(input.timezone)}</b>`,
-    ...sections,
-  ].join('\n\n');
+    {
+      text: '',
+      parts: [
+        { text: '✅ ' },
+        { text: input.state === 'published' ? 'Пости опубліковано' : 'Пост заплановано', strong: true },
+      ],
+    },
+    { text: '' },
+    { text: '', parts: [{ text: '🕓 Часовий пояс: ' }, { text: input.timezone, strong: true }] },
+    ...visibleGroups.flatMap((group) => [
+      { text: '' },
+      ...renderGroup(group.title, group.placements, channels, input.state, input.timezone),
+    ]),
+  ];
 }
 
 function renderGroup(
@@ -78,53 +79,46 @@ function renderGroup(
   const shared = timing.every((value) =>
     sameTiming(value, timing[0], timezone),
   );
-  const heading = `<b>Пост «${escapeHtml(title)}»:</b>`;
-  const common =
-    shared && timing[0]?.publishedOrScheduledAt
-      ? timingLines(timing[0], timezone)
-      : null;
-  const channelHeading =
-    state === 'published'
-      ? '<b>✅ Опубліковано в каналах:</b>'
-      : '<b>🗓️ Заплановано в каналах:</b>';
+  const common = shared && timing[0]?.publishedOrScheduledAt
+    ? timingLines(timing[0], timezone)
+    : null;
+  const channelHeading = state === 'published'
+    ? '✅ Опубліковано в каналах:'
+    : '🗓️ Заплановано в каналах:';
   return [
-    heading,
+    { text: `Пост «${title}»:`, strong: true },
     ...(common ?? []),
-    channelHeading,
-    ...placements.map((placement, index) =>
-      line(
-        placement,
-        channels.get(placement.telegramChannelId),
-        state,
-        timezone,
-        common !== null ? null : timing[index],
-      ),
-    ),
-  ].join('\n');
+    { text: channelHeading, strong: true },
+    ...placements.flatMap((placement, index) => [
+      channelLine(placement, channels.get(placement.telegramChannelId), state),
+      ...(common ? [] : timingLines(timing[index], timezone, '   ')),
+    ]),
+  ];
 }
 
-function line(
+function channelLine(
   placement: PublicationConfirmationPlacement,
   channel: PublicationConfirmationChannel | undefined,
   state: 'scheduled' | 'published',
-  timezone: string,
-  timing: PublicationTiming | null,
-) {
-  const postLinks =
-    state === 'published'
-      ? (placement.telegramMessageUrls ?? []).map(
-          (url, index, urls) =>
-            `<a href="${escapeHtml(url)}">${urls.length === 1 ? 'Пост' : `Пост ${index + 1}`}</a>`,
-        )
-      : [];
-  return [
-    `${channelPresentation(channel)}${postLinks.length ? ` — ${postLinks.join(', ')}` : ''}`,
-    ...(timing
-      ? timingLines(timing, timezone).map((value) => `   ${value}`)
-      : []),
-  ]
-    .filter(Boolean)
-    .join('\n');
+): PublicationNotificationLine {
+  const { iconPresentation, title, href } = publicationNotificationChannel(
+    channel ?? { id: placement.telegramChannelId, title: 'Недоступний канал' },
+    true,
+  );
+  const parts: PublicationNotificationPart[] = [{ text: title, href, strong: true }];
+  const urls = state === 'published' ? placement.telegramMessageUrls ?? [] : [];
+  for (const [index, url] of urls.entries()) {
+    parts.push({ text: index === 0 ? ' — ' : ', ' }, {
+      text: urls.length === 1 ? 'Пост' : `Пост ${index + 1}`,
+      href: /^https:\/\/t\.me\//u.test(url) ? url : undefined,
+    });
+  }
+  return {
+    text: '',
+    icon: iconPresentation ?? { type: 'unicode', value: '📢' },
+    iconFallback: '📢',
+    parts,
+  };
 }
 
 type PublicationTiming = {
@@ -165,17 +159,20 @@ function sameTiming(
   );
 }
 
-function timingLines(timing: PublicationTiming, timezone: string) {
+function timingLines(timing: PublicationTiming, timezone: string, indent = ''): PublicationNotificationLine[] {
   const date = timing.publishedOrScheduledAt;
   if (!date) return [];
   const format = timingFormat(timing);
   const { dayMonth, hourMinute } = formatDateParts(date, timezone);
   return [
-    `📅 Дата — <b>${dayMonth}</b>; 🕒 Час — <b>${hourMinute}</b>`,
-    ...(format ? [`🗑️ Формат — <b>${escapeHtml(format)}</b>`] : []),
-  ]
-    .filter(Boolean)
-    .map(String);
+    { text: '', parts: [
+      { text: `${indent}📅 Дата — ` }, { text: dayMonth, strong: true },
+      { text: '; 🕒 Час — ' }, { text: hourMinute, strong: true },
+    ] },
+    ...(format ? [{ text: '', parts: [
+      { text: `${indent}🗑️ Формат — ` }, { text: format, strong: true },
+    ] }] : []),
+  ];
 }
 
 function timingFormat(timing: PublicationTiming) {
@@ -189,17 +186,6 @@ function dateOrNull(value: string | Date | null | undefined) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function channelPresentation(
-  channel: PublicationConfirmationChannel | undefined,
-) {
-  const icon = storedTelegramIconHtml(channel?.presentationIcon?.emoji, '📢');
-  const title = `<b>${escapeHtml(stripTitleEmoji(channel?.title ?? 'Недоступний канал'))}</b>`;
-  const url = channel?.publicInviteLink?.url ?? channel?.defaultInviteLink?.url;
-  return url
-    ? `<a href="${escapeHtml(url)}">${icon} ${title}</a>`
-    : `${icon} ${title}`;
 }
 
 function formatDateParts(value: Date, timezone: string) {
@@ -251,18 +237,4 @@ function formatHours(hours: number) {
           ? 'години'
           : 'годин';
   return `${hours} ${unit}`;
-}
-
-function stripTitleEmoji(value: string) {
-  return value
-    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
-
-function escapeHtml(value: string) {
-  return value.replace(
-    /[&<>]/g,
-    (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]!,
-  );
 }

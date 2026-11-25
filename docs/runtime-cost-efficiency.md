@@ -279,3 +279,12 @@ drafts, unsuccessful attempts and shared planning. Unknown receipts stay
 unconfirmed. The preview reuses the delivery formatter with example amounts.
 There are no new timers or database wakeups while idle. For 100 active channels
 the maximum remains one grouped read per run, including the fatal-run report.
+
+### Scheduled and published Telegram confirmations
+
+Settings reuse the workspace lookup that already chooses the notification
+recipient. Channel icons and links come from the existing batched channel reads.
+At 100 channels the notification still performs one recipient lookup and uses the
+existing Telegram send, with the existing Unicode fallback on explicit rejection.
+The website loads the sample on demand for a single selected channel. No new
+worker, polling, history, or idle database activity is introduced.

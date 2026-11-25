@@ -3,7 +3,7 @@ import { renderPublicationConfirmation } from './telegram-system-bot-publication
 const channel = {
   id: 'channel-1',
   title: '💝 Листівки Привітання щодня 💝',
-  presentationIcon: { emoji: '💌' },
+  presentationIcon: { id: 'icon', type: 'emoji' as const, emoji: '💌' },
   publicInviteLink: { url: 'https://t.me/public' },
   defaultInviteLink: { url: 'https://t.me/default' },
 };
@@ -17,7 +17,7 @@ describe('renderPublicationConfirmation', () => {
         channels: [
           {
             ...channel,
-            presentationIcon: { emoji: `![📢](tg://emoji?id=${id})` },
+            presentationIcon: { id: 'icon', type: 'emoji' as const, emoji: `![📢](tg://emoji?id=${id})` },
           },
         ],
         timezone: 'Europe/Kyiv',
@@ -29,7 +29,7 @@ describe('renderPublicationConfirmation', () => {
         ],
       });
       expect(text).toContain(
-        `<a href="https://t.me/public"><tg-emoji emoji-id="${id}">📢</tg-emoji> <b>`,
+        `<tg-emoji emoji-id="${id}">📢</tg-emoji> <a href="https://t.me/public"><b>`,
       );
       expect(text).not.toContain('tg://emoji');
     },
@@ -55,7 +55,7 @@ describe('renderPublicationConfirmation', () => {
       ],
       timezone: 'Europe/Kyiv',
     });
-    expect(text).toContain('💌 <b>Листівки Привітання щодня</b>');
+    expect(text).toContain('💌 <a href="https://t.me/public"><b>Листівки Привітання щодня</b></a>');
     expect(text).not.toContain('💝');
     expect(text).toContain('https://t.me/public');
     expect(text).toContain(

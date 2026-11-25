@@ -2,6 +2,7 @@ import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramSystemBotNotificationsService } from '../../telegram/telegram-system-bot/telegram-system-bot-notifications.service';
 import { renderPublicationConfirmation } from '../../telegram/telegram-system-bot/telegram-system-bot-publication-confirmation';
+import { publicationNotificationChannelSelect } from '../../operations/notifications/publication-notification-message';
 
 @Injectable()
 export class MutualPromotionBotNotificationService {
@@ -30,6 +31,7 @@ export class MutualPromotionBotNotificationService {
       workspaceId: folder.workspaceId,
       userId: folder.createdByUserId,
       text: this.render(folder, 'scheduled'),
+      publicationState: 'scheduled',
       parseMode: 'HTML',
     });
     if (delivery.status !== 'SENT') return;
@@ -79,6 +81,7 @@ export class MutualPromotionBotNotificationService {
       workspaceId: post.folder.workspaceId,
       userId: post.folder.createdByUserId,
       text: this.render(folder, 'published'),
+      publicationState: 'published',
       parseMode: 'HTML',
     });
     if (delivery.status !== 'SENT') return;
@@ -106,15 +109,7 @@ export class MutualPromotionBotNotificationService {
         workspace: { select: { timezone: true } },
         participants: {
           select: {
-            telegramChannel: {
-              select: {
-                id: true,
-                title: true,
-                publicInviteLink: { select: { url: true } },
-                defaultInviteLink: { select: { url: true } },
-                presentationIcon: { select: { emoji: true } },
-              },
-            },
+            telegramChannel: { select: publicationNotificationChannelSelect },
           },
         },
         posts: {

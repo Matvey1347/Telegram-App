@@ -36,6 +36,7 @@ import { AdsHeaderActions } from "./ads-header-actions";
 import { adsSectionHeader } from "./ads-section-header";
 import { shouldUpdateHistoricalPromotion } from "./cross-promotion-plan-save-mode";
 import { useAppToast } from "@/providers/toast-provider";
+import { useSendPublicationConfirmation } from "../use-send-publication-confirmation";
 import {
   CrossPromotionPlanStatusTabs,
   plansForCrossPromotionTab,
@@ -99,7 +100,6 @@ export function CrossPromotionPlansPage({
   };
   const [deletePlan, setDeletePlan] = useState<CrossPromotionPlan | null>(null);
   const [previewPromoId, setPreviewPromoId] = useState<string | null>(null);
-  const [botNotificationPlan, setBotNotificationPlan] = useState<CrossPromotionPlan | null>(null);
   const [planTab, setPlanTab] = useState<CrossPromotionPlanTab>("ACTIVE");
   const plansQuery = useQuery({
     queryKey: crossPromotionPlanKeys.combined,
@@ -143,16 +143,6 @@ export function CrossPromotionPlansPage({
     queryKey: ["promos", "preview", previewPromoId],
     queryFn: () => promosApi.get(previewPromoId!),
     enabled: Boolean(previewPromoId),
-  });
-  const botNotificationPreviewQuery = useQuery({
-    queryKey: [
-      "cross-promotion-plans",
-      "bot-notification-preview",
-      botNotificationPlan?.id,
-    ],
-    queryFn: () =>
-      crossPromotionPlansApi.previewBotNotification(botNotificationPlan!.id),
-    enabled: Boolean(botNotificationPlan),
   });
   const saveMutation = useMutation({
     mutationFn: async (payload: CreateCrossPromotionPlanPayload) => {
@@ -476,10 +466,7 @@ export function CrossPromotionPlansPage({
       ]);
     },
   });
-  const sendToBotMutation = useMutation({
-    mutationFn: (plan: CrossPromotionPlan) =>
-      crossPromotionPlansApi.sendToBot(plan.id),
-  });
+  const sendToBotMutation = useSendPublicationConfirmation(crossPromotionPlansApi.sendToBot);
   const refreshFolderLinks = useMutation({
     mutationFn: (id: string) => mutualPromotionFoldersApi.refreshInviteLinkData(id),
     onSuccess: (folder) => reconcileMutualPromotionFolder(qc, folder),
@@ -575,7 +562,8 @@ export function CrossPromotionPlansPage({
                   }}
                   onDelete={() => setDeletePlan(plan)}
                   onResume={(source) => resumeMutation.mutate(source)}
-                  onSendToBot={setBotNotificationPlan}
+                  onSendToBot={(source) => sendToBotMutation.mutate(source.id)}
+                  sendingToBot={sendToBotMutation.isPending}
                   onOpenPromo={setPreviewPromoId}
                   onRefreshInviteLinks={(source) => refreshInviteLinksMutation.mutate(source.id)}
                   refreshingInviteLinks={
@@ -683,52 +671,6 @@ export function CrossPromotionPlansPage({
           setDeletePlan(null);
         }}
       />
-      <Modal
-        open={Boolean(botNotificationPlan)}
-        onClose={() => {
-          if (!sendToBotMutation.isPending) setBotNotificationPlan(null);
-        }}
-        title="Preview bot confirmation"
-      >
-        <div className="space-y-4">
-          {botNotificationPreviewQuery.isLoading ? (
-            <LoadingState />
-          ) : botNotificationPreviewQuery.isError ? (
-            <ErrorState text="Could not prepare the bot confirmation." />
-          ) : (
-            <div
-              className="max-h-[55dvh] overflow-y-auto whitespace-pre-wrap rounded-xl border border-neutral-800 bg-neutral-950/55 p-4 text-sm text-neutral-200 [&_a]:text-blue-300 [&_a]:underline"
-              dangerouslySetInnerHTML={{
-                __html: botNotificationPreviewQuery.data?.text ?? "",
-              }}
-            />
-          )}
-          <div className="flex justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={sendToBotMutation.isPending}
-              onClick={() => setBotNotificationPlan(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={
-                !botNotificationPreviewQuery.data || sendToBotMutation.isPending
-              }
-              onClick={() => {
-                if (!botNotificationPlan) return;
-                sendToBotMutation.mutate(botNotificationPlan, {
-                  onSuccess: () => setBotNotificationPlan(null),
-                });
-              }}
-            >
-              {sendToBotMutation.isPending ? "Sending…" : "Send to bot"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </AppShell>
   );
 }

@@ -1,3 +1,4 @@
+import type { PublicationConfirmationDelivery } from "@telegram-system/shared";
 import type { AxiosInstance, AxiosRequestConfig } from "axios";
 import type {
   TelegramAdAvailabilityResponse,
@@ -129,14 +130,10 @@ export function createTelegramAdSalesApi({
     deleteDraft: async (id: string) => {
       await api.delete(`/telegram-ad-sales/drafts/${id}`);
     },
-    previewBotNotification: async (id: string) =>
-      (
-        await api.get<{ text: string }>(
-          `/telegram-ad-sales/${id}/bot-notification-preview`,
-        )
-      ).data,
     sendToBot: async (id: string) =>
-      (await api.post(`/telegram-ad-sales/${id}/send-to-bot`)).data,
+      (await api.post<PublicationConfirmationDelivery>(
+        `/telegram-ad-sales/${id}/send-to-bot`, undefined, silentFeedbackConfig,
+      )).data,
     createSale: async (payload: Record<string, unknown>, silent = false) =>
       (
         await api.post<TelegramAdSale>(

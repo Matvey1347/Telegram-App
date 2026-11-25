@@ -18,6 +18,11 @@ import {
   publicationNotificationChannel,
   publicationNotificationChannelSelect,
 } from '../../operations/notifications/publication-notification-message';
+import { publicationConfirmationLines } from '../telegram-system-bot/telegram-system-bot-publication-confirmation';
+
+type ConfirmationFields = 'scheduledConfirmationDestination' | 'publishedConfirmationDestination';
+type SettingsInput = Omit<PublicationNotificationSettings, ConfirmationFields> &
+  Partial<Pick<PublicationNotificationSettings, ConfirmationFields>>;
 
 export const CHANNEL_REMINDERS_TASK_KEY = 'telegram.channel_reminders.due';
 export const activePublicationChannels = {
@@ -29,6 +34,8 @@ const settingsSelect = {
   coverageNotificationDestination: true,
   autopilotNotificationDestination: true,
   autopilotErrorNotificationDestination: true,
+  scheduledConfirmationDestination: true,
+  publishedConfirmationDestination: true,
   publicationNotificationExcludedChannelIds: true,
 } as const;
 
@@ -73,6 +80,8 @@ export class TelegramChannelRemindersService {
       coverageDestination: settings.coverageNotificationDestination,
       autopilotDestination: settings.autopilotNotificationDestination,
       autopilotErrorDestination: settings.autopilotErrorNotificationDestination,
+      scheduledConfirmationDestination: settings.scheduledConfirmationDestination,
+      publishedConfirmationDestination: settings.publishedConfirmationDestination,
       excludedChannelIds:
         settings.publicationNotificationExcludedChannelIds.filter((id) =>
           active.has(id),
@@ -85,7 +94,7 @@ export class TelegramChannelRemindersService {
     return this.read(await this.editor(userId));
   }
 
-  async save(userId: string, input: PublicationNotificationSettings) {
+  async save(userId: string, input: SettingsInput) {
     const workspaceId = await this.editor(userId);
     const current = await this.read(workspaceId);
     const available = new Set(current.channels.map(({ id }) => id));
@@ -95,6 +104,10 @@ export class TelegramChannelRemindersService {
       );
     }
     const excludedChannelIds = [...input.excludedChannelIds].sort();
+    const confirmationRoutes = {
+      scheduledConfirmationDestination: input.scheduledConfirmationDestination ?? current.scheduledConfirmationDestination,
+      publishedConfirmationDestination: input.publishedConfirmationDestination ?? current.publishedConfirmationDestination,
+    };
     const changed =
       input.enabled !== current.enabled ||
       excludedChannelIds.join() !==
@@ -102,7 +115,9 @@ export class TelegramChannelRemindersService {
     const routingChanged =
       input.coverageDestination !== current.coverageDestination ||
       input.autopilotDestination !== current.autopilotDestination ||
-      input.autopilotErrorDestination !== current.autopilotErrorDestination;
+      input.autopilotErrorDestination !== current.autopilotErrorDestination ||
+      confirmationRoutes.scheduledConfirmationDestination !== current.scheduledConfirmationDestination ||
+      confirmationRoutes.publishedConfirmationDestination !== current.publishedConfirmationDestination;
     if (changed || routingChanged) {
       await this.prisma.workspace.update({
         where: { id: workspaceId },
@@ -113,6 +128,7 @@ export class TelegramChannelRemindersService {
           autopilotNotificationDestination: input.autopilotDestination,
           autopilotErrorNotificationDestination:
             input.autopilotErrorDestination,
+          ...confirmationRoutes,
           ...(changed
             ? {
                 publicationNotificationDueAt: input.enabled ? new Date() : null,
@@ -123,7 +139,7 @@ export class TelegramChannelRemindersService {
       if (changed)
         notifyScheduledTaskDueWorkChanged(CHANNEL_REMINDERS_TASK_KEY);
     }
-    return { ...input, excludedChannelIds, channels: current.channels };
+    return { ...input, ...confirmationRoutes, excludedChannelIds, channels: current.channels };
   }
 
   async preview(
@@ -131,12 +147,16 @@ export class TelegramChannelRemindersService {
     id?: string,
   ): Promise<PublicationNotificationPreview> {
     const workspaceId = await this.editor(userId);
-    const row = id
-      ? await this.prisma.telegramChannel.findFirst({
+    const [row, workspace] = await Promise.all([
+      id ? this.prisma.telegramChannel.findFirst({
           where: { id, workspaceId, ...activePublicationChannels },
           select: publicationNotificationChannelSelect,
-        })
-      : null;
+        }) : null,
+      this.prisma.workspace.findUniqueOrThrow({
+        where: { id: workspaceId },
+        select: { timezone: true },
+      }),
+    ]);
     if (id && !row) throw new NotFoundException('Channel is unavailable');
     const channel = publicationNotificationChannel(
       row ?? { id: '', title: 'Пример канала' },
@@ -149,7 +169,25 @@ export class TelegramChannelRemindersService {
       totalCost: '0.22',
       errorCount: 0,
     };
+    const confirmation = {
+      channels: [row ?? { id: '', title: 'Канал для прикладу' }],
+      timezone: workspace.timezone,
+      groups: [
+        {
+          title: 'Зразок публікації',
+          placements: [{
+            telegramChannelId: row?.id ?? '',
+            scheduledAt: '2026-01-15T08:00:00.000Z',
+            publishedAt: '2026-01-15T08:00:04.000Z',
+            formatLabel: 'Автовидалення через 24 години',
+            telegramMessageUrls: [''],
+          }],
+        },
+      ],
+    };
     return {
+      scheduledConfirmation: publicationConfirmationLines({ ...confirmation, state: 'scheduled' }),
+      publishedConfirmation: publicationConfirmationLines({ ...confirmation, state: 'published' }),
       coverage: coverageNotificationLines(3, [channel]),
       autopilot: autopilotReportLines(channel, sample),
       autopilotError: autopilotReportLines(channel, {

@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { CrmContactDetail } from "@telegram-system/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ToastProvider } from "@/providers/toast-provider";
 import {
   CrmContactActionModal,
   type CrmContactAction,
@@ -33,7 +34,8 @@ vi.mock("@/lib/features/growth/telegram-crm-api", () => ({
   },
 }));
 
-vi.mock("@/lib/api", () => ({
+vi.mock("@/lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api")>()),
   authApi: { me: mocks.me },
   iconsApi: {
     get: vi.fn(),
@@ -122,11 +124,13 @@ function renderModal(action: CrmContactAction = "info") {
   });
   return render(
     <QueryClientProvider client={client}>
-      <CrmContactActionModal
-        contactId="contact-1"
-        action={action}
-        onClose={vi.fn()}
-      />
+      <ToastProvider>
+        <CrmContactActionModal
+          contactId="contact-1"
+          action={action}
+          onClose={vi.fn()}
+        />
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }

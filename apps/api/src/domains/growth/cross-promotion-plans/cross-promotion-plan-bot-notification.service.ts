@@ -12,7 +12,8 @@ import type {
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { TelegramSystemBotNotificationsService } from '../../telegram/telegram-system-bot/telegram-system-bot-notifications.service';
-import { renderPublicationConfirmation } from '../../telegram/telegram-system-bot/telegram-system-bot-publication-confirmation';
+import { renderPublicationConfirmation, type PublicationConfirmationChannel } from '../../telegram/telegram-system-bot/telegram-system-bot-publication-confirmation';
+import { publicationNotificationChannelSelect } from '../../operations/notifications/publication-notification-message';
 
 type ScheduledPlacement = CrossPromotionChannelPlacementInput;
 type Publication = {
@@ -33,13 +34,7 @@ type StoredPlacement = {
   managedPostId: string;
   publicationId?: string | null;
 };
-type Channel = {
-  id: string;
-  title: string;
-  publicInviteLink: { url: string } | null;
-  defaultInviteLink: { url: string } | null;
-  presentationIcon: { emoji: string | null } | null;
-};
+type Channel = PublicationConfirmationChannel;
 
 const json = <T>(value: unknown, fallback: T): T =>
   value && typeof value === 'object' ? (value as T) : fallback;
@@ -55,10 +50,11 @@ export class CrossPromotionPlanBotNotificationService {
 
   async send(userId: string, id: string) {
     const workspaceId = await this.workspaces.resolveWorkspaceIdForUser(userId);
-    const message = await this.renderScheduledMessage(workspaceId, id);
+    const message = await this.renderScheduledMessage(workspaceId, id, true);
     return this.notifications.sendToWorkspaceUser({
       workspaceId,
       userId,
+      publicationState: message.state,
       text: message.text,
       parseMode: 'HTML',
     });
@@ -90,6 +86,7 @@ export class CrossPromotionPlanBotNotificationService {
       workspaceId: input.workspaceId,
       userId: input.userId,
       parseMode: 'HTML',
+      publicationState: 'published',
       text: publishedMessage(
         publications,
         input.posts,
@@ -99,17 +96,21 @@ export class CrossPromotionPlanBotNotificationService {
     });
   }
 
-  private async renderScheduledMessage(workspaceId: string, id: string) {
+  private async renderScheduledMessage(workspaceId: string, id: string, requireConfirmed = false) {
     const plan = await this.prisma.crossPromotionPlan.findFirst({
       where: { id, workspaceId },
       select: {
         title: true,
+        status: true,
         publicationPost: true,
         placementPostIds: true,
         workspace: { select: { timezone: true } },
       },
     });
     if (!plan) throw new NotFoundException('Cross-promotion plan not found');
+    if (requireConfirmed && !['SCHEDULED', 'ACTIVE', 'COMPLETED'].includes(plan.status)) {
+      throw new BadRequestException('Schedule the promotion before sending a confirmation');
+    }
     const post = json<CrossPromotionPlacementPost>(plan.publicationPost, {
       title: '',
       text: '',
@@ -155,6 +156,7 @@ export class CrossPromotionPlanBotNotificationService {
         managedPosts,
       );
       return {
+        state: 'published' as const,
         text: publishedMessage(
           publications,
           publishedPosts,
@@ -164,6 +166,7 @@ export class CrossPromotionPlanBotNotificationService {
       };
     }
     return {
+      state: 'scheduled' as const,
       text: renderPublicationConfirmation({
         state: 'scheduled',
         channels,
@@ -179,14 +182,8 @@ export class CrossPromotionPlanBotNotificationService {
   private channelsFor(workspaceId: string, channelIds: string[]) {
     return this.prisma.telegramChannel.findMany({
       where: { workspaceId, id: { in: [...new Set(channelIds)] } },
-      select: {
-        id: true,
-        title: true,
-        publicInviteLink: { select: { url: true } },
-        defaultInviteLink: { select: { url: true } },
-        presentationIcon: { select: { emoji: true } },
-      },
-    }) as Promise<Channel[]>;
+      select: publicationNotificationChannelSelect,
+    });
   }
 
   private async workspaceTimezone(workspaceId: string) {

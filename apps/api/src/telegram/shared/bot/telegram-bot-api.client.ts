@@ -284,7 +284,7 @@ export class TelegramBotApiClient {
       link_preview_options?: unknown;
     },
   ) {
-    return this.call<{ message_id: number }>(token, 'sendMessage', payload);
+    return this.call<{ message_id: number; entities?: { type: string }[] }>(token, 'sendMessage', payload);
   }
 
   /** Bot API Rich Messages are deliberately isolated from the MTProto sender. */

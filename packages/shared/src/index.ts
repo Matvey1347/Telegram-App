@@ -78,8 +78,11 @@ export * from "./types/workspace-creatives";
 
 export type * from "./types/dashboard-insights";
 export * from "./types/telegram-bot-ads";
-export { publicationNotificationDestinations } from './types/publication-notifications';
+export { publicationConfirmationDestinations, publicationNotificationDestinations } from './types/publication-notifications';
 export type {
+  PublicationConfirmationDelivery,
+  PublicationConfirmationDestination,
+  PublicationNotificationPart,
   PublicationNotificationDestination,
   PublicationNotificationChannel,
   PublicationNotificationLine,

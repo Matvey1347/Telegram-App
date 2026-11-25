@@ -16,6 +16,8 @@ const defaults = {
   coverageDestination: "TELEGRAM_GROUP",
   autopilotDestination: "TELEGRAM_GROUP",
   autopilotErrorDestination: "TELEGRAM_GROUP",
+  scheduledConfirmationDestination: "TELEGRAM_PRIVATE",
+  publishedConfirmationDestination: "TELEGRAM_PRIVATE",
 } as const;
 
 const channels = [
@@ -89,6 +91,8 @@ describe("publication notifications", () => {
       coverage: [{ text: "Образец" }],
       autopilot: [],
       autopilotError: [],
+      scheduledConfirmation: [],
+      publishedConfirmation: [],
     });
     renderSettings();
     await screen.findByRole("alert");
@@ -102,11 +106,13 @@ describe("publication notifications", () => {
     );
   });
 
-  it("loads previews only when requested and shows the three examples", async () => {
+  it("loads the five previews only when requested", async () => {
     vi.mocked(publicationNotificationsApi.preview).mockResolvedValue({
       coverage: [{ text: "Запас публикаций · 3 дн." }],
       autopilot: [{ text: "Черновики · +30" }],
       autopilotError: [{ text: "Ошибки · 6" }],
+      scheduledConfirmation: [{ text: "Пост заплановано" }],
+      publishedConfirmation: [{ text: "Пости опубліковано" }],
     });
     renderSettings();
     await screen.findByText("Все активные каналы");
@@ -117,6 +123,8 @@ describe("publication notifications", () => {
     expect(await screen.findByText("Черновики · +30")).toBeInTheDocument();
     expect(screen.getByText("Ошибки · 6")).toBeInTheDocument();
     expect(screen.getByText("Запас публикаций · 3 дн.")).toBeInTheDocument();
+    expect(screen.getByText("Пост заплановано")).toBeInTheDocument();
+    expect(screen.getByText("Пости опубліковано")).toBeInTheDocument();
     expect(publicationNotificationsApi.save).not.toHaveBeenCalled();
     fireEvent.click(
       screen.getByRole("button", { name: "Канал для предпросмотра" }),

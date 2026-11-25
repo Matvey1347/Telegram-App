@@ -4,6 +4,8 @@ const destinations = {
   coverageDestination: 'TELEGRAM_GROUP',
   autopilotDestination: 'TELEGRAM_GROUP',
   autopilotErrorDestination: 'TELEGRAM_GROUP',
+  scheduledConfirmationDestination: 'TELEGRAM_PRIVATE',
+  publishedConfirmationDestination: 'TELEGRAM_PRIVATE',
 } as const;
 
 describe('publication notification settings', () => {
@@ -15,6 +17,9 @@ describe('publication notification settings', () => {
           autopilotNotificationDestination: destinations.autopilotDestination,
           autopilotErrorNotificationDestination:
             destinations.autopilotErrorDestination,
+          scheduledConfirmationDestination: destinations.scheduledConfirmationDestination,
+          publishedConfirmationDestination: destinations.publishedConfirmationDestination,
+          timezone: 'Europe/Kyiv',
           publicationNotificationsEnabled: false,
           publicationNotificationExcludedChannelIds: [],
         }),
@@ -27,7 +32,12 @@ describe('publication notification settings', () => {
         ]),
         findFirst: jest
           .fn()
-          .mockResolvedValue({ id: 'one', title: '💌 One 💌' }),
+          .mockResolvedValue({
+            id: 'one',
+            title: '💌 One 💌',
+            username: 'one',
+            avatarEmojiIcon: { id: 'icon', type: 'emoji', emoji: '![💌](tg://emoji?id=42)' },
+          }),
       },
     };
     const workspace = {
@@ -123,7 +133,7 @@ describe('publication notification settings', () => {
     );
   });
 
-  it('previews both report outcomes and coverage without writing settings', async () => {
+  it('previews both confirmations with the same linked channel and custom icon as Telegram', async () => {
     const { service, prisma } = setup();
     const preview = await service.preview('user', 'one');
     expect(preview.autopilot[0].text).toBe('One');
@@ -132,6 +142,14 @@ describe('publication notification settings', () => {
       'Готовые публикации · $0.16', 'Публикации с ошибками · $0.05', 'Всего · $0.22',
     ]));
     expect(preview.coverage[1].text).toBe('One');
+    for (const confirmation of [preview.scheduledConfirmation, preview.publishedConfirmation]) {
+      expect(confirmation).toContainEqual(expect.objectContaining({
+        icon: expect.objectContaining({ telegramCustomEmojiId: '42' }),
+        parts: expect.arrayContaining([{ text: 'One', href: 'https://t.me/one', strong: true }]),
+      }));
+    }
+    expect(preview.scheduledConfirmation[0].parts?.[1].text).toBe('Пост заплановано');
+    expect(preview.publishedConfirmation[0].parts?.[1].text).toBe('Пости опубліковано');
     expect(prisma.workspace.update).not.toHaveBeenCalled();
   });
 });
