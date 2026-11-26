@@ -7,6 +7,10 @@ import { TelegramInviteLinkCreateInline } from "@/components/features/telegram/t
 import type { CrossPromotionTargetInput } from "@telegram-system/shared";
 import type { TelegramChannel } from "@/lib/api";
 
+export function promotionChannelViews(channel: TelegramChannel) {
+  return channel.preview?.audience.avgViewsAdjusted ?? channel.preview?.adAnalysis?.metrics?.avgViews ?? null;
+}
+
 export function promotionLinkTitle(title: string, date: string, views?: number | null) {
   const metrics = ` · ${date || "—"} · ${views == null ? "—" : Math.round(views)}👁`;
   // Telegram accepts at most 32 characters for an invite-link title.
@@ -54,7 +58,7 @@ export function OwnPromotionInviteLinks({
           <TelegramInviteLinkCreateInline
             key={publisher.id}
             channelId={value.telegramChannelId}
-            initialTitle={promotionLinkTitle(publisher.title, placementDateFor(publisher.id), publisher.ownViewsPerPost)}
+            initialTitle={promotionLinkTitle(publisher.title, placementDateFor(publisher.id), promotionChannelViews(publisher))}
             open
             onOpenChange={(open) => { if (!open) setPublisher(null); }}
             onCreated={(link) => onChange({

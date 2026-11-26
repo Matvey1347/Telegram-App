@@ -5,7 +5,7 @@ import type { Promo, TelegramChannel, TelegramInviteLinkOption } from "@/lib/api
 import { DateInput, FormField, MultiSelect, TimeInput } from "@/components/ui/primitives";
 import { CrossPromotionTargetEditor } from "./cross-promotion-target-editor";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import { OwnPromotionInviteLinks, promotionLinkTitle } from "./own-promotion-invite-links";
+import { OwnPromotionInviteLinks, promotionChannelViews, promotionLinkTitle } from "./own-promotion-invite-links";
 import { CommonAdSlotOptions } from "../common-ad-slot-options";
 
 export function CrossPromotionOwnTargets({
@@ -43,8 +43,8 @@ export function CrossPromotionOwnTargets({
   ) => void;
 }) {
   const publishers = channels.filter((channel) => publisherIds.includes(channel.id));
-  const sharedViews = publishers.length && publishers.every((channel) => channel.ownViewsPerPost != null)
-    ? publishers.reduce((count, channel) => count + (channel.ownViewsPerPost ?? 0), 0)
+  const sharedViews = publishers.length && publishers.every((channel) => promotionChannelViews(channel) != null)
+    ? publishers.reduce((count, channel) => count + (promotionChannelViews(channel) ?? 0), 0)
     : null;
   const available = channels.filter(
     (channel) => !publisherIds.includes(channel.id),

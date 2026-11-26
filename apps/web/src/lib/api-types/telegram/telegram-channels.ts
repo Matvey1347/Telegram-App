@@ -168,7 +168,7 @@ export type TelegramChannel = EntityAssignment & TelegramChannelAvatarEmojiState
       | "hasExternalTrafficAnomaly"
       | "hasSubscriberBasePollution"
       | "postsWindow"
-    >;
+    > & Partial<Pick<TelegramChannelAudience, "avgViewsAdjusted">>;
     audienceTrend?: TelegramChannelAudienceTrend | null;
     hasPublicationSchedule?: boolean;
     financialSummary: TelegramChannelFinancialSummary;

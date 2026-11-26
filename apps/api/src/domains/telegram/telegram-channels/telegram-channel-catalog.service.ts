@@ -332,6 +332,7 @@ export class TelegramChannelCatalogService {
         activeSubscribersEstimate: snapshot?.activeSubscribersEstimate ?? null,
         paidActiveSubscribersEstimate:
           snapshot?.activeSubscribersEstimate ?? null,
+        avgViewsAdjusted: snapshot?.avgViewsAdjusted ?? null,
         viewRate: snapshot?.viewRate ?? null,
         reactionRate,
         dataQuality: snapshot?.dataQuality ?? null,

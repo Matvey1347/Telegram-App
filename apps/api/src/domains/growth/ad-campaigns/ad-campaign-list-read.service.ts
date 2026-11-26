@@ -396,6 +396,7 @@ export class AdCampaignListReadService {
         return {
           campaignId: campaign.id,
           kind: link.kind,
+          campaignChannelId: campaign.telegramChannelId,
           inviteLinkId: inviteLink.id,
           channelId: inviteLink.telegramChannelId,
           channelTitle: inviteLink.telegramChannel.title,
@@ -420,7 +421,7 @@ export class AdCampaignListReadService {
         select: { inviteLinkId: true, kind: true, adCampaign: { select: { id: true, placementDate: true, startedAt: true, createdAt: true, endedAt: true, sourcePostViews: true } } },
       }),
       sharedEntries.length ? loadBotRequestExposures(
-        this.prisma, workspaceId, [...new Set(sharedEntries.map((entry) => entry.channelId))],
+        this.prisma, workspaceId, [...new Set(sharedEntries.flatMap((entry) => [entry.channelId, entry.campaignChannelId]))],
         new Date(Math.min(...sharedEntries.map((entry) => entry.startsAt.getTime()))), latest,
       ) : new Map<string, CampaignWindow[]>(),
     ]);
@@ -479,6 +480,8 @@ export class AdCampaignListReadService {
         const shared = entry.kind === 'BOT';
         const candidates = [
           ...(shared ? exposures.get(entry.channelId) ?? [] : []),
+          ...(shared && entry.campaignChannelId !== entry.channelId
+            ? exposures.get(entry.campaignChannelId) ?? [] : []),
           ...(windowsByLink.get(entry.inviteLinkId) ?? []),
         ];
         const windows = [...new Map(candidates.map((window) => [window.campaignId, window])).values()];
