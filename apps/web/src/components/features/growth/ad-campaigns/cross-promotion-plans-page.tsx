@@ -8,6 +8,7 @@ import { Plus } from "lucide-react";
 import { useOptionalI18n } from "@/providers/i18n-provider";
 import type {
   CreateCrossPromotionPlanPayload,
+  UpdateCrossPromotionPlanDetails,
   CrossPromotionPlan,
   CrossPromotionPlanKind,
   MutualPromotionFolderListStatus,
@@ -222,11 +223,7 @@ export function CrossPromotionPlansPage({
     },
   });
   const updateDetailsMutation = useMutation({
-    mutationFn: (details: {
-      title: string;
-      advertiserId?: string | null;
-      partnerTelegramUsername?: string | null;
-    }) => {
+    mutationFn: (details: UpdateCrossPromotionPlanDetails) => {
       if (!editingPlan) throw new Error("Promotion is not available");
       return crossPromotionPlansApi.updateDetails(editingPlan.id, details);
     },

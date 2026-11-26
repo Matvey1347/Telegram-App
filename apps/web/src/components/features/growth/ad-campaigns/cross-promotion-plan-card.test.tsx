@@ -112,6 +112,14 @@ describe("CrossPromotionPlanCard", () => {
     expect(screen.getByText("VP")).toBeInTheDocument();
   });
 
+  it.each(["DIRECT_MUTUAL", "OWN_CHANNELS"] as const)("opens a %s placement from the card", (kind) => {
+    const onEdit = vi.fn();
+    const placement = { ...plan, kind };
+    render(<CrossPromotionPlanCard plan={placement} onEdit={onEdit} onDelete={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: `Open promotion ${plan.title}` }));
+    expect(onEdit).toHaveBeenCalledWith(placement);
+  });
+
   it.each(["DIRECT_MUTUAL", "OWN_CHANNELS"] as const)(
     "keeps the date beside the title and the channel, metrics and promo in one row for %s",
     (kind) => {

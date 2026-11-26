@@ -67,6 +67,11 @@ export type CreateCrossPromotionPlanPayload = {
   trackingEndsAt?: string | null;
 };
 
+export type UpdateCrossPromotionPlanDetails = Pick<
+  CreateCrossPromotionPlanPayload,
+  "title" | "advertiserId" | "partnerTelegramUsername"
+> & { targets?: CrossPromotionTargetInput[] };
+
 export type CrossPromotionSchedulingProgress = {
   phase: "VALIDATING" | "DELETING" | "SCHEDULING" | "SAVING" | "ROLLING_BACK";
   message: string;

@@ -27,6 +27,30 @@ describe('pending request account recovery', () => {
     expect(h.prisma.telegramChannel.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ pendingJoinRequestsCount: 76 }) }));
     expect(h.access.connectedAccount).toHaveBeenCalledWith('workspace', 'channel', 'alternate');
   });
+  it('uses a photo from the verified alternate when the primary response has only the queue', async () => {
+    const h = harness(null);
+    h.mtproto.getPublicChannelInfo.mockReset()
+      .mockResolvedValueOnce({ kind: 'channel', telegramChatId: '123', pendingJoinRequestsCount: 76, photoUrl: null })
+      .mockResolvedValueOnce({ kind: 'channel', telegramChatId: '123', pendingJoinRequestsCount: 91, photoUrl: 'data:image/jpeg;base64,dGVzdA==' });
+    await h.service.syncPublicChannelInfo('workspace', 'channel', { id: 'primary' } as never);
+    expect(h.access.channelIdentityPatch).toHaveBeenCalledWith(expect.objectContaining({
+      pendingJoinRequestsCount: 76,
+      photoUrl: 'data:image/jpeg;base64,dGVzdA==',
+    }));
+  });
+
+  it('keeps an existing photo without using a second Telegram account', async () => {
+    const h = harness(null);
+    h.prisma.telegramChannel.findFirst.mockResolvedValueOnce({
+      id: 'channel', username: null, telegramChatId: '123', photoUrl: 'existing-avatar',
+    } as never);
+    h.mtproto.getPublicChannelInfo.mockReset()
+      .mockResolvedValueOnce({ kind: 'channel', telegramChatId: '123', pendingJoinRequestsCount: 0, photoUrl: null });
+    await h.service.syncPublicChannelInfo('workspace', 'channel', { id: 'primary' } as never);
+    expect(h.sources.sourcesForChannel).not.toHaveBeenCalled();
+    expect(h.prisma.telegramChannel.update.mock.calls[0][0].data).not.toHaveProperty('photoUrl');
+  });
+
   it.each([[null, '123'], [0, 'different-channel']])('preserves prior count when alternative gives %s for %s', async (count, chat) => {
     const h = harness(count as number | null, chat as string);
     const result = await h.service.syncPublicChannelInfo('workspace', 'channel', { id: 'primary' } as never);

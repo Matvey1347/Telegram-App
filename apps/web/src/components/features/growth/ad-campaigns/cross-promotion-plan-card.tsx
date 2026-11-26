@@ -70,7 +70,15 @@ export function CrossPromotionPlanCard({
 
   return (
     <article className="group relative break-inside-avoid rounded-2xl border border-neutral-800 bg-neutral-950/80 pb-3 transition duration-200 hover:border-neutral-700">
-      <div className="px-3 pt-3">
+      {canEdit ? (
+        <button
+          type="button"
+          aria-label={`Open promotion ${plan.title}`}
+          className="absolute inset-0 rounded-2xl focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+          onClick={() => onEdit(plan)}
+        />
+      ) : null}
+      <div className="pointer-events-none relative px-3 pt-3">
         <div className={ownPromotion
           ? "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]"
           : "flex items-start justify-between gap-3"
@@ -96,7 +104,8 @@ export function CrossPromotionPlanCard({
           ) : null}
           <div className={`flex shrink-0 items-center gap-1 ${ownPromotion ? "col-start-2 row-start-1 justify-self-end lg:col-start-4" : ""}`}>
             <MutualPromotionFolderStatusBadge status={plan.status} />
-            <CardActionsMenu label={`Actions for ${plan.title}`}>
+            <div className="pointer-events-auto">
+              <CardActionsMenu label={`Actions for ${plan.title}`}>
               {canEdit ? (
                 <CardMenuAction
                   label={plan.status === "DRAFT" && !plan.lastError ? "Continue draft" : "Edit promotion"}
@@ -129,6 +138,7 @@ export function CrossPromotionPlanCard({
               ) : null}
               <CardMenuAction danger label="Delete" icon={<Trash2 size={16} />} onClick={onDelete} />
             </CardActionsMenu>
+            </div>
           </div>
         </div>
         {!ownPromotion && (plan.advertiser || channelList) ? (
@@ -156,7 +166,7 @@ export function CrossPromotionPlanCard({
 
       {plan.status === "DRAFT" ? (
         <div
-          className={`mx-4 mt-3 rounded-lg border p-3 text-xs ${plan.lastError ? "border-rose-900/70 bg-rose-950/20 text-rose-200" : "border-blue-900/70 bg-blue-950/20 text-blue-100"}`}
+          className={`pointer-events-none relative mx-4 mt-3 rounded-lg border p-3 text-xs ${plan.lastError ? "border-rose-900/70 bg-rose-950/20 text-rose-200" : "border-blue-900/70 bg-blue-950/20 text-blue-100"}`}
         >
           <p className="font-medium">{plan.lastError ? "This placement was not scheduled." : "Saved draft."}</p>
           <p className={plan.lastError ? "mt-1 text-rose-300/80" : "mt-1 text-blue-200/80"}>
@@ -166,7 +176,7 @@ export function CrossPromotionPlanCard({
       ) : null}
 
       {plan.targetResults.length ? (
-        <div className="mx-3 mt-2 divide-y divide-neutral-800 overflow-hidden rounded-lg border border-neutral-800 bg-black/20">
+        <div className="pointer-events-none relative mx-3 mt-2 divide-y divide-neutral-800 overflow-hidden rounded-lg border border-neutral-800 bg-black/20">
           {plan.targetResults.map((target, index) => (
             <div
               key={`target:${target.telegramChannelId}:${target.inviteLinkId}`}
@@ -257,7 +267,7 @@ function PromoLink({
       type="button"
       onClick={() => onOpenPromo(promoId)}
       title={`Promo: ${title}. Click to open its preview.`}
-      className={`${className} hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
+      className={`pointer-events-auto ${className} hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
     >
       {content}
     </button>

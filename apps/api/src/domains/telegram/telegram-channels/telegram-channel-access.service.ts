@@ -384,7 +384,7 @@ export class TelegramChannelAccessService {
       ...(info.pendingJoinRequestsCount == null
         ? {}
         : { pendingJoinRequestsCount: info.pendingJoinRequestsCount }),
-      photoUrl: info.photoUrl,
+      ...(info.photoUrl ? { photoUrl: info.photoUrl } : {}),
       accessMode:
         info.accessMode ||
         this.fallbackAccessMode({

@@ -105,6 +105,7 @@ function setup() {
                     telegramChannelId: 'target-1',
                     joinedCount: 10,
                     requestedCount: 2,
+                    createdAt: new Date('2026-09-01T08:00:00.000Z'),
                   },
                 ]
               : [
@@ -151,12 +152,22 @@ function setup() {
         },
       ]),
     },
+    $executeRaw: jest.fn().mockResolvedValue(1),
     crossPromotionPlan: {
       findMany: jest.fn().mockResolvedValue([]),
-      findFirst: jest.fn().mockResolvedValue({
-        id: 'plan-1',
-        placementPostIds: [],
-      }),
+      findFirst: jest
+        .fn()
+        .mockResolvedValue({
+          id: 'plan-1',
+          placementPostIds: [],
+        })
+        .mockImplementation((query) =>
+          Promise.resolve(
+            query.select?.status && !query.where.id
+              ? null
+              : { id: 'plan-1', placementPostIds: [] },
+          ),
+        ),
       create: jest
         .fn()
         .mockImplementation(
@@ -192,11 +203,26 @@ function setup() {
       { resolve: jest.fn() } as never,
     ),
     prisma,
+    row,
   };
 }
 
 describe('CrossPromotionPlansService', () => {
   afterEach(() => jest.restoreAllMocks());
+
+  it('rejects a repeat placement before creating another plan', async () => {
+    const { service, prisma } = setup();
+    prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({
+      status: 'DRAFT',
+    } as never);
+
+    await expect(service.create('user-1', payload)).rejects.toThrow(
+      'Continue scheduling from its draft',
+    );
+    expect(prisma.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.crossPromotionPlan.create).not.toHaveBeenCalled();
+    expect(prisma.crossPromotionPlan.updateMany).not.toHaveBeenCalled();
+  });
 
   it('updates partner details without changing scheduled publications', async () => {
     const { service, prisma } = setup();
@@ -207,13 +233,39 @@ describe('CrossPromotionPlansService', () => {
     });
 
     expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith({
-      where: { id: 'plan-1' },
+      where: { id: 'plan-1', workspaceId: 'workspace-1' },
       data: {
         title: 'Mentor ↔ @marina_ads1',
         advertiserId: null,
         partnerTelegramUsername: '@marina_ads1',
       },
     });
+  });
+
+  it('saves tracking selections using the pre-placement observation without rewriting scheduled posts', async () => {
+    const { service, prisma, row } = setup();
+    prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({
+      ...row,
+      status: 'SCHEDULED',
+      targets: [],
+      baselineTargetCounters: [],
+    });
+    prisma.telegramInviteLinkSnapshot.findMany.mockResolvedValueOnce([
+      { inviteLinkId: 'link-1', joinedCount: 5, requestedCount: 1 },
+    ]);
+    await service.updateDetails('user-1', row.id, {
+      title: row.title,
+      targets: payload.targets,
+    });
+    const [update] = prisma.crossPromotionPlan.update.mock.calls[0];
+    expect(update.data).toMatchObject({
+      targets: payload.targets,
+      baselineTargetCounters: [
+        { inviteLinkId: 'link-1', joinedCount: 5, requestedCount: 1 },
+      ],
+    });
+    expect(update.data).not.toHaveProperty('publicationPost');
+    expect(update.data).not.toHaveProperty('placementPostIds');
   });
 
   it('allows a direct exchange without partner channels or promo targets', async () => {

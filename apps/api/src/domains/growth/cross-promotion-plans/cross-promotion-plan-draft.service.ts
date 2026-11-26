@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
@@ -72,11 +76,22 @@ export class CrossPromotionPlanDraftService {
     if (id) {
       const existing = await this.prisma.crossPromotionPlan.findFirst({
         where: { id, workspaceId, status: 'DRAFT' },
-        select: { id: true },
+        select: { id: true, publicationPost: true },
       });
       if (!existing) throw new NotFoundException('Saved draft is unavailable');
+      const stored = draftObject(existing.publicationPost);
+      if (!stored.formDraft) {
+        throw new ConflictException(
+          'This promotion already started scheduling. Continue scheduling from the existing promotion.',
+        );
+      }
       const row = await this.prisma.crossPromotionPlan.update({
-        where: { id: existing.id },
+        where: {
+          id: existing.id,
+          workspaceId,
+          status: 'DRAFT',
+          placementPostIds: { equals: [] },
+        },
         data,
       });
       return this.readService.shape(workspaceId, row);

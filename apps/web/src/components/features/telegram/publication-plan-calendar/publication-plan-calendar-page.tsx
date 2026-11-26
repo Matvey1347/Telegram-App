@@ -364,6 +364,17 @@ export function PublicationPlanCalendarPage() {
                     view === "month" && day.getMonth() !== cursor.getMonth();
                   const rows = dayItems?.slots ?? [];
                   const outside = dayItems?.outsideEvents ?? [];
+                  const vpByTime = new Map<number, TelegramPublicationPlanCalendarEvent[]>();
+                  for (const event of [...outside, ...(dayItems?.eventsBySlot.values() ?? [])].flat()) {
+                    if (event.kind !== "VP") continue;
+                    const time = Date.parse(event.scheduledAt);
+                    const simultaneous = vpByTime.get(time) ?? [];
+                    simultaneous.push(event);
+                    vpByTime.set(time, simultaneous);
+                  }
+                  const vpConflicts = [...vpByTime.values()].filter((events) =>
+                    new Set(events.map(({ crossPromotionPlanId, id }) => crossPromotionPlanId ?? id)).size > 1,
+                  ).flat();
                   return (
                     <div
                       key={day.toISOString()}
@@ -373,6 +384,15 @@ export function PublicationPlanCalendarPage() {
                         <span className="text-sm font-semibold text-white">
                           {day.getDate()}
                         </span>
+                        {vpConflicts.length ? (
+                          <button
+                            type="button"
+                            onClick={() => setConflictEvents(vpConflicts)}
+                            className="flex items-center gap-1 rounded border border-rose-700 bg-rose-950/30 px-1 text-[9px] text-rose-100"
+                          >
+                            <TriangleAlert size={11} aria-hidden="true" /> VP conflict
+                          </button>
+                        ) : null}
                         {dayKey === today ? (
                           <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-semibold text-white">
                             Today
@@ -403,7 +423,7 @@ export function PublicationPlanCalendarPage() {
                                   key={event.id}
                                   type="button"
                                   onClick={() => openEvent(event)}
-                                  className={`flex w-full items-center gap-1.5 rounded-md border border-dashed px-1.5 py-1 text-left text-[10px] font-medium ${eventTone(event)}`}
+                                  className={`flex w-full items-center gap-1.5 rounded-md border border-dashed px-1.5 py-1 text-left text-[10px] font-medium ${vpConflicts.includes(event) ? "border-rose-700 bg-rose-950/30 text-rose-100" : eventTone(event)}`}
                                 >
                                   <span className="shrink-0">
                                     {calendarDisplayTime(event.scheduledAt, timezone)}

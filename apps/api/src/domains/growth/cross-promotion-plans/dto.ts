@@ -69,6 +69,12 @@ export class UpdateCrossPromotionPlanDetailsDto {
   @IsOptional() @IsString() @MaxLength(33) partnerTelegramUsername?:
     | string
     | null;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => CrossPromotionTargetDto)
+  targets?: CrossPromotionTargetDto[];
 }
 
 /** Move an already published direct-exchange record into this one. */

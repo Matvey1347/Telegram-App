@@ -58,9 +58,10 @@ export function MutualPromotionFolderCard({
               <time className="whitespace-nowrap" dateTime={folder.endsAt}>{formatDateTime(folder.endsAt)}</time>
             </p>
           </div>
-          <div className="pointer-events-auto flex items-start gap-1">
+          <div className="flex items-start gap-1">
             {folder.status !== "COMPLETED" ? <MutualPromotionFolderStatusBadge status={folder.status} /> : null}
             {onEdit || onRefreshInviteLinks || onDelete ? (
+              <div className="pointer-events-auto">
               <CardActionsMenu label={`Actions for ${folder.title}`}>
                 {onEdit ? (
                   <CardMenuAction label="Edit folder" icon={<Pencil size={16} />} onClick={onEdit} />
@@ -77,6 +78,7 @@ export function MutualPromotionFolderCard({
                   <CardMenuAction danger label="Delete folder" icon={<Trash2 size={16} />} onClick={onDelete} />
                 ) : null}
               </CardActionsMenu>
+              </div>
             ) : null}
           </div>
         </div>
@@ -92,7 +94,7 @@ function ChannelPerformance({ channels }: { channels: MutualPromotionFolderListI
 
   return (
     <div
-      className="pointer-events-auto relative z-20 mx-3 mt-2 divide-y divide-neutral-800 overflow-hidden rounded-lg border border-neutral-800 bg-black/20"
+      className="pointer-events-none relative z-20 mx-3 mt-2 divide-y divide-neutral-800 overflow-hidden rounded-lg border border-neutral-800 bg-black/20"
       aria-label="Channel performance"
     >
       {channels.map((channel) => (

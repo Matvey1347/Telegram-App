@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,12 +9,14 @@ import type {
   CrossPromotionPlacementPost,
   CrossPromotionTargetInput,
 } from '@telegram-system/shared';
+import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { notifyScheduledTaskDueWorkChanged } from '../../../common/scheduled-task-wake-notifier';
 import {
   CreateCrossPromotionPlanDto,
   SaveCrossPromotionPlacementsDto,
+  UpdateCrossPromotionPlanDetailsDto,
 } from './dto';
 import { CrossPromotionPlanReadService } from './cross-promotion-plan-read.service';
 import { TelegramInviteLinkRegistrationService } from '../../telegram/telegram-channels/telegram-invite-link-registration.service';
@@ -26,6 +29,7 @@ import {
   firstPartnerPublicationAt,
   nextPublisherDeletionAt,
 } from './cross-promotion-plan-input';
+import { crossPromotionTrackingPatch } from './cross-promotion-tracking-patch';
 import type { ScheduledPost as ScheduledPlacement } from './cross-promotion-placement-input';
 import { CrossPromotionPlanPlacementStore } from './cross-promotion-plan-placement.store';
 
@@ -141,32 +145,52 @@ export class CrossPromotionPlansService {
         ),
       )
       .map((plan) => plan.id);
-    if (closingIds.length) {
-      await this.prisma.crossPromotionPlan.updateMany({
-        where: { workspaceId, id: { in: closingIds } },
-        data: { trackingEndsAt: scheduledAt, status: 'COMPLETED' },
+    const row = await this.prisma.$transaction(async (tx) => {
+      const title = dto.title.trim();
+      await acquirePostgresTransactionLock(tx, `cross-promotion:${workspaceId}:${dto.kind}:${scheduledAt.toISOString()}`);
+      const duplicate = await tx.crossPromotionPlan.findFirst({
+        where: {
+          workspaceId,
+          kind: dto.kind,
+          scheduledAt,
+          title: { equals: title, mode: 'insensitive' },
+          publisherChannelIds: { hasSome: normalized.publisherChannelIds },
+          status: { not: 'CANCELLED' },
+        },
+        select: { status: true },
       });
-    }
-    const row = await this.prisma.crossPromotionPlan.create({
-      data: {
-        workspaceId,
-        advertiserId: dto.advertiserId || null,
-        partnerTelegramUsername: dto.partnerTelegramUsername?.trim() || null,
-        createdByUserId: userId,
-        kind: dto.kind,
-        title: dto.title.trim(),
-        publisherChannelIds: normalized.publisherChannelIds,
-        partnerChannelIds: normalized.partnerChannelIds,
-        targets: dto.targets as unknown as Prisma.InputJsonValue,
-        publicationPost: dto.publicationPost,
-        scheduledAt,
-        trackingEndsAt: dto.trackingEndsAt
-          ? new Date(dto.trackingEndsAt)
-          : null,
-        nextDueAt: firstLifecycleAt(dto),
-        baselineTargetCounters,
-        baselinePublisherSubscribers,
-      },
+      if (duplicate) {
+        throw new ConflictException(duplicate.status === 'DRAFT'
+          ? 'This promotion already exists. Continue scheduling from its draft.'
+          : 'This promotion already exists for the selected time and channels.');
+      }
+      if (closingIds.length) {
+        await tx.crossPromotionPlan.updateMany({
+          where: { workspaceId, id: { in: closingIds } },
+          data: { trackingEndsAt: scheduledAt, status: 'COMPLETED' },
+        });
+      }
+      return tx.crossPromotionPlan.create({
+        data: {
+          workspaceId,
+          advertiserId: dto.advertiserId || null,
+          partnerTelegramUsername: dto.partnerTelegramUsername?.trim() || null,
+          createdByUserId: userId,
+          kind: dto.kind,
+          title: dto.title.trim(),
+          publisherChannelIds: normalized.publisherChannelIds,
+          partnerChannelIds: normalized.partnerChannelIds,
+          targets: dto.targets as unknown as Prisma.InputJsonValue,
+          publicationPost: dto.publicationPost,
+          scheduledAt,
+          trackingEndsAt: dto.trackingEndsAt
+            ? new Date(dto.trackingEndsAt)
+            : null,
+          nextDueAt: firstLifecycleAt(dto),
+          baselineTargetCounters,
+          baselinePublisherSubscribers,
+        },
+      });
     });
     notifyScheduledTaskDueWorkChanged('mutual_promotion.lifecycle');
     return this.readService.shape(workspaceId, row);
@@ -302,16 +326,11 @@ export class CrossPromotionPlansService {
   async updateDetails(
     userId: string,
     id: string,
-    details: {
-      title: string;
-      advertiserId?: string | null;
-      partnerTelegramUsername?: string | null;
-    },
+    details: UpdateCrossPromotionPlanDetailsDto,
   ) {
     const workspaceId = await this.workspace(userId);
     const existing = await this.prisma.crossPromotionPlan.findFirst({
       where: { id, workspaceId, status: { not: 'CANCELLED' } },
-      select: { id: true },
     });
     if (!existing)
       throw new NotFoundException('Cross-promotion plan not found');
@@ -324,8 +343,9 @@ export class CrossPromotionPlansService {
         throw new NotFoundException('Partner CRM client is unavailable');
     }
     const updated = await this.prisma.crossPromotionPlan.update({
-      where: { id },
+      where: { id, workspaceId },
       data: {
+        ...await crossPromotionTrackingPatch(this.prisma, existing, details.targets),
         title: details.title.trim(),
         advertiserId: details.advertiserId || null,
         partnerTelegramUsername:

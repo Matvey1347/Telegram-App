@@ -51,7 +51,10 @@ describe('CrossPromotionPlanDraftService', () => {
 
   it('updates the same saved draft instead of creating a second one', async () => {
     const { service, prisma } = setup();
-    prisma.crossPromotionPlan.findFirst.mockResolvedValue({ id: 'draft-1' });
+    prisma.crossPromotionPlan.findFirst.mockResolvedValue({
+      id: 'draft-1',
+      publicationPost: { formDraft: {} },
+    });
     prisma.crossPromotionPlan.update.mockResolvedValue({ id: 'draft-1' });
 
     await service.save(
@@ -61,8 +64,24 @@ describe('CrossPromotionPlanDraftService', () => {
     );
 
     expect(prisma.crossPromotionPlan.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'draft-1' } }),
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'draft-1',
+          placementPostIds: { equals: [] },
+        }),
+      }),
     );
     expect(prisma.crossPromotionPlan.create).not.toHaveBeenCalled();
+  });
+  it('preserves the Telegram checkpoints of an interrupted schedule', async () => {
+    const { service, prisma } = setup();
+    prisma.crossPromotionPlan.findFirst.mockResolvedValue({
+      id: 'draft-1',
+      publicationPost: { text: 'Already sent to Telegram' },
+    });
+    await expect(
+      service.save('user-1', { kind: 'DIRECT_MUTUAL', draft: {} }, 'draft-1'),
+    ).rejects.toThrow('already started scheduling');
+    expect(prisma.crossPromotionPlan.update).not.toHaveBeenCalled();
   });
 });

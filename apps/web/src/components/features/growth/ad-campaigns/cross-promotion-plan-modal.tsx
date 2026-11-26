@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   CreateCrossPromotionPlanPayload,
+  UpdateCrossPromotionPlanDetails,
   CrossPromotionPlan,
   CrossPromotionPlanKind,
   TelegramChannelNetworkOption,
@@ -106,11 +107,7 @@ export function CrossPromotionPlanModal({
     draft: Record<string, unknown>,
     id?: string,
   ) => Promise<unknown>;
-  onUpdateDetails?: (details: {
-    title: string;
-    advertiserId?: string | null;
-    partnerTelegramUsername?: string | null;
-  }) => Promise<unknown>;
+  onUpdateDetails?: (details: UpdateCrossPromotionPlanDetails) => Promise<unknown>;
 }) {
   const state = useCrossPromotionDraftState({
     open,
@@ -436,7 +433,7 @@ export function CrossPromotionPlanModal({
       partnerIds.length && !targets.length
         ? "Add at least one promo placement on Partner side."
         : null,
-      ...(partnerIds.length ? targets : []).flatMap((target, index) => [
+      ...(kind === "DIRECT_MUTUAL" ? targets : []).flatMap((target, index) => [
         !target.telegramChannelId
           ? `Promo placement ${index + 1}: choose the promoted channel.`
           : null,
@@ -450,7 +447,7 @@ export function CrossPromotionPlanModal({
       partnerIds.length && missingPartnerFormats.length
         ? `Partner side: choose a format for ${channelNames(missingPartnerFormats)}.`
         : null,
-      partnerIds.length && outboundMode === "CUSTOM" && !hasOutboundPost
+      kind === "DIRECT_MUTUAL" && targets.length && outboundMode === "CUSTOM" && !hasOutboundPost
         ? "My custom promo: add text or media before scheduling."
         : null,
       !publicationPost || ownPosts.some((draft) => !draft)
@@ -513,10 +510,6 @@ export function CrossPromotionPlanModal({
           ),
         })),
       ];
-      // Keep the plan anchor aligned with the first post Telegram will really
-      // publish. Individual channel settings can override the form default;
-      // sending that stale default made a future per-channel schedule look
-      // historical to the reschedule endpoint.
       const scheduledAt = new Date(
         Math.min(
           ...publisherPublications.flatMap((publication) =>
@@ -536,7 +529,7 @@ export function CrossPromotionPlanModal({
       });
       const configuredTargets = kind === "OWN_CHANNELS"
         ? ownPromotionTargets(targets, publisherIds)
-        : targets.filter((target) => target.inviteLinkId);
+        : targets;
       const payload = {
         kind,
         advertiserId: kind === "DIRECT_MUTUAL" ? advertiserId : null,
@@ -622,6 +615,12 @@ export function CrossPromotionPlanModal({
     if (!onUpdateDetails) return;
     try {
       setError("");
+      const trackingChanged = kind === "DIRECT_MUTUAL" &&
+        JSON.stringify(targets) !== JSON.stringify(initial?.targets ?? []);
+      if (trackingChanged && !promoReady && targets.length) {
+        setError("Choose the promoted channel, promo and tracking invite link.");
+        return;
+      }
       const advertiserId =
         kind === "DIRECT_MUTUAL" && partnerContact.trim()
           ? await ensureCrossPromotionPartnerClient({
@@ -633,6 +632,7 @@ export function CrossPromotionPlanModal({
       if (advertiserId) setPartnerAdvertiserId(advertiserId);
       await onUpdateDetails({
         title: title.trim(),
+        ...(trackingChanged ? { targets } : {}),
         advertiserId,
         partnerTelegramUsername:
           kind === "DIRECT_MUTUAL" ? partnerTelegram.trim() || null : null,

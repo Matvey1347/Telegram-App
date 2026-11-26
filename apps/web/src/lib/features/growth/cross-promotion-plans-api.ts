@@ -1,5 +1,6 @@
 import type {
   CreateCrossPromotionPlanPayload,
+  UpdateCrossPromotionPlanDetails,
   CrossPromotionPlan,
   CrossPromotionPlanKind,
   CrossPromotionSchedulingProgress,
@@ -153,11 +154,7 @@ export const crossPromotionPlansApi = {
   ) => (await api.patch<CrossPromotionPlan>(`${basePath}/${id}`, payload)).data,
   updateDetails: async (
     id: string,
-    details: {
-      title: string;
-      advertiserId?: string | null;
-      partnerTelegramUsername?: string | null;
-    },
+    details: UpdateCrossPromotionPlanDetails,
   ) =>
     (await api.patch<CrossPromotionPlan>(`${basePath}/${id}/details`, details))
       .data,

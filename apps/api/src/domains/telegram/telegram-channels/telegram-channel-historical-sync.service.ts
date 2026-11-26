@@ -64,6 +64,7 @@ export class TelegramChannelHistoricalSyncService {
       telegramChatId: string | null;
       postsSyncFrom?: Date | null;
       inviteLinksSyncFrom?: Date | null;
+      photoUrl: string | null;
     } | null;
     if (!channel) throw new NotFoundException('Telegram channel not found');
     const channelReference =
@@ -91,7 +92,8 @@ export class TelegramChannelHistoricalSyncService {
       });
     }
     let pendingJoinRequestsSourceId = account.id;
-    if (info.pendingJoinRequestsCount == null) {
+    const needsPhoto = () => !info.photoUrl && !channel.photoUrl;
+    if (info.pendingJoinRequestsCount == null || needsPhoto()) {
       const alternatives = (await this.sourceAccessService.sourcesForChannel(workspaceId, channelId))
         .filter((source) => source.sourceType === TelegramSourceType.MTPROTO && source.sourceId !== account.id)
         .sort((a, b) => Number(b.permissions.canManageInviteLinks) - Number(a.permissions.canManageInviteLinks))
@@ -102,12 +104,14 @@ export class TelegramChannelHistoricalSyncService {
           const verified = await this.mtprotoClient.getPublicChannelInfo({
             ...this.telegramChannelAccessService.accountCredentials(alternate), channel: channelReference,
           });
-          if (verified.kind === 'channel' && verified.telegramChatId === info.telegramChatId && verified.pendingJoinRequestsCount != null) {
+          if (verified.kind !== 'channel' || verified.telegramChatId !== info.telegramChatId) continue;
+          info.photoUrl ||= verified.photoUrl;
+          if (info.pendingJoinRequestsCount == null && verified.pendingJoinRequestsCount != null) {
             info.pendingJoinRequestsCount = verified.pendingJoinRequestsCount;
             info.pendingJoinRequestsError = null;
             pendingJoinRequestsSourceId = source.sourceId;
-            break;
           }
+          if (info.pendingJoinRequestsCount != null && !needsPhoto()) break;
         } catch { /* Preserve the original failure and stored counter; never synthesize zero. */ }
       }
     }
