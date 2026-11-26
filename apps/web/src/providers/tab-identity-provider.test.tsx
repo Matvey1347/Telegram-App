@@ -244,8 +244,8 @@ describe("TabIdentityProvider", () => {
 
     await waitFor(() => {
       expect(document.title).toBe("Posts · Test Channel · Telegram System");
+      expect(iconHref("icon")).toBe(channelIcon);
     });
-    expect(iconHref("icon")).toBe(channelIcon);
 
     currentPathname = "/finance";
     currentSearch = "";
