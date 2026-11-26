@@ -407,7 +407,7 @@ describe('TelegramPublicationSchedulesService', () => {
     );
   });
 
-  it('shows a VP publication once at its earliest channel delivery', async () => {
+  it.each([1, 2])('shows each of %i same-title VP reservations once at its earliest delivery', async (count) => {
     prisma.telegramChannelPublicationScheduleAssignment.findMany.mockResolvedValue(
       [
         { channelId: 'channel-1', selectionMode: 'FULL', selectedSlots: [] },
@@ -420,9 +420,9 @@ describe('TelegramPublicationSchedulesService', () => {
       slots: [],
     });
     prisma.telegramAdSalePlacement.findMany.mockResolvedValue([]);
-    prisma.crossPromotionPlan.findMany.mockResolvedValue([
-      {
-        id: 'vp-1',
+    prisma.crossPromotionPlan.findMany.mockResolvedValue(
+      Array.from({ length: count }, (_, index) => ({
+        id: `vp-${index + 1}`,
         title: 'Admin Hub',
         advertiser: { avatarIcon: null, crmPeers: [] },
         scheduledAt: new Date('2026-10-29T18:10:00.000Z'),
@@ -448,8 +448,8 @@ describe('TelegramPublicationSchedulesService', () => {
             },
           ],
         },
-      },
-    ]);
+      })),
+    );
     prisma.icon.findMany.mockResolvedValue([]);
 
     const calendar = await service.calendar('user-1', {
@@ -458,11 +458,14 @@ describe('TelegramPublicationSchedulesService', () => {
       to: '2026-10-30T00:00:00.000Z',
     });
     expect(calendar.events).toEqual([
-      expect.objectContaining({
-        kind: 'VP',
-        title: 'Admin Hub',
-        scheduledAt: '2026-10-29T18:10:00.000Z',
-      }),
+      ...Array.from({ length: count }, (_, index) =>
+        expect.objectContaining({
+          kind: 'VP',
+          title: 'Admin Hub',
+          crossPromotionPlanId: `vp-${index + 1}`,
+          scheduledAt: '2026-10-29T18:10:00.000Z',
+        }),
+      ),
     ]);
   });
 
