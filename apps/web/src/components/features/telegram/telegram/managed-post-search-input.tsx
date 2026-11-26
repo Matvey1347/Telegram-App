@@ -6,13 +6,15 @@ import { useI18n } from "@/providers/i18n-provider";
 export function ManagedPostSearchInput({
   value,
   onChange,
+  className = "mb-3",
 }: {
   value: string;
   onChange: (value: string) => void;
+  className?: string;
 }) {
   const { t } = useI18n();
   return (
-    <label className="relative mb-3 block">
+    <label className={`relative block ${className}`}>
       <span className="sr-only">{t("telegram.posts.search.label")}</span>
       <Search
         className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500"

@@ -141,6 +141,12 @@ describe('publication notification settings', () => {
     expect(preview.autopilotError.map(({ text }) => text)).toEqual(expect.arrayContaining([
       'Готовые публикации · $0.16', 'Публикации с ошибками · $0.05', 'Всего · $0.22',
     ]));
+    const expenses = preview.autopilotError.findIndex(({ text }) => text === 'Расходы');
+    expect(expenses).toBeGreaterThan(0);
+    expect(preview.autopilotError.slice(expenses + 1, expenses + 5)).toEqual(
+      Array.from({ length: 4 }, () => expect.objectContaining({ indent: true })),
+    );
+    expect(preview.autopilotError.filter(({ icon }) => icon?.type === 'unicode' && icon.value === '💳')).toHaveLength(1);
     expect(preview.coverage[1].text).toBe('One');
     for (const confirmation of [preview.scheduledConfirmation, preview.publishedConfirmation]) {
       expect(confirmation).toContainEqual(expect.objectContaining({

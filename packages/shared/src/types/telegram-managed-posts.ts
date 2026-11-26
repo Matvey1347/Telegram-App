@@ -7,6 +7,11 @@ export const TELEGRAM_MANAGED_POST_LOOKUP_MAX_IDS = 1_000;
 /** Maximum channel group summaries returned by the bounded sidebar contract. */
 export const TELEGRAM_POST_GROUP_SUMMARY_MAX_ITEMS = 1_000;
 
+export type TelegramManagedPostAiOrigin = {
+  /** True when the post was saved from an AI Posting generation. */
+  aiGenerated?: boolean;
+};
+
 export type TelegramManagedPostLookupItem = {
   id: string;
   title: string;

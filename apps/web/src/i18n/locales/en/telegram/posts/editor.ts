@@ -15,6 +15,8 @@ const messages = {
   "telegram.posts.editor.publishTime": "Publish time",
   "telegram.posts.editor.openHistory": "Open post history",
   "telegram.posts.editor.posts": "Posts",
+  "telegram.posts.editor.aiOnly": "AI only",
+  "telegram.posts.editor.aiGenerated": "Created with AI",
   "telegram.posts.editor.moveToChannel": "Move to another channel",
   "telegram.posts.editor.selectAll": "Select every post in this channel",
   "telegram.posts.editor.selectAllInTab": "Select every post in this tab",

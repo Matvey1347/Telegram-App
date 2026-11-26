@@ -326,8 +326,8 @@ describe("TabIdentityProvider", () => {
       expect(document.title).toBe(
         "Posts · Cached Canonical Channel · Telegram System",
       );
+      expect(iconHref("icon")).toBe(channelIcon);
     });
-    expect(iconHref("icon")).toBe(channelIcon);
   });
 
   it("uses cached route identity immediately on hard reload before channel query resolves", async () => {
@@ -377,8 +377,8 @@ describe("TabIdentityProvider", () => {
 
     await waitFor(() => {
       expect(document.title).toBe("Posts · Business Channel · Telegram System");
+      expect(iconHref("icon")).toBe(channelIcon);
     });
-    expect(iconHref("icon")).toBe(channelIcon);
 
     document.title = "Telegram System";
     for (const rel of ["icon", "shortcut icon", "apple-touch-icon"] as const) {
@@ -393,8 +393,8 @@ describe("TabIdentityProvider", () => {
 
     await waitFor(() => {
       expect(document.title).toBe("Posts · Business Channel · Telegram System");
+      expect(iconHref("icon")).toBe(channelIcon);
     });
-    expect(iconHref("icon")).toBe(channelIcon);
   });
 
   it("keeps a valid favicon in React Strict Mode", async () => {

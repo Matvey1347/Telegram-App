@@ -4,6 +4,7 @@ import type {
   TelegramPostButtonRows,
   TelegramPostEngagementMetrics,
   TelegramManagedPostIdVerificationStatus,
+  TelegramManagedPostAiOrigin,
   TelegramManagedPostLinkSource,
   TelegramPostMediaItem,
 } from "@telegram-system/shared";
@@ -56,7 +57,7 @@ export type TelegramManagedPostGroupSummary = {
   statusNumberingEnabled?: boolean;
   sidebarPosition?: number | null;
 };
-export type TelegramManagedPost = {
+export type TelegramManagedPost = TelegramManagedPostAiOrigin & {
   id: string;
   workspaceId: string;
   telegramChannelId: string;

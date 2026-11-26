@@ -47,6 +47,8 @@ type ManagedPostReadRow = {
   telegramMessageIds: string[];
   telegramMessageUrls: string[];
   assignedMember: ManagedPostMemberRow | null;
+  aiPostingGeneration?: { id: string } | null;
+  aiPostingApprovedWithoutEdits?: boolean | null;
 };
 type ManagedPostQueryChannel = {
   id: string;
@@ -84,6 +86,7 @@ export class TelegramManagedPostQueryService {
     user: { select: { id: true, name: true } },
   } as const;
   private readonly managedPostInclude = {
+    aiPostingGeneration: { select: { id: true } },
     assignedMember: { select: this.memberSummarySelect },
     group: {
       select: {
@@ -171,13 +174,14 @@ export class TelegramManagedPostQueryService {
       telegramPosts.map((post) => [post.telegramMessageId, post]),
     );
     return posts.map((post) => {
-      const { adSalePlacements, ...managedPost } =
+      const { adSalePlacements, aiPostingGeneration, ...managedPost } =
         post as ManagedPostReadRow & {
           adSalePlacements?: Array<{ timezone: string }>;
         };
       const linkedMessageIds = this.linkedMessageIds(post);
       return {
         ...managedPost,
+        aiGenerated: Boolean(aiPostingGeneration) || typeof post.aiPostingApprovedWithoutEdits === 'boolean',
         scheduleTimezone: adSalePlacements?.[0]?.timezone ?? null,
         readOnlyTelegramPost: false,
         primaryTelegramMessageUrl:

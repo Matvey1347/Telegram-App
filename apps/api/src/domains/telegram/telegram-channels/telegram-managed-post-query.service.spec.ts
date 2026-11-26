@@ -90,6 +90,27 @@ function setup(
 }
 
 describe('TelegramManagedPostQueryService unified read model', () => {
+  it('marks saved AI generations and legacy edited AI drafts without exposing generation records', async () => {
+    const common = {
+      workspaceId: 'workspace-1',
+      telegramChannelId: 'channel-1',
+      telegramMessageIds: [],
+      telegramMessageUrls: [],
+      assignedMember: null,
+      group: null,
+    };
+    const { service } = setup([
+      { ...common, id: 'generated', aiPostingGeneration: { id: 'run' } },
+      { ...common, id: 'legacy-edited', aiPostingApprovedWithoutEdits: false },
+      { ...common, id: 'classified-manual', aiPostingSphereId: 'topic', aiPostingRubricId: 'rubric' },
+    ]);
+    const { items } = await service.managedPosts('user-1', 'channel-1', { all: true });
+    expect(items.map(({ id, aiGenerated }) => [id, aiGenerated])).toEqual([
+      ['generated', true], ['legacy-edited', true], ['classified-manual', false],
+    ]);
+    expect(items.every((item) => !('aiPostingGeneration' in item))).toBe(true);
+  });
+
   it('enriches a managed post matched through its Telegram URL without duplicating it', async () => {
     const { service, prisma } = setup([
       {

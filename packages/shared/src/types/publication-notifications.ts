@@ -8,6 +8,7 @@ export type PublicationNotificationPart = {
 export type PublicationNotificationLine = PublicationNotificationPart & {
   icon?: ResolvedEmoji | null;
   iconFallback?: string;
+  indent?: boolean;
   parts?: PublicationNotificationPart[];
 };
 

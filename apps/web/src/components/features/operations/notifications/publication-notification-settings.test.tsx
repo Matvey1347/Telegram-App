@@ -116,6 +116,9 @@ describe("publication notifications", () => {
     });
     renderSettings();
     await screen.findByText("Все активные каналы");
+    for (const group of ["Подтверждения публикаций", "AI Posting", "Запас публикаций"]) {
+      expect(screen.getByRole("region", { name: group })).toBeVisible();
+    }
     expect(publicationNotificationsApi.preview).not.toHaveBeenCalled();
     fireEvent.click(
       screen.getByRole("button", { name: "Предпросмотр сообщений" }),

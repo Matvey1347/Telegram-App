@@ -4,7 +4,7 @@ import { wantsNewTab, managedPostStatusKey } from "../managed-post-identity";
 
 import { useState } from "react";
 import { IconAvatar } from "@/components/icons/icon-avatar";
-import { Card, LoadingState, EmptyState } from "@/components/ui/primitives";
+import { Button, Card, LoadingState, EmptyState } from "@/components/ui/primitives";
 import {
   FileText,
   Clock3,
@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   MoveRight,
   Trash2,
+  Sparkles,
 } from "lucide-react";
 import { ManagedPostSearchInput } from "@/components/features/telegram/telegram/managed-post-search-input";
 import { telegramPostGroupTitle } from "@/components/features/telegram/telegram/telegram-post-group-title";
@@ -29,6 +30,7 @@ import {
   remoteStatusKey,
 } from "./telegram-post-workspace-model";
 import { PendingPostRow } from "./telegram-post-editor-rows";
+import { ManagedPostAiBadge } from "./managed-post-ai-badge";
 import { PostIcon } from "../managed-post-identity";
 import type { TelegramPostWorkspaceModel } from "./use-telegram-post-workspace";
 
@@ -41,6 +43,9 @@ type Model = Pick<
   | "statusTab"
   | "postSearch"
   | "setPostSearch"
+  | "aiOnly"
+  | "setAiOnly"
+  | "originFilteredPosts"
   | "visiblePosts"
   | "visiblePendingPostSaves"
   | "groupedPendingPostSaves"
@@ -84,6 +89,9 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
     statusTab,
     postSearch,
     setPostSearch,
+    aiOnly,
+    setAiOnly,
+    originFilteredPosts,
     visiblePosts,
     visiblePendingPostSaves,
     groupedPendingPostSaves,
@@ -126,7 +134,7 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
         </h2>
         <span className="text-xs text-neutral-500">
           {t("telegram.posts.total", {
-            count: (posts.data?.length || 0) + pendingPostSaves.length,
+            count: originFilteredPosts.length + (aiOnly ? 0 : pendingPostSaves.length),
           })}
         </span>
       </div>
@@ -137,7 +145,7 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
               value: "DRAFT",
               label: t("telegram.posts.editor.drafts"),
               icon: FileText,
-              count: (posts.data || []).filter(
+              count: originFilteredPosts.filter(
                 (post) =>
                   ["DRAFT", "FAILED", "PUBLISHING"].includes(post.status) ||
                   isBrokenPublishedPost(post),
@@ -147,7 +155,7 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
               value: "SCHEDULED",
               label: t("telegram.posts.editor.scheduled"),
               icon: Clock3,
-              count: (posts.data || []).filter(
+              count: originFilteredPosts.filter(
                 (post) => post.status === "SCHEDULED",
               ).length,
             },
@@ -155,7 +163,7 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
               value: "PUBLISHED",
               label: t("telegram.posts.editor.published"),
               icon: CheckCircle2,
-              count: (posts.data || []).filter(
+              count: originFilteredPosts.filter(
                 (post) =>
                   post.status === "PUBLISHED" && !isBrokenPublishedPost(post),
               ).length,
@@ -183,7 +191,22 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
           </button>
         ))}
       </div>
-      <ManagedPostSearchInput value={postSearch} onChange={setPostSearch} />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <ManagedPostSearchInput className="min-w-0 flex-1" value={postSearch} onChange={setPostSearch} />
+        <Button
+          type="button"
+          aria-pressed={aiOnly}
+          variant={aiOnly ? "primary" : "secondary"}
+          onClick={() => {
+            setSelectedPostIds([]);
+            setEditorialOpen({});
+            setAiOnly(!aiOnly);
+          }}
+        >
+          <Sparkles size={14} aria-hidden />
+          {t("telegram.posts.editor.aiOnly")}
+        </Button>
+      </div>
       {posts.isLoading ? <LoadingState /> : null}
       {visiblePosts.length || visiblePendingPostSaves.length ? (
         <>
@@ -193,19 +216,21 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
             ))}
             {orderedSidebarSections.map((section) => {
               const expandable = Boolean(section.group || section.editorial);
-              const collapsed = section.editorial
+              const collapsed = aiOnly
+                ? editorialOpen[section.key] === false
+                : section.editorial
                 ? !(editorialOpen[section.key] ?? (
-                    Boolean(postSearch.trim()) || section.posts.some((post) => post.id === editing?.id)
+                    aiOnly || Boolean(postSearch.trim()) || section.posts.some((post) => post.id === editing?.id)
                   ))
                 : Boolean(section.group && collapsedGroupIds.includes(section.group.id));
               const statusNumberingEnabled = Boolean(
                 section.group?.statusNumberingEnabled,
               );
-              const sectionReadOnly = Boolean(section.editorial) || section.posts.some(
+              const sectionReadOnly = aiOnly || Boolean(section.editorial) || section.posts.some(
                 (post) => post.readOnlyTelegramPost || (!section.group && Boolean(post.groupId)),
               );
               const toggleSection = () => {
-                if (section.editorial) {
+                if (aiOnly || section.editorial) {
                   setEditorialOpen((current) => ({ ...current, [section.key]: collapsed }));
                 } else if (section.group) {
                   toggleGroupCollapsed(section.group.id);
@@ -423,6 +448,7 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
                                     bare
                                   />
                                   <span className="truncate">{post.title}</span>
+                                  {post.aiGenerated && <ManagedPostAiBadge />}
                                   <ManagedPostTelegramIdentityIndicator
                                     post={post}
                                   />
@@ -532,7 +558,7 @@ export function TelegramPostSidebar({ model }: { model: Model }) {
                     ? t("telegram.posts.editor.clearTab")
                     : t("telegram.posts.editor.allInThisTab")}
                 </button>
-                {allTabPostsSelected ? (
+                {allTabPostsSelected && !aiOnly ? (
                   <button
                     type="button"
                     onClick={toggleAllChannelPosts}

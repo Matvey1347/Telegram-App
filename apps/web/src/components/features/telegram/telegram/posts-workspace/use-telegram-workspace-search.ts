@@ -1,7 +1,7 @@
 "use client";
 
 import { useManagedPostSearch } from "@/components/features/telegram/telegram/use-managed-post-search";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { type TelegramManagedPost } from "@/lib/api";
 import {
   isBrokenPublishedPost,
@@ -39,6 +39,11 @@ export function useTelegramWorkspaceSearch(input: Input) {
     postGroupsById,
     telegramImportedSystemGroup,
   } = input;
+  const [aiOnly, setAiOnly] = useState(false);
+  const originFilteredPosts = useMemo(
+    () => (posts.data ?? []).filter((post) => !aiOnly || post.aiGenerated),
+    [posts.data, aiOnly],
+  );
 
   const {
     query: postSearch,
@@ -46,8 +51,8 @@ export function useTelegramWorkspaceSearch(input: Input) {
     visiblePosts,
     visiblePendingPosts: visiblePendingPostSaves,
   } = useManagedPostSearch({
-    posts: posts.data || [],
-    pendingPosts: pendingPostSaves,
+    posts: originFilteredPosts,
+    pendingPosts: aiOnly ? [] : pendingPostSaves,
     status: statusTab,
     savingPostIds,
     isBrokenPublishedPost,
@@ -96,6 +101,9 @@ export function useTelegramWorkspaceSearch(input: Input) {
   return {
     postSearch,
     setPostSearch,
+    aiOnly,
+    setAiOnly,
+    originFilteredPosts,
     visiblePosts,
     visiblePendingPostSaves,
     groupedVisiblePosts,

@@ -1,5 +1,7 @@
 "use client";
 
+import { ManagedPostAiBadge } from "./managed-post-ai-badge";
+
 import {
   Card,
   FormField,
@@ -250,6 +252,7 @@ export function TelegramDraftEditor({ model }: { model: Model }) {
                   ? t("telegram.posts.editor.editPost")
                   : t("telegram.posts.newPost")}
             </h2>
+            {editing?.aiGenerated && <ManagedPostAiBadge />}
             {editing && incomingInternalLinkPosts.length > 0 ? (
               <button
                 type="button"

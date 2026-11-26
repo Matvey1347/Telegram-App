@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { act, renderHook } from "@testing-library/react";
 import type { TelegramManagedPost } from "@/lib/api";
 import { matchesManagedPostSearch } from "./use-managed-post-search";
+import { useTelegramWorkspaceSearch } from "./posts-workspace/use-telegram-workspace-search";
 
 function post(overrides: Partial<TelegramManagedPost> = {}) {
   return {
@@ -48,5 +50,32 @@ describe("matchesManagedPostSearch", () => {
   it("requires every search term and rejects unrelated posts", () => {
     expect(matchesManagedPostSearch(post(), "weekly missing")).toBe(false);
     expect(matchesManagedPostSearch(post(), "something else")).toBe(false);
+  });
+});
+
+describe("AI-only workspace search", () => {
+  it("keeps origin, status and text filters independent and omits pending manual saves", () => {
+    const ai = post({ id: "ai", aiGenerated: true });
+    const options = {
+      posts: { data: [ai, post({ id: "manual" }), post({ id: "published-ai", aiGenerated: true, status: "PUBLISHED" })] },
+      pendingPostSaves: [{ id: "pending", title: ai.title }],
+      savingPostIds: [],
+      statusTab: "DRAFT",
+      effectivePostGroup: () => null,
+      effectivePostMember: () => null,
+      effectivePostGroupId: () => null,
+    } as unknown as Parameters<typeof useTelegramWorkspaceSearch>[0];
+    const { result } = renderHook(() => useTelegramWorkspaceSearch(options));
+    expect(result.current.visiblePosts.map(({ id }) => id)).toEqual(["ai", "manual"]);
+    act(() => result.current.setAiOnly(true));
+    expect(result.current.visiblePosts.map(({ id }) => id)).toEqual(["ai"]);
+    expect(result.current.visiblePendingPostSaves).toEqual([]);
+    act(() => result.current.setPostSearch("unrelated"));
+    expect(result.current.visiblePosts).toEqual([]);
+    act(() => {
+      result.current.setPostSearch("advertising");
+      result.current.setAiOnly(false);
+    });
+    expect(result.current.visiblePosts.map(({ id }) => id)).toEqual(["ai", "manual"]);
   });
 });

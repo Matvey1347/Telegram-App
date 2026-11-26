@@ -15,6 +15,8 @@ const messages = {
   "telegram.posts.editor.publishTime": "Время публикации",
   "telegram.posts.editor.openHistory": "Открыть историю публикации",
   "telegram.posts.editor.posts": "Публикации",
+  "telegram.posts.editor.aiOnly": "Только ИИ",
+  "telegram.posts.editor.aiGenerated": "Создано ИИ",
   "telegram.posts.editor.moveToChannel": "Переместить в другой канал",
   "telegram.posts.editor.selectAll": "Выбрать все публикации канала",
   "telegram.posts.editor.selectAllInTab": "Выбрать все публикации во вкладке",

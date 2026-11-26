@@ -40,7 +40,12 @@ export function publicationNotificationChannel(channel: ChannelSource, includeOt
     !channel.publicInviteLink?.isRevoked && channel.publicInviteLink?.url,
     !channel.defaultInviteLink?.isRevoked && channel.defaultInviteLink?.url,
   ].find((url): url is string => typeof url === 'string' && /^https:\/\/t\.me\/(?:\+|joinchat\/)?[A-Za-z0-9_-]+$/u.test(url));
-  return { id: channel.id, title, iconPresentation, href };
+  return {
+    id: channel.id,
+    title,
+    iconPresentation: iconPresentation ? { ...iconPresentation, name: title } : null,
+    href,
+  };
 }
 
 export type AutopilotReportMetrics = {
@@ -69,8 +74,11 @@ export function autopilotReportLines(
   const money = (amount: string | null | undefined, unknown = 0) =>
     amount == null ? 'уточняется' :
       `$${amount}${unknown ? ' · есть неподтверждённые расходы' : ''}`;
-  const line = (label: string, amount: string | null | undefined, unknown?: number) =>
-    ({ icon: unicode('💳'), text: `${label} · ${money(amount, unknown)}` });
+  const costLine = (label: string, amount: string | null | undefined, unknown?: number, icon?: string) => ({
+    ...(icon && { icon: unicode(icon) }),
+    text: `${label} · ${money(amount, unknown)}`,
+    indent: true,
+  });
   return [
     heading,
     ...(metrics.coverageDays === null ? [{ icon: unicode('⚠️'), text: 'Сбой автопилота' }] : [
@@ -79,11 +87,13 @@ export function autopilotReportLines(
       { icon: unicode('📦'), text: `Запас · ${metrics.readyDrafts} черн. · ${metrics.coverageDays} дн.` },
     ]),
     ...(metrics.errorCount ? [
-      line('Готовые публикации', costs?.successful, costs?.unknownByBucket.successful),
-      line('Публикации с ошибками', costs?.failed, costs?.unknownByBucket.failed),
+      { text: '' },
+      { icon: unicode('💳'), text: 'Расходы', strong: true },
+      costLine('Готовые публикации', costs?.successful, costs?.unknownByBucket.successful, '✅'),
+      costLine('Публикации с ошибками', costs?.failed, costs?.unknownByBucket.failed, '❌'),
       ...(costs && (Number(costs.shared) || costs.unknownByBucket.shared)
-        ? [line('Общее планирование', costs.shared, costs.unknownByBucket.shared)] : []),
-      line('Всего', metrics.totalCost, metrics.unknownCosts),
+        ? [costLine('Общее планирование', costs.shared, costs.unknownByBucket.shared, '🧩')] : []),
+      { ...costLine('Всего', metrics.totalCost, metrics.unknownCosts), strong: true },
     ] :
       metrics.totalCost || metrics.unknownCosts ? [{ icon: unicode('💳'), text: money(metrics.totalCost, metrics.unknownCosts) }] : []),
     ...(metrics.errorCount ? [{ icon: unicode('⚠️'), text: `Ошибки · ${metrics.errorCount}` }] : []),
@@ -102,12 +112,12 @@ function escape(value: string) {
 }
 
 export function publicationNotificationHtml(lines: PublicationNotificationLine[]) {
-  return lines.map(({ text, icon, iconFallback, href, strong, parts }) => {
+  return lines.map(({ text, icon, iconFallback, href, strong, parts, indent }) => {
     const alt = escape(icon?.type === 'unicode' ? icon.value : iconFallback ?? '');
     const custom = icon?.type === 'unicode' && icon.telegramCustomEmojiId;
     const prefix = custom && /^\d+$/u.test(custom) ? `<tg-emoji emoji-id="${custom}">${alt}</tg-emoji>` : alt;
     const content = parts ? parts.map(partHtml).join('') : lineContent(text, href, strong);
-    return `${prefix ? prefix + ' ' : ''}${content}`;
+    return `${indent ? '   ' : ''}${prefix ? prefix + ' ' : ''}${content}`;
   }).join('\n');
 }
 
