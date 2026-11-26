@@ -53,6 +53,7 @@ export class CrossPromotionPlansController {
   ) {
     return this.streamResponse.stream(res, {
       eventPrefix: 'cross_promotion_plan.schedule_stream',
+      heartbeatIntervalMs: 15_000,
       persistLifecycleLogs: false,
       action: (onProgress, signal) =>
         this.scheduling.createAndSchedule(user.sub, dto, onProgress, signal),
@@ -131,6 +132,7 @@ export class CrossPromotionPlansController {
   ) {
     return this.streamResponse.stream(res, {
       eventPrefix: 'cross_promotion_plan.reschedule_stream',
+      heartbeatIntervalMs: 15_000,
       persistLifecycleLogs: false,
       action: (onProgress, signal) =>
         this.scheduling.replaceAndSchedule(
@@ -252,6 +254,7 @@ export class CrossPromotionPlansController {
   ) {
     return this.streamResponse.stream(res, {
       eventPrefix: 'cross_promotion_plan.resume_stream',
+      heartbeatIntervalMs: 15_000,
       persistLifecycleLogs: false,
       action: (onProgress, signal) =>
         this.scheduling.resume(user.sub, id, onProgress, signal),
