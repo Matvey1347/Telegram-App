@@ -16,6 +16,7 @@ export class CrossPromotionTargetDto {
   @IsString() telegramChannelId!: string;
   @IsOptional() @IsString() promoId?: string | null;
   @IsString() inviteLinkId!: string;
+  @IsOptional() @IsString() publisherChannelId?: string;
 }
 
 export class CreateCrossPromotionPlanDto {

@@ -51,7 +51,6 @@ import type {
   TelegramChannelBatchImportResult,
   TelegramChannelSelectOption,
   TelegramChannelSourceAccess,
-  TelegramInviteLink,
   TelegramInviteLinkHistory,
   TelegramManagedPost,
   TelegramManagedPostLinkTarget,
@@ -96,15 +95,6 @@ type CrudFactory = <T>(path: string) => {
   remove: (id: string) => Promise<T>;
 };
 
-// Keep the slow MTProto invite creation mutation visible to the user.
-const createInviteLinkFeedbackConfig = {
-  feedback: {
-    title: "Creating invite link",
-    loadingMessage: "Creating the invite link in Telegram…",
-    successMessage: "Invite link created.",
-    errorMessage: "Telegram could not create the invite link.",
-  },
-} as never;
 export function createTelegramChannelsApi({
   api,
   crud,
@@ -133,7 +123,7 @@ export function createTelegramChannelsApi({
   silentFeedbackConfig: AxiosRequestConfig;
   quietMutationConfig: AxiosRequestConfig;
 }) {
-  const telegramChannelsApi = { ...createTelegramInviteLinkMaintenanceApi(api),
+  const telegramChannelsApi = { ...createTelegramInviteLinkMaintenanceApi(api, quietMutationConfig),
     previewUnifiedImport: async (
       channelId: string,
       manifest: TelegramUnifiedImportManifest,
@@ -301,32 +291,6 @@ export function createTelegramChannelsApi({
           `/telegram-channels/${id}`,
           payload,
           silentFeedbackConfig,
-        )
-      ).data,
-    registerInviteLink: async (id: string, url: string) =>
-      (
-        await api.post<{ id: string; name: string; url: string }>(
-          `/telegram-channels/${id}/invite-links/register`,
-          { url },
-          quietMutationConfig,
-        )
-      ).data,
-    createInviteLink: async (
-      id: string,
-      payload: {
-        title: string;
-        mtprotoAccountId?: string;
-        requestNeeded: boolean;
-        expiresAt?: string;
-        usageLimit?: number;
-        monthlyFeeStars?: number;
-      },
-    ) =>
-      (
-        await api.post<TelegramInviteLink>(
-          `/telegram-channels/${id}/invite-links/create`,
-          payload,
-          createInviteLinkFeedbackConfig,
         )
       ).data,
     import: async (payload: TelegramChannelImportPayload) =>

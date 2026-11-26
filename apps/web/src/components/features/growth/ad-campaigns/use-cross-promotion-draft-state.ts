@@ -163,13 +163,33 @@ export function useCrossPromotionDraftState({
           initial?.partnerTelegramUsername ??
           "",
       );
-      setTargets(initial?.targets ?? []);
+      const initialTargets = initial?.targets ?? [];
+      if (kind === "OWN_CHANNELS") {
+        const targetsByChannel = new Map<string, CrossPromotionTargetInput>();
+        for (const target of initialTargets) {
+          const previous = targetsByChannel.get(target.telegramChannelId);
+          const base = previous ?? { ...target, inviteLinkId: "", publisherChannelId: undefined };
+          if (target.publisherChannelId) {
+            const result = initial?.targetResults?.find((item) => item.inviteLinkId === target.inviteLinkId);
+            if (result?.inviteLinkUrl) {
+              base.publisherInviteLinks = {
+                ...base.publisherInviteLinks,
+                [target.publisherChannelId]: { id: target.inviteLinkId, url: result.inviteLinkUrl },
+              };
+            }
+          } else {
+            base.inviteLinkId = target.inviteLinkId;
+          }
+          targetsByChannel.set(target.telegramChannelId, base);
+        }
+        setTargets([...targetsByChannel.values()]);
+      } else setTargets(initialTargets);
       const storedPublications = initialPost?.publisherPublications ?? [];
       setPost(
-        storedPublications[0]?.post ?? initial?.publicationPost ?? emptyPost(),
+        initialPost?.ownSourcePost ?? storedPublications[0]?.post ?? initial?.publicationPost ?? emptyPost(),
       );
       setAdditionalPublisherPosts(
-        storedPublications.slice(1).map((publication) => ({
+        (kind === "OWN_CHANNELS" ? [] : storedPublications.slice(1)).map((publication) => ({
           id: publication.id,
           post: publication.post,
           settings: placementSettingsFromStored(

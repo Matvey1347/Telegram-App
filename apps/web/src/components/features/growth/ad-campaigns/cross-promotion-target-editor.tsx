@@ -30,6 +30,7 @@ export function CrossPromotionTargetEditor({
   showChannelIdentity = true,
   framed = true,
   trailing,
+  inviteLinkTitle,
 }: {
   channel: TelegramChannel;
   value: CrossPromotionTargetInput;
@@ -42,6 +43,7 @@ export function CrossPromotionTargetEditor({
   showChannelIdentity?: boolean;
   framed?: boolean;
   trailing?: ReactNode;
+  inviteLinkTitle?: string;
 }) {
   const [registeredLinks, setRegisteredLinks] = useState<TelegramInviteLink[]>(
     [],
@@ -222,6 +224,7 @@ export function CrossPromotionTargetEditor({
           >
             <div className="min-w-0">
               <TelegramInviteLinkCreateInline
+            initialTitle={inviteLinkTitle}
                 channelId={channel.id}
                 open
                 onOpenChange={setCreatingInviteLink}

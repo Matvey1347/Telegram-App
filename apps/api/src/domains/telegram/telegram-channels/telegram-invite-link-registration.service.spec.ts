@@ -39,7 +39,8 @@ describe('TelegramInviteLinkRegistrationService', () => {
         ? overrides.foundChannel
         : channel;
     const prisma = {
-      telegramInviteLink: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      telegramInviteLink: { findUnique: jest.fn().mockResolvedValue(null), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      telegramUserAccountIntegration: { findMany: jest.fn().mockResolvedValue([]) },
       telegramChannel: {
         findFirst: jest.fn().mockResolvedValue(foundChannel),
       },
@@ -48,6 +49,7 @@ describe('TelegramInviteLinkRegistrationService', () => {
       resolveWorkspaceIdForUser: jest.fn().mockResolvedValue('workspace-1'),
     };
     const access = {
+      sourceDisplayName: jest.fn((account) => account.label),
       bestMtprotoAccountId: jest.fn().mockResolvedValue('account-1'),
       connectedAccount: jest.fn().mockResolvedValue({ id: 'account-1' }),
       accountCredentials: jest.fn().mockReturnValue({
@@ -57,6 +59,7 @@ describe('TelegramInviteLinkRegistrationService', () => {
       }),
     };
     const mtproto = {
+      getPublicChannelInfo: jest.fn(),
       getChannelInviteLink: jest
         .fn()
         .mockResolvedValue(overrides?.remote ?? remote),
@@ -98,12 +101,33 @@ describe('TelegramInviteLinkRegistrationService', () => {
         sourceAccess as never,
       ),
       prisma,
+      access,
       mtproto,
       inviteCreator,
       inviteSync,
       sourceAccess,
     };
   }
+
+  it('offers the verified new owner and excludes old and mismatched accounts', async () => {
+    const { service, prisma, access, mtproto } = createService();
+    prisma.telegramUserAccountIntegration.findMany.mockResolvedValue([
+      { id: 'old', label: 'Old', isPreferredInviteLinkAccount: true },
+      { id: 'new', label: 'New', photoUrl: null, isPreferredInviteLinkAccount: false },
+      { id: 'wrong', label: 'Different channel' },
+    ]);
+    access.accountCredentials.mockImplementation((account) => ({ apiId: '1', apiHash: 'hash', session: account.id }));
+    mtproto.getPublicChannelInfo
+      .mockResolvedValueOnce({ kind: 'channel', telegramChatId: channel.telegramChatId, adminRights: { inviteUsers: false } })
+      .mockResolvedValueOnce({ kind: 'channel', telegramChatId: channel.telegramChatId, isCreator: true })
+      .mockResolvedValueOnce({ kind: 'channel', telegramChatId: '98765', isCreator: true });
+    await expect(service.accounts('user-1', 'channel-1')).resolves.toEqual([
+      { sourceId: 'new', displayName: 'New', role: 'OWNER', avatarUrl: null, isPreferredInviteLinkAccount: false },
+    ]);
+    expect(prisma.telegramUserAccountIntegration.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ workspaceId: 'workspace-1', isActive: true }),
+    }));
+  });
 
   it('verifies and persists a legacy link for the workspace channel', async () => {
     const { service, prisma, mtproto, inviteSync } = createService();

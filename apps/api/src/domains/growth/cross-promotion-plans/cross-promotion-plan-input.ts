@@ -178,8 +178,10 @@ export async function validatePlanInput(
       throw new BadRequestException(
         'Every promo must belong to its promoted channel',
       );
-    if (!target.promoId && dto.kind !== 'DIRECT_MUTUAL')
-      throw new BadRequestException('Every own-channel target needs a promo');
+    if (!target.promoId && dto.kind === 'OWN_CHANNELS' && dto.publicationPost.partnerPostSource !== 'CUSTOM')
+      throw new BadRequestException('Every own-channel target needs a promo or a custom post');
+    if (target.publisherChannelId && (dto.kind !== 'OWN_CHANNELS' || !publisherChannelIds.includes(target.publisherChannelId)))
+      throw new BadRequestException('Every unique invite link must use a selected publishing channel');
     if (
       linkById.get(target.inviteLinkId)?.telegramChannelId !==
       target.telegramChannelId

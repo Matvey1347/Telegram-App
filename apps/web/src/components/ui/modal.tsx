@@ -31,7 +31,6 @@ export function Modal({
   size = "md",
   allowOverflow = false,
   stableHeight = false,
-  extraViewportSpace = false,
   compactTitle = false,
   closeLabel,
 }: PropsWithChildren<{
@@ -45,7 +44,6 @@ export function Modal({
   size?: "md" | "sm" | "xs" | "xl" | "2xl";
   allowOverflow?: boolean;
   stableHeight?: boolean;
-  extraViewportSpace?: boolean;
   compactTitle?: boolean;
   loading?: boolean;
   closeLabel?: string;
@@ -135,7 +133,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`relative flex w-full min-w-0 max-w-[calc(100vw-1rem)] flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-w-[calc(100vw-2rem)] ${extraViewportSpace ? "max-h-[min(90dvh,calc(100dvh_-_max(1rem,env(safe-area-inset-top))_-_max(1rem,env(safe-area-inset-bottom))))] sm:max-h-[84dvh]" : "max-h-[calc(100dvh-2rem)] sm:max-h-[84vh]"} ${stableHeight ? "h-[calc(100dvh-2rem)] sm:h-[84vh]" : ""} ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "xs" ? "!max-w-[min(400px,calc(100vw-2rem))]" : size === "sm" ? "!max-w-[min(560px,calc(100vw-2rem))]" : size === "xl" ? "!max-w-[min(1280px,calc(100vw-2rem))]" : size === "2xl" ? "!max-w-[min(1540px,calc(100vw-2rem))]" : "!max-w-[min(660px,calc(100vw-2rem))]"}`}
+        className={`relative flex w-full min-w-0 max-w-[calc(100vw-1rem)] flex-col rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl sm:max-w-[calc(100vw-2rem)] max-h-[80dvh] ${stableHeight ? "h-[80dvh]" : ""} ${allowOverflow ? "overflow-visible" : "overflow-hidden"} ${size === "xs" ? "!max-w-[min(400px,calc(100vw-2rem))]" : size === "sm" ? "!max-w-[min(560px,calc(100vw-2rem))]" : size === "xl" ? "!max-w-[min(1280px,calc(100vw-2rem))]" : size === "2xl" ? "!max-w-[min(1540px,calc(100vw-2rem))]" : "!max-w-[min(660px,calc(100vw-2rem))]"}`}
       >
         <div className="mb-1 flex shrink-0 items-center justify-between gap-2 p-3 pb-2 sm:gap-3 sm:p-5 sm:pb-3">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">

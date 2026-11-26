@@ -75,7 +75,7 @@ check. No page may create horizontal viewport scrolling.
 - Dense tabs and toolbars may scroll horizontally with an obvious active item.
 - Tables need either a deliberate mobile card representation or an explicitly
   documented horizontal-scroll container. Never rely on viewport overflow.
-- Modals cap at `100dvh`, keep their body scrollable and return focus to the
+- Modals cap at `80dvh`, keep their body scrollable and return focus to the
   opener. Sticky actions respect safe-area insets.
 - The mobile sidebar is a modal drawer: it traps focus, closes on Escape,
   restores focus, exposes dialog semantics and locks background scrolling.

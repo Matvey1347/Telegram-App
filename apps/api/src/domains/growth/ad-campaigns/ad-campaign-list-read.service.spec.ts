@@ -12,6 +12,21 @@ describe('AdCampaignListReadService', () => {
     expect(prisma.adCampaignBotInviteLink.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ adCampaign: { workspaceId: 'workspace' } }) }));
   });
 
+  it('uses measured views of a competing promotion on the destination of a shared bot link', async () => {
+    const start = new Date('2026-01-01T00:00:00Z');
+    const end = new Date('2026-01-02T00:00:00Z');
+    const inviteLink = { id: 'link', telegramChannelId: 'channel', telegramChannel: { title: 'Channel', photoUrl: null } };
+    const row = { id: 'ad', placementDate: start, createdAt: start, endedAt: end, sourcePostViews: 100, botInviteLinks: [{ kind: 'BOT', inviteLink }] };
+    const prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([{ campaignId: 'vp', channelId: 'channel', startsAt: start, endsAt: end, views: 300 }]),
+      adCampaignBotInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
+      telegramInviteLinkSnapshot: { findMany: jest.fn().mockResolvedValue([{ inviteLinkId: 'link', syncedAt: end, joinedCount: 0, requestedCount: 80 }]) },
+    };
+    const service = new AdCampaignListReadService(prisma as never, {} as never);
+    const result = await (service as any).loadBotRequestMetrics('workspace', [row]);
+    expect(result.get('ad')).toMatchObject({ total: 20, estimated: true });
+  });
+
   it('uses a compact, workspace-scoped list read with bounded operations', async () => {
     type ListQuery = {
       where: { workspaceId: string };

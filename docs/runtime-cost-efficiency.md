@@ -294,3 +294,18 @@ At 100 channels the notification still performs one recipient lookup and uses th
 existing Telegram send, with the existing Unicode fallback on explicit rejection.
 The website loads the sample on demand for a single selected channel. No new
 worker, polling, history, or idle database activity is introduced.
+
+### Campaign bot attribution and invite account selection
+
+Campaign results use one batched exposure query for the destination channels
+with shared bot links on the requested page. It joins recorded ad, own-channel
+and mutual-promotion placements intersecting the date range. Attribution uses
+stored reach when available and a proportional estimate when request timestamps
+or reach are missing. Historical entries with no recorded end use the first
+24 hours. Exact campaign-link counters remain separate from this estimate.
+
+The invite-account picker checks Telegram for one selected channel on demand,
+with at most three concurrent calls and a 30-second browser cache. Work scales
+with connected accounts, independent of the other channels in the workspace.
+There is no polling, background job or write on access checks. Existing sync
+retention, write paths and idle Neon/Railway behavior remain the same.

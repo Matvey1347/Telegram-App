@@ -238,6 +238,31 @@ describe('TelegramMtprotoClient import resolution', () => {
     );
   });
 
+  it('reads exact-link importers when Telegram hides a former admin export', async () => {
+    const entity = new Api.Channel({
+      id: returnBigInt('123456'), title: 'Channel', accessHash: returnBigInt('7'), broadcast: true,
+    } as any);
+    fakeClient.getEntity.mockResolvedValue(entity);
+    fakeClient.invoke.mockImplementation((request: unknown) => {
+      if (request instanceof Api.messages.GetExportedChatInvite)
+        throw Object.assign(new Error('Telegram refused the export lookup'), { errorMessage: 'CHAT_ADMIN_REQUIRED' });
+      if (request instanceof Api.messages.GetChatInviteImporters && request.link === 'https://t.me/+legacy')
+        return { count: request.requested ? 83 : 11 };
+      throw new Error('Unexpected invoke');
+    });
+    await expect(client.getChannelInviteLink({
+      apiId: '1', apiHash: 'hash', session: 'session',
+      channel: { telegramChatId: '123456', telegramAccessHash: '7' },
+      inviteLink: 'https://t.me/+legacy',
+      knownInvite: {
+        url: 'https://t.me/+legacy', title: 'Legacy', telegramCreatorUserId: '42',
+        creatorFirstName: null, creatorLastName: null, creatorUsername: null, creatorPhotoUrl: null,
+        createdAt: null, startDate: null, expireDate: null, usageLimit: null,
+        requestNeeded: true, permanent: false, revoked: false,
+      },
+    })).resolves.toMatchObject({ usage: 11, requested: 83, usageObserved: true, requestedObserved: true });
+  });
+
   it('resolves a public username to a real entity', async () => {
     const entity = new Api.Channel({
       id: '123456' as any,

@@ -99,10 +99,12 @@ export function TelegramInviteLinkCreateInline({
   onCreated,
   open: controlledOpen,
   onOpenChange,
+  initialTitle = "",
 }: {
   channelId: string;
   onCreated: (link: TelegramInviteLink) => void;
   open?: boolean;
+  initialTitle?: string;
   onOpenChange?: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
@@ -114,7 +116,7 @@ export function TelegramInviteLinkCreateInline({
     if (controlledOpen === undefined) setUncontrolledOpen(next);
     onOpenChange?.(next);
   };
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(initialTitle);
   const [requestNeeded, setRequestNeeded] = useState(true);
   const [monthlyFeeEnabled, setMonthlyFeeEnabled] = useState(false);
   const [monthlyFeeStars, setMonthlyFeeStars] = useState("");
@@ -124,22 +126,13 @@ export function TelegramInviteLinkCreateInline({
   const [userLimitPreset, setUserLimitPreset] = useState(4);
   const [usageLimit, setUsageLimit] = useState("");
   const sources = useQuery({
-    queryKey: [...telegramChannelKeys.sources(), channelId],
-    queryFn: () => telegramChannelsApi.sources(channelId),
+    queryKey: telegramChannelKeys.inviteLinkAccounts(channelId),
+    queryFn: ({ signal }) => telegramChannelsApi.inviteLinkAccounts(channelId, signal),
     enabled: open && Boolean(channelId),
+    placeholderData: () => undefined,
     staleTime: 30_000,
   });
-  const accounts = [
-    ...new Map(
-      (sources.data ?? [])
-        .filter(
-          (source) =>
-            source.sourceType === "MTPROTO" &&
-            source.permissions.canManageInviteLinks,
-        )
-        .map((source) => [source.sourceId, source]),
-    ).values(),
-  ];
+  const accounts = sources.data ?? [];
   const selectedAccount = accounts.find((account) => account.sourceId === accountId)
     ?? accounts.find((account) => account.isPreferredInviteLinkAccount)
     ?? accounts[0];
@@ -256,9 +249,7 @@ export function TelegramInviteLinkCreateInline({
           options={accounts.map((account) => ({
             value: account.sourceId,
             label: account.displayName,
-            meta: account.permissions.canManageInviteLinks
-              ? "Can manage invite links"
-              : undefined,
+            meta: account.role === "OWNER" ? "Channel owner" : "Can manage invite links",
             iconUrl: account.avatarUrl ?? undefined,
             iconFallback: account.displayName,
           }))}

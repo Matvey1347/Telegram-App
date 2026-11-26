@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   me: vi.fn(),
   getCapabilities: vi.fn(),
   updateCapabilities: vi.fn(),
+  updateAccount: vi.fn(),
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   getSyncState: vi.fn(),
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/api", () => ({
   authApi: { me: mocks.me },
+  telegramUserAccountsApi: { update: mocks.updateAccount },
 }));
 
 vi.mock("@/lib/features/growth/telegram-crm-api", () => ({
@@ -67,6 +69,7 @@ describe("TelegramCrmAccountCapabilitiesModal", () => {
       defaultCrmSenderAccountId: null,
     });
     mocks.updateSettings.mockReset();
+    mocks.updateAccount.mockReset().mockResolvedValue({ ...account, isPriorityPublisher: true });
     mocks.getSyncState.mockReset().mockResolvedValue({
       initialImportStatus: "COMPLETED",
       lastMeaningfulSyncAt: null,
@@ -74,7 +77,7 @@ describe("TelegramCrmAccountCapabilitiesModal", () => {
     mocks.initialSync.mockReset();
   });
 
-  it("uses the shared toggles and saves the selected capability", async () => {
+  it("offers publication priority without an on or off publishing toggle", async () => {
     render(
       <QueryClientProvider
         client={
@@ -95,17 +98,18 @@ describe("TelegramCrmAccountCapabilitiesModal", () => {
     );
 
     const publishingToggle = await screen.findByRole("button", {
-      name: "Publishing",
+      name: "Priority publishing account",
     });
     expect(screen.queryByRole("button", { name: "CRM sync" })).toBeNull();
-    expect(publishingToggle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "Publishing" })).toBeNull();
+    expect(publishingToggle).toHaveAttribute("aria-pressed", "false");
 
     await waitFor(() => expect(publishingToggle).toBeEnabled());
     fireEvent.click(publishingToggle);
 
     await waitFor(() =>
-      expect(mocks.updateCapabilities).toHaveBeenCalledWith("account-1", {
-        mtprotoPublishingEnabled: false,
+      expect(mocks.updateAccount).toHaveBeenCalledWith("account-1", {
+        isPriorityPublisher: true,
       }),
     );
   });

@@ -35,6 +35,20 @@ describe('AdCampaignInviteWindowsService', () => {
     expect(prisma.adCampaign.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'c', workspaceId: 'w' } }));
   });
 
+  it('drops stale pre-campaign counts and requests only Telegram importers since the actual start', async () => {
+    const startedAt = new Date('2026-11-12T12:30:00.000Z');
+    prisma.adCampaign.findFirst.mockResolvedValue({ ...campaign, startedAt });
+    prisma.adCampaignInviteLinkWindow.findMany.mockResolvedValue([
+      { inviteLinkId: 'a', fromDate: '2026-08-19', timezone: 'Europe/Kyiv' },
+    ]);
+    registration.register.mockResolvedValue({ joinedWithinPeriod: 12, pendingWithinPeriod: 7 });
+    expect(await service.refresh('user', 'c')).toEqual([]);
+    expect(registration.register).toHaveBeenCalledWith('user', 'channel', 'invite', expect.objectContaining({ from: startedAt, includePending: true }));
+    expect(prisma.adCampaignInviteLinkWindow.updateMany).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      data: expect.objectContaining({ fromDate: '2026-11-12', joinedCount: null }),
+    }));
+  });
+
   it('marks results unavailable when Telegram cannot return complete counts', async () => {
     prisma.adCampaignInviteLinkWindow.findMany.mockResolvedValue([{ inviteLinkId: 'a', fromDate: '2026-11-12', timezone: 'Europe/Kyiv' }]);
     registration.register.mockResolvedValue({ joinedWithinPeriod: 10, pendingWithinPeriod: null });

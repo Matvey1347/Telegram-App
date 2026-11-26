@@ -3,7 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramInviteLinkRegistrationService } from '../../telegram/telegram-channels/telegram-invite-link-registration.service';
-import { zonedDateTimeToUtc } from '../../telegram/telegram-ad-sales/domain/timezone';
+import { utcDateKey, zonedDateTimeToUtc } from '../../telegram/telegram-ad-sales/domain/timezone';
 import { SetAdCampaignInviteWindowsDto } from './ad-campaign-invite-windows.dto';
 
 @Injectable()
@@ -18,7 +18,7 @@ export class AdCampaignInviteWindowsService {
     const workspaceId = await this.workspaces.resolveWorkspaceIdForUser(userId);
     const campaign = await this.prisma.adCampaign.findFirst({
       where: { id: campaignId, workspaceId },
-      select: { id: true, workspace: { select: { timezone: true } }, inviteLinks: { select: { id: true, url: true, telegramChannelId: true } } },
+      select: { id: true, startedAt: true, placementDate: true, workspace: { select: { timezone: true } }, inviteLinks: { select: { id: true, url: true, telegramChannelId: true } } },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
     return { campaign, workspaceId };
@@ -40,6 +40,8 @@ export class AdCampaignInviteWindowsService {
       throw new BadRequestException('Invite links must belong to this campaign');
     }
     const timezone = campaign.workspace.timezone;
+    const start = campaign.startedAt ?? campaign.placementDate;
+    const campaignDate = start ? utcDateKey(start, timezone) : null;
     for (const entry of dto.windows) {
       if (!entry.fromDate) continue;
       const parsed = new Date(`${entry.fromDate}T00:00:00Z`);
@@ -59,13 +61,14 @@ export class AdCampaignInviteWindowsService {
           if (old) await tx.adCampaignInviteLinkWindow.delete({ where: { id: old.id } });
           continue;
         }
-        if (old?.fromDate === entry.fromDate && old.timezone === timezone) continue;
+        const fromDate = campaignDate && campaignDate > entry.fromDate ? campaignDate : entry.fromDate;
+        if (old?.fromDate === fromDate && old.timezone === timezone) continue;
         changed.push(entry.inviteLinkId);
         const configurationToken = randomUUID();
         await tx.adCampaignInviteLinkWindow.upsert({
           where: { adCampaignId_inviteLinkId: { adCampaignId: campaignId, inviteLinkId: entry.inviteLinkId } },
-          create: { adCampaignId: campaignId, inviteLinkId: entry.inviteLinkId, fromDate: entry.fromDate, timezone, configurationToken },
-          update: { fromDate: entry.fromDate, timezone, configurationToken, joinedCount: null, pendingCount: null, computedAt: null, lastAttemptAt: null, lastAttemptToken: null, lastAttemptStatus: null, lastAttemptReason: null },
+          create: { adCampaignId: campaignId, inviteLinkId: entry.inviteLinkId, fromDate, timezone, configurationToken },
+          update: { fromDate, timezone, configurationToken, joinedCount: null, pendingCount: null, computedAt: null, lastAttemptAt: null, lastAttemptToken: null, lastAttemptStatus: null, lastAttemptReason: null },
         });
       }
     });
@@ -82,6 +85,10 @@ export class AdCampaignInviteWindowsService {
       if (onlyIds && !onlyIds.includes(window.inviteLinkId)) continue;
       const link = byLink.get(window.inviteLinkId);
       if (!link) continue;
+      const start = campaign.startedAt ?? campaign.placementDate;
+      const campaignDate = start ? utcDateKey(start, window.timezone) : null;
+      const clamped = Boolean(campaignDate && campaignDate > window.fromDate);
+      const fromDate = clamped ? campaignDate! : window.fromDate;
       const observedUntil = new Date();
       const lastAttemptToken = randomUUID();
       const identity = {
@@ -93,7 +100,10 @@ export class AdCampaignInviteWindowsService {
       };
       const reserved = await this.prisma.adCampaignInviteLinkWindow.updateMany({
         where: { ...identity, lastAttemptToken: window.lastAttemptToken },
-        data: { lastAttemptAt: observedUntil, lastAttemptToken, lastAttemptStatus: 'RUNNING', lastAttemptReason: null },
+        data: {
+          ...(clamped ? { fromDate, joinedCount: null, pendingCount: null, computedAt: null } : {}),
+          lastAttemptAt: observedUntil, lastAttemptToken, lastAttemptStatus: 'RUNNING', lastAttemptReason: null,
+        },
       });
       if (reserved.count !== 1) continue;
 
@@ -101,7 +111,8 @@ export class AdCampaignInviteWindowsService {
       let pendingCount: number | null = null;
       let reason: string | null = null;
       try {
-        const from = zonedDateTimeToUtc(window.fromDate, '00:00', window.timezone);
+        const localStart = zonedDateTimeToUtc(fromDate, '00:00', window.timezone);
+        const from = start && start > localStart ? start : localStart;
         const result = await this.registration.register(userId, link.telegramChannelId, link.url, { from, until: observedUntil, includePending: true });
         joinedCount = result.joinedWithinPeriod;
         pendingCount = result.pendingWithinPeriod ?? null;

@@ -4,10 +4,15 @@ import type { CrossPromotionTargetInput } from "@telegram-system/shared";
 import type { Promo, TelegramChannel, TelegramInviteLinkOption } from "@/lib/api";
 import { DateInput, FormField, MultiSelect, TimeInput } from "@/components/ui/primitives";
 import { CrossPromotionTargetEditor } from "./cross-promotion-target-editor";
+import { SegmentedControl } from "@/components/ui/segmented-control";
+import { OwnPromotionInviteLinks, promotionLinkTitle } from "./own-promotion-invite-links";
 import { CommonAdSlotOptions } from "../common-ad-slot-options";
 
 export function CrossPromotionOwnTargets({
   channels,
+  mode = "PROMO",
+  onModeChange,
+  placementDateFor,
   publisherIds,
   targetIds,
   date,
@@ -20,6 +25,9 @@ export function CrossPromotionOwnTargets({
   onResolved,
 }: {
   channels: TelegramChannel[];
+  mode?: "PROMO" | "CUSTOM";
+  onModeChange?: (mode: "PROMO" | "CUSTOM") => void;
+  placementDateFor?: (channelId: string) => string;
   publisherIds: string[];
   targetIds: string[];
   date: string;
@@ -34,6 +42,10 @@ export function CrossPromotionOwnTargets({
     value: { promo?: Promo; inviteLink?: TelegramInviteLinkOption },
   ) => void;
 }) {
+  const publishers = channels.filter((channel) => publisherIds.includes(channel.id));
+  const sharedViews = publishers.length && publishers.every((channel) => channel.ownViewsPerPost != null)
+    ? publishers.reduce((count, channel) => count + (channel.ownViewsPerPost ?? 0), 0)
+    : null;
   const available = channels.filter(
     (channel) => !publisherIds.includes(channel.id),
   );
@@ -48,6 +60,19 @@ export function CrossPromotionOwnTargets({
           <CommonAdSlotOptions channelIds={publisherIds} date={date} selectedTime={time} onSelect={onTimeChange} />
         </FormField>
       </div>
+      {onModeChange && (
+        <FormField label="Publication source" required>
+          <SegmentedControl
+            value={mode}
+            onChange={onModeChange}
+            ariaLabel="Publication source"
+            options={[
+              { value: "PROMO", label: "Saved promo" },
+              { value: "CUSTOM", label: "Custom post" },
+            ]}
+          />
+        </FormField>
+      )}
       <FormField label="Channels being promoted" required>
         <MultiSelect
           value={targetIds}
@@ -70,8 +95,10 @@ export function CrossPromotionOwnTargets({
           (item) => item.id === target.telegramChannelId,
         );
         return channel ? (
+          <div key={channel.id} className="space-y-3">
           <CrossPromotionTargetEditor
-            key={channel.id}
+            showPromo={mode === "PROMO"}
+            inviteLinkTitle={promotionLinkTitle(channel.title, date, sharedViews)}
             channel={channel}
             value={target}
             onChange={(next) =>
@@ -83,6 +110,16 @@ export function CrossPromotionOwnTargets({
             }
             onResolved={(value) => onResolved(channel.id, value)}
           />
+          {!!publisherIds.length && (
+            <OwnPromotionInviteLinks
+              value={target}
+              publishers={publishers}
+              placementDateFor={placementDateFor ?? (() => date)}
+              onChange={(next) => onTargetsChange(targets.map((item) =>
+                item.telegramChannelId === next.telegramChannelId ? next : item))}
+            />
+          )}
+          </div>
         ) : null;
       })}
     </section>

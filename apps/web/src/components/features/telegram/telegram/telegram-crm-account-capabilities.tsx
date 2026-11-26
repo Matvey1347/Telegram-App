@@ -10,14 +10,6 @@ import { telegramCrmKeys } from "@/lib/features/growth/telegram-crm-query";
 import { authKeys, telegramAccountKeys, telegramChannelKeys } from "@/lib/query-keys";
 import { crmPermissions } from "@/components/features/growth/ad-sales/crm/crm-permissions";
 
-const capabilityRows = [
-  {
-    key: "mtprotoPublishingEnabled",
-    label: "Publishing",
-    detail: "Allow channel publishing with this user account.",
-  },
-] as const;
-
 export function TelegramCrmAccountCapabilitiesModal({
   account,
   open,
@@ -94,7 +86,8 @@ export function TelegramCrmAccountCapabilitiesModal({
             isPriorityPublisher:
               item.id === account.id
                 ? Boolean(next.isPriorityPublisher)
-                : false,
+                : next.isPriorityPublisher ? false : item.isPriorityPublisher,
+            ...(item.id === account.id ? { mtprotoPublishingEnabled: next.mtprotoPublishingEnabled } : {}),
           })),
       );
     },
@@ -120,16 +113,6 @@ export function TelegramCrmAccountCapabilitiesModal({
         </p>
       ) : (
         <div className="space-y-3">
-          {capabilityRows.map((row) => (
-            <ToggleRow
-              key={row.key}
-              checked={values[row.key]}
-              label={row.label}
-              description={row.detail}
-              disabled={!editable || pending}
-              onChange={(checked) => update.mutate({ [row.key]: checked })}
-            />
-          ))}
           <ToggleRow
             checked={Boolean(account.isPriorityPublisher)}
             label="Priority publishing account"
@@ -138,7 +121,7 @@ export function TelegramCrmAccountCapabilitiesModal({
               !editable ||
               pending ||
               priorityUpdate.isPending ||
-              !account.mtprotoPublishingEnabled
+              !account.isActive
             }
             onChange={(checked) => priorityUpdate.mutate(checked)}
           />

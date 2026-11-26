@@ -1,5 +1,6 @@
 "use client";
 
+import { ownPromotionPost, ownPromotionTargets } from "./own-promotion-publications";
 import { crossPromotionPlacementProduct } from "./cross-promotion-plan-summary";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -375,16 +376,12 @@ export function CrossPromotionPlanModal({
     const hasPostContent = Boolean(
       post.text.trim() || post.imageUrls.length || post.mediaItems?.length,
     );
-    const firstTarget = targets[0];
-    const resolved = firstTarget ? resolvedTarget(firstTarget, 0) : undefined;
-    const selectedPromoPost =
-      resolved?.promo && resolved.inviteLink
-        ? renderSelectedPromoDraft(resolved.promo, resolved.inviteLink.url)
-        : null;
-    // Own-channel promotion publishes the selected reusable promo. A manually
-    // composed post remains an explicit optional override, never a requirement.
-    const publicationPost =
-      kind === "OWN_CHANNELS" && !hasPostContent ? selectedPromoPost : post;
+    const uniqueLinks = kind === "OWN_CHANNELS" && targets.some((target) =>
+      publisherIds.some((id) => Boolean(target.publisherInviteLinks?.[id])));
+    const ownPosts = kind === "OWN_CHANNELS"
+      ? publisherIds.map((id) => ownPromotionPost(outboundMode, post, targets, resolvedTarget, id))
+      : [];
+    const publicationPost = kind === "OWN_CHANNELS" ? ownPosts[0] : post;
     const channelNames = (channelIds: string[]) =>
       channelIds
         .map(
@@ -456,7 +453,9 @@ export function CrossPromotionPlanModal({
       partnerIds.length && outboundMode === "CUSTOM" && !hasOutboundPost
         ? "My custom promo: add text or media before scheduling."
         : null,
-      !publicationPost ? "Choose or compose the post to publish." : null,
+      !publicationPost || ownPosts.some((draft) => !draft)
+        ? "Choose or compose the post and choose its tracking links."
+        : null,
     ].filter((message): message is string => Boolean(message));
     if (validationErrors.length) {
       setShowValidationErrors(true);
@@ -488,14 +487,21 @@ export function CrossPromotionPlanModal({
         placement(channelId, partnerSettings, partnerDate),
       );
       const publisherPublications = [
-        {
+        ...(uniqueLinks ? publisherPlacements.map((slot, index) => {
+          const draft = ownPosts[index]!;
+          return {
+            id: `publisher-${slot.telegramChannelId}`,
+            post: { ...draft, title: draft.title.trim() || title.trim() },
+            placements: [slot],
+          };
+        }) : [{
           id: "publisher-1",
           post: {
             ...publicationPost,
             title: publicationPost.title.trim() || title.trim(),
           },
           placements: publisherPlacements,
-        },
+        }]),
         ...additionalPublisherPosts.map((publication) => ({
           id: publication.id,
           post: {
@@ -528,8 +534,9 @@ export function CrossPromotionPlanModal({
       ].flatMap((item) => {
         return item.deleteAt ? [new Date(item.deleteAt)] : [];
       });
-      const configuredTargets =
-        kind === "DIRECT_MUTUAL" && !partnerIds.length ? [] : targets;
+      const configuredTargets = kind === "OWN_CHANNELS"
+        ? ownPromotionTargets(targets, publisherIds)
+        : targets.filter((target) => target.inviteLinkId);
       const payload = {
         kind,
         advertiserId: kind === "DIRECT_MUTUAL" ? advertiserId : null,
@@ -543,11 +550,12 @@ export function CrossPromotionPlanModal({
           ...publicationPost,
           title: publicationPost.title.trim() || title.trim(),
           iconId,
+          ...(kind === "OWN_CHANNELS" && outboundMode === "CUSTOM" ? { ownSourcePost: post } : {}),
           partnerPostSource: outboundMode,
           publisherPlacements,
           partnerPlacements,
           publisherPublications,
-          partnerPublications: configuredTargets.map((target, index) => {
+          partnerPublications: (kind === "DIRECT_MUTUAL" ? configuredTargets : []).map((target, index) => {
             const resolved = resolvedTarget(target, index);
             const generated =
               outboundMode === "PROMO" && resolved?.promo && resolved.inviteLink

@@ -90,6 +90,14 @@ transport, claims or publication must run the deadline regressions described in
 `docs/telegram/PUBLICATION_RELIABILITY.md`. Never claim guaranteed delivery during
 Telegram outages or claim a fix is live until its deployed version is verified.
 
+## Production publication test cleanup
+
+Use an authorized test channel and a unique fixture marker. Record the IDs of
+every test ad, VP, placement, Telegram message and invite link as they are
+created. Remove the test records and remote artifacts through the normal
+application flows, then verify that they are gone before handing off. If remote
+cleanup fails, retain the exact IDs for retry and report the outstanding items.
+
 ## Runtime cost efficiency
 
 - Read and apply `docs/runtime-cost-efficiency.md` before adding production timers, cron jobs, polling, logging, persistence, external calls, or frontend refetching.

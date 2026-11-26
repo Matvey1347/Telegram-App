@@ -1,3 +1,5 @@
+import { utcDateKey } from '../../telegram/telegram-ad-sales/domain/timezone';
+
 type InviteLinkCounters = {
   id: string;
   joinedCount: number;
@@ -11,13 +13,26 @@ type InviteLinkCounters = {
 
 export function campaignInviteWindowMetrics(
   links: InviteLinkCounters[],
-  windows: Array<{ inviteLinkId: string; joinedCount: number | null; pendingCount: number | null }>,
+  windows: Array<{
+    inviteLinkId: string;
+    joinedCount: number | null;
+    pendingCount: number | null;
+    fromDate?: string;
+    timezone?: string;
+  }>,
+  campaignStart?: Date | null,
 ) {
   const byLink = new Map(windows.map((window) => [window.inviteLinkId, window]));
   let joined: number | null = 0;
   let pending: number | null = 0;
   for (const link of links) {
     const window = byLink.get(link.id);
+    if (window?.fromDate && window.timezone && campaignStart &&
+        window.fromDate < utcDateKey(campaignStart, window.timezone)) {
+      joined = null;
+      pending = null;
+      continue;
+    }
     const joinedValue = window ? window.joinedCount :
       link.joinedObserved === false && !link.joinedObservedAt || link.joinedObserved === null && !link.joinedObservedAt && !link.lastSyncedAt ? null : link.joinedCount;
     const pendingValue = window ? window.pendingCount :

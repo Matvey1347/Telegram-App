@@ -49,6 +49,19 @@ type Dependencies = {
   withTimeout: TelegramMtprotoClient['withTimeout'];
 };
 
+export type InviteLinkLookup = {
+  apiId: string;
+  apiHash: string;
+  session: string;
+  channel: StoredTelegramChannelReference;
+  inviteLink: string;
+  joinedFrom?: Date | null;
+  joinedUntil?: Date | null;
+  includePendingSince?: boolean;
+  preferLivePending?: boolean;
+  knownInvite?: Omit<TelegramInviteLinksResult['links'][number], 'usage' | 'requested'>;
+};
+
 export class TelegramMtprotoInviteLinks {
   constructor(private readonly context: Dependencies) {}
 
@@ -502,17 +515,7 @@ export class TelegramMtprotoInviteLinks {
     }
   }
 
-  async getChannelInviteLink(params: {
-    apiId: string;
-    apiHash: string;
-    session: string;
-    channel: StoredTelegramChannelReference;
-    inviteLink: string;
-    joinedFrom?: Date | null;
-    joinedUntil?: Date | null;
-    includePendingSince?: boolean;
-    preferLivePending?: boolean;
-  }): Promise<TelegramInviteLinksResult['links'][number]> {
+  async getChannelInviteLink(params: InviteLinkLookup): Promise<TelegramInviteLinksResult['links'][number]> {
     const parsed = parseTelegramImportInput(params.inviteLink);
     if (parsed.type !== 'invite') {
       throw new BadRequestException(
@@ -528,15 +531,44 @@ export class TelegramMtprotoInviteLinks {
       );
       let response: unknown;
       try {
-        response = await fetchInvite();
+        try {
+          response = await fetchInvite();
+        } catch (error) {
+          const code = (error as { errorMessage?: string })?.errorMessage;
+          if (code !== 'CHANNEL_INVALID' || resolved.channel?.resolvedBy !== 'stored-peer') throw error;
+          resolved = await this.context.resolveStoredChannel(client, { ...params.channel, telegramAccessHash: null });
+          response = await fetchInvite();
+        }
       } catch (error) {
-        // Access hashes belong to the connected account. Re-resolve the same
-        // channel once when the stored hash is rejected.
-        const code = (error as { errorMessage?: string })?.errorMessage;
-        if (code !== 'CHANNEL_INVALID' || resolved.channel?.resolvedBy !== 'stored-peer')
-          this.context.mapInviteError(error);
-        resolved = await this.context.resolveStoredChannel(client, { ...params.channel, telegramAccessHash: null });
-        response = await fetchInvite().catch((failure: unknown) => this.context.mapInviteError(failure));
+        // After an owner change Telegram can hide another admin's export entry.
+        // The exact-link importer queries can still return verified counters.
+        const known = params.knownInvite;
+        if (known && !known.revoked && (!known.expireDate || known.expireDate > new Date())) {
+          const peer = resolved.peer;
+          const run = <T>(request: Promise<T>) => this.context.withTimeout(
+            request, this.context.telegramResolveTimeoutMs, 'Telegram invite-link importer lookup',
+          );
+          const read = (requested: boolean) => readInviteImporterCount(client, peer, requested, run, parsed.inviteLink);
+          const period = (requested: boolean) => params.joinedFrom
+            ? this.countInviteLinkJoinsInPeriod({
+                client, peer, inviteLink: parsed.inviteLink,
+                from: params.joinedFrom, until: params.joinedUntil ?? new Date(), requested,
+              })
+            : null;
+          const [usage, requested, joinedWithinPeriod, pendingWithinPeriod] = await Promise.all([
+            read(false), known.requestNeeded ? read(true) : null,
+            period(false), params.includePendingSince ? period(true) : null,
+          ]);
+          if (usage != null || requested != null || joinedWithinPeriod != null || pendingWithinPeriod != null) {
+            return {
+              ...known,
+              usage: usage ?? 0, requested: requested ?? 0,
+              usageObserved: usage != null, requestedObserved: requested != null || !known.requestNeeded,
+              joinedWithinPeriod, pendingWithinPeriod,
+            };
+          }
+        }
+        this.context.mapInviteError(error);
       }
 
       const invite = this.unwrapExportedChatInvite(response);

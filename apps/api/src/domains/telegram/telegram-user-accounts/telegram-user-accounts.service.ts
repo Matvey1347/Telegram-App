@@ -260,11 +260,10 @@ export class TelegramUserAccountsService {
       if (
         dto.isPriorityPublisher &&
         (!existing.isActive ||
-          existing.status !== TelegramUserAccountStatus.connected ||
-          !existing.mtprotoPublishingEnabled)
+          existing.status !== TelegramUserAccountStatus.connected)
       ) {
         throw new BadRequestException(
-          'A priority publisher must be connected, active, and enabled for publishing.',
+          'A priority publisher must be connected and active.',
         );
       }
       await this.prisma.$transaction(async (tx) => {
@@ -276,7 +275,10 @@ export class TelegramUserAccountsService {
         }
         await tx.telegramUserAccountIntegration.update({
           where: { id },
-          data: { isPriorityPublisher: dto.isPriorityPublisher },
+          data: {
+            isPriorityPublisher: dto.isPriorityPublisher,
+            ...(dto.isPriorityPublisher ? { mtprotoPublishingEnabled: true } : {}),
+          },
         });
       });
     }

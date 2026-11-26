@@ -5,7 +5,6 @@ import { useEffect, useRef } from "react";
 import { Bot, ChevronDown, Plus, Send, Trash2 } from "lucide-react";
 import type {
   CrossPromotionTargetInput,
-  TelegramAdProduct,
   TelegramAdvertiser,
   TelegramSystemBotPostDraft,
 } from "@telegram-system/shared";
@@ -18,16 +17,11 @@ import {
   Button,
   CustomSelect,
   FormField,
-  MultiSelect,
 } from "@/components/ui/primitives";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { MutualPromotionPostComposer } from "./mutual-promotion/mutual-promotion-post-composer";
 import { CrossPromotionTargetEditor } from "./cross-promotion-target-editor";
 import { CrmClientField } from "../crm/crm-client-field";
-import {
-  CrossPromotionPlacementSettings,
-  type CrossPromotionPlacementSettingsValue,
-} from "./cross-promotion-placement-settings";
 
 type FlowStatus = "idle" | "working" | "waiting" | "done";
 
@@ -37,8 +31,6 @@ export function CrossPromotionPartnerSide({
   showPartnerIdentity = true,
   channels,
   ownChannels,
-  partnerIds,
-  onPartnerIdsChange = () => undefined,
   partnerAdvertiserId,
   partnerClient,
   partnerContact,
@@ -46,12 +38,6 @@ export function CrossPromotionPartnerSide({
   onPartnerTelegramChange,
   onPartnerAdvertiserChange,
   onSearchAdvertisers,
-  productsByChannelId,
-  settings,
-  defaultDate,
-  onDefaultDateChange,
-  defaultTime,
-  onSettingsChange,
   targets,
   onTargetsChange,
   onAddTarget,
@@ -73,8 +59,6 @@ export function CrossPromotionPartnerSide({
   showPartnerIdentity?: boolean;
   channels: TelegramChannel[];
   ownChannels: TelegramChannel[];
-  partnerIds: string[];
-  onPartnerIdsChange?: (ids: string[]) => void;
   partnerAdvertiserId: string | null;
   partnerClient?: {
     id: string;
@@ -87,12 +71,6 @@ export function CrossPromotionPartnerSide({
   onPartnerTelegramChange: (value: string) => void;
   onPartnerAdvertiserChange: (advertiser: TelegramAdvertiser | null) => void;
   onSearchAdvertisers: (query: string) => Promise<TelegramAdvertiser[]>;
-  productsByChannelId: Record<string, TelegramAdProduct[]>;
-  settings: CrossPromotionPlacementSettingsValue;
-  defaultDate: string;
-  onDefaultDateChange: (date: string) => void;
-  defaultTime: string;
-  onSettingsChange: (value: CrossPromotionPlacementSettingsValue) => void;
   targets: CrossPromotionTargetInput[];
   onTargetsChange: (targets: CrossPromotionTargetInput[]) => void;
   onAddTarget?: () => void;
@@ -173,46 +151,6 @@ export function CrossPromotionPartnerSide({
                 onSearchAdvertisers={onSearchAdvertisers}
               />
             </div>
-          ) : null}
-          <FormField label="Partner channels">
-            <MultiSelect
-              value={partnerIds}
-              onChange={onPartnerIdsChange}
-              options={channels.map((channel) => ({
-                value: channel.id,
-                label: channel.username
-                  ? `${channel.title} · @${channel.username}`
-                  : channel.title,
-                selectedLabel: channel.title,
-                iconUrl: channel.photoUrl,
-                iconFallback: channel.title,
-              }))}
-              placeholder="Select partner channels"
-              searchPlaceholder="Search channels"
-            />
-          </FormField>
-          {partnerIds.length ? (
-            <CrossPromotionPlacementSettings
-              title="Formats in partner channels"
-              channelIds={partnerIds}
-              channels={channels}
-              productsByChannelId={productsByChannelId}
-              value={settings}
-              defaultDate={defaultDate}
-              defaultTime={defaultTime}
-              onDefaultDateChange={onDefaultDateChange}
-              onChange={onSettingsChange}
-              formatErrorChannelIds={
-                showValidationErrors
-                  ? partnerIds.filter((channelId) => {
-                      const products = productsByChannelId[channelId] ?? [];
-                      return (
-                        products.length > 0 && !settings.formatIds[channelId]
-                      );
-                    })
-                  : []
-              }
-            />
           ) : null}
           {targets.length ? (
             <>

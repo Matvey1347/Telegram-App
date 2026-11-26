@@ -59,7 +59,9 @@ export function CrossPromotionPlanCard({
     : plan.scheduledAt;
   const publisherViews = sumKnown(plan.publisherResults.map((channel) => channel.postViews));
   const targetViews = ownPromotion
-    ? plan.targetResults.map(() => publisherViews)
+    ? plan.targetResults.map((target) => target.publisherChannelId
+        ? plan.publisherResults.find((channel) => channel.telegramChannelId === target.publisherChannelId)?.postViews ?? null
+        : publisherViews)
     : splitPublisherViews(publisherViews, plan.targetResults);
 
   const channelList = publishingChannels.length ? (
@@ -172,7 +174,9 @@ export function CrossPromotionPlanCard({
             >
               <div className="flex min-w-0 items-center gap-1 rounded-full border border-neutral-700 bg-neutral-900 px-2 py-0.5" title={target.title}>
                 <TelegramEntityAvatar imageUrl={target.photoUrl} kind="channel" alt="" size="xs" />
-                <span className="truncate font-medium text-neutral-100">{target.title}</span>
+                <span className="truncate font-medium text-neutral-100">{target.title}
+                  {target.publisherChannelId ? ` · ${plan.publisherResults.find((channel) => channel.telegramChannelId === target.publisherChannelId)?.title ?? ""}` : ""}
+                </span>
               </div>
               <Stat
                 label="During placement"

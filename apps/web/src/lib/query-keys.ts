@@ -154,6 +154,8 @@ export const telegramChannelKeys = {
       search,
     ] as const,
   sources: () => ["telegram-channel-sources"] as const,
+  inviteLinkAccounts: (channelId: string) =>
+    ["telegram-channel-sources", channelId, "invite-link-accounts"] as const,
   sourceChannels: () => ["telegram-source-channels"] as const,
   publishingCapabilities: () => ["telegram-publishing-capabilities"] as const,
   campaigns: (channelId: string) =>

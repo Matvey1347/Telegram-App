@@ -29,3 +29,10 @@ export type TelegramPublishingCapabilities = {
   checkedAt: string | null;
   isFallback: boolean;
 };
+
+export type TelegramInviteLinkAccount = TelegramInviteLinkAccountPreference & {
+  sourceId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role: "OWNER" | "ADMIN";
+};

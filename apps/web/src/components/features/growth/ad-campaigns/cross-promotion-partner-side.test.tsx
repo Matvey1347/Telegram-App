@@ -27,7 +27,6 @@ vi.mock("./cross-promotion-target-editor", () => ({
 
 describe("CrossPromotionPartnerSide", () => {
   it("hides partner formats until partner channels are selected", async () => {
-    const onDefaultDateChange = vi.fn();
     const onAddTarget = vi.fn();
 
     render(
@@ -40,19 +39,12 @@ describe("CrossPromotionPartnerSide", () => {
         ownChannels={[
           { id: "own-1", title: "My selected publishing channel" } as never,
         ]}
-        partnerIds={[]}
         partnerAdvertiserId={null}
         partnerContact=""
         onPartnerContactChange={vi.fn()}
         onPartnerTelegramChange={vi.fn()}
         onPartnerAdvertiserChange={vi.fn()}
         onSearchAdvertisers={vi.fn().mockResolvedValue([])}
-        productsByChannelId={{}}
-        settings={{ formatIds: {}, times: {} }}
-        defaultDate="2026-09-15"
-        onDefaultDateChange={onDefaultDateChange}
-        defaultTime="17:00"
-        onSettingsChange={vi.fn()}
         targets={[]}
         onTargetsChange={vi.fn()}
         onAddTarget={onAddTarget}
@@ -71,13 +63,12 @@ describe("CrossPromotionPartnerSide", () => {
     );
 
     expect(screen.getByText("Client")).toBeVisible();
-    expect(screen.queryByText("Partner channels (optional)")).toBeNull();
+    expect(screen.queryByText("Partner channels")).toBeNull();
     expect(screen.queryByText("Formats in partner channels")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Add promo placement" }),
     ).toBeVisible();
     await waitFor(() => expect(onAddTarget).toHaveBeenCalledOnce());
-    expect(onDefaultDateChange).not.toHaveBeenCalled();
   });
 
   it("keeps formats hidden while retaining the required first promo placement", () => {
@@ -87,19 +78,12 @@ describe("CrossPromotionPartnerSide", () => {
         onExpandedChange={vi.fn()}
         channels={[{ id: "own-1", title: "My channel" } as never]}
         ownChannels={[{ id: "own-1", title: "My channel" } as never]}
-        partnerIds={[]}
         partnerAdvertiserId={null}
         partnerContact=""
         onPartnerContactChange={vi.fn()}
         onPartnerTelegramChange={vi.fn()}
         onPartnerAdvertiserChange={vi.fn()}
         onSearchAdvertisers={vi.fn().mockResolvedValue([])}
-        productsByChannelId={{}}
-        settings={{ formatIds: {}, times: {} }}
-        defaultDate="2026-09-15"
-        onDefaultDateChange={vi.fn()}
-        defaultTime="17:00"
-        onSettingsChange={vi.fn()}
         targets={[
           {
             telegramChannelId: "own-1",
@@ -135,19 +119,12 @@ describe("CrossPromotionPartnerSide", () => {
         onExpandedChange={onExpandedChange}
         channels={[]}
         ownChannels={[]}
-        partnerIds={[]}
         partnerAdvertiserId={null}
         partnerContact=""
         onPartnerContactChange={vi.fn()}
         onPartnerTelegramChange={vi.fn()}
         onPartnerAdvertiserChange={vi.fn()}
         onSearchAdvertisers={vi.fn().mockResolvedValue([])}
-        productsByChannelId={{}}
-        settings={{ formatIds: {}, times: {} }}
-        defaultDate="2026-09-15"
-        onDefaultDateChange={vi.fn()}
-        defaultTime="17:00"
-        onSettingsChange={vi.fn()}
         targets={[]}
         onTargetsChange={vi.fn()}
         onResolved={vi.fn()}

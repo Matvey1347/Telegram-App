@@ -519,6 +519,7 @@ export class CrossPromotionPlanReadService {
           return {
             telegramChannelId: target.telegramChannelId,
             inviteLinkId: target.inviteLinkId,
+            publisherChannelId: target.publisherChannelId,
             title: channel?.title ?? 'Unavailable channel',
             photoUrl: channel?.photoUrl ?? null,
             promoId: target.promoId ?? null,

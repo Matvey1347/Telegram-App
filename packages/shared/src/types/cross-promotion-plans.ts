@@ -13,6 +13,10 @@ export type CrossPromotionTargetInput = {
   telegramChannelId: string;
   promoId?: string | null;
   inviteLinkId: string;
+  /** When set, the link was used only in this publishing channel. */
+  publisherChannelId?: string;
+  /** In-progress form choices. Saved plans store these as separate targets. */
+  publisherInviteLinks?: Record<string, { id: string; url: string }>;
 };
 
 export type CrossPromotionChannelPlacementInput = {
@@ -38,6 +42,7 @@ export type CrossPromotionPublicationItem = {
 
 export type CrossPromotionPlacementPost = TelegramSystemBotPostDraft & {
   iconId?: string | null;
+  ownSourcePost?: TelegramSystemBotPostDraft;
   partnerPublicationPost?: TelegramSystemBotPostDraft | null;
   partnerPostSource?: "PROMO" | "CUSTOM";
   publisherPlacements?: CrossPromotionChannelPlacementInput[];
@@ -100,6 +105,7 @@ export type CrossPromotionPlan = CreateCrossPromotionPlanPayload & {
   }>;
   targetResults: Array<{
     telegramChannelId: string;
+    publisherChannelId?: string;
     inviteLinkId: string;
     title: string;
     photoUrl: string | null;

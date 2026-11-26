@@ -609,17 +609,7 @@ export class TelegramMtprotoClient {
     return this.inviteLinks.getAllChannelInviteLinks(params);
   }
 
-  async getChannelInviteLink(params: {
-    apiId: string;
-    apiHash: string;
-    session: string;
-    channel: StoredTelegramChannelReference;
-    inviteLink: string;
-    joinedFrom?: Date | null;
-    joinedUntil?: Date | null;
-    includePendingSince?: boolean;
-    preferLivePending?: boolean;
-  }): Promise<TelegramInviteLinksResult['links'][number]> {
+  async getChannelInviteLink(params: Parameters<TelegramMtprotoInviteLinks['getChannelInviteLink']>[0]) {
     return this.inviteLinks.getChannelInviteLink(params);
   }
 

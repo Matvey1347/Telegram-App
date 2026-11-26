@@ -135,7 +135,6 @@ export function CrossPromotionPlanView({
     publisherIds,
     setPublisherIds,
     partnerIds,
-    setPartnerIds,
     partnerAdvertiserId,
     setPartnerAdvertiserId,
     partnerContact,
@@ -150,14 +149,11 @@ export function CrossPromotionPlanView({
     setAdditionalPublisherPosts,
     date,
     setDate,
-    partnerDate,
-    setPartnerDate,
     time,
     setTime,
     publisherSettings,
     setPublisherSettings,
     partnerSettings,
-    setPartnerSettings,
     outboundMode,
     setOutboundMode,
     outboundPost,
@@ -286,7 +282,6 @@ export function CrossPromotionPlanView({
         onBack && !saving && !savingDraft ? <ModalBackButton label="Back to promotion types" onClick={onBack} /> : null
       }
       size="xl"
-      extraViewportSpace
       compactTitle
       footer={mode === "create" && !loading && (initial || !drafts.pendingDrafts.length) ? actions : undefined}
     >
@@ -614,7 +609,7 @@ export function CrossPromotionPlanView({
                 ) : null}
               </>
             ) : null}
-            {mySideOpen && kind === "OWN_CHANNELS" ? (
+            {mySideOpen && kind === "OWN_CHANNELS" && outboundMode === "CUSTOM" ? (
               <CrossPromotionPublicationPostEditor
                 directMutual={false}
                 post={post}
@@ -641,8 +636,6 @@ export function CrossPromotionPlanView({
                 showPartnerIdentity={false}
                 channels={allChannels}
                 ownChannels={ownChannels}
-                partnerIds={partnerIds}
-                onPartnerIdsChange={setPartnerIds}
                 partnerAdvertiserId={partnerAdvertiserId}
                 partnerClient={initial?.advertiser ?? null}
                 partnerContact={partnerContact}
@@ -650,12 +643,6 @@ export function CrossPromotionPlanView({
                 onPartnerTelegramChange={setPartnerTelegram}
                 onPartnerAdvertiserChange={(advertiser) => setPartnerAdvertiserId(advertiser?.id ?? null)}
                 onSearchAdvertisers={searchAdvertisers}
-                productsByChannelId={productsByChannelId}
-                settings={partnerSettings}
-                defaultDate={partnerDate}
-                onDefaultDateChange={setPartnerDate}
-                defaultTime={time}
-                onSettingsChange={setPartnerSettings}
                 targets={targets}
                 onTargetsChange={setTargets}
                 onAddTarget={() => {
@@ -699,6 +686,9 @@ export function CrossPromotionPlanView({
             {kind === "OWN_CHANNELS" ? (
               <CrossPromotionOwnTargets
                 channels={ownChannels}
+                mode={outboundMode}
+                onModeChange={setOutboundMode}
+                placementDateFor={(channelId) => publisherSettings.dates?.[channelId] || date}
                 publisherIds={publisherIds}
                 targetIds={targetIds}
                 date={date}

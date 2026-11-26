@@ -3,7 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { TelegramChannelDataType, TelegramSourceType } from '@prisma/client';
+import { TelegramChannelDataType, TelegramSourceType, TelegramUserAccountStatus } from '@prisma/client';
+import type { TelegramInviteLinkAccount } from '@telegram-system/shared';
+import { runBounded } from '../../../common/run-bounded';
+import { normalizeTelegramChannelId } from '@api/telegram/shared/imports/telegram-post-url';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TelegramMtprotoClient } from '@api/telegram/shared/mtproto/telegram-mtproto.client';
@@ -46,19 +49,37 @@ export class TelegramInviteLinkRegistrationService {
     });
     if (!channel) throw new NotFoundException('Telegram channel not found');
 
+    const stored = await this.prisma.telegramInviteLink.findUnique({
+      where: { workspaceId_telegramChannelId_url: { workspaceId, telegramChannelId: channelId, url: inviteLink } },
+      select: {
+        url: true, name: true, creatorTelegramUserId: true, creatorFirstName: true,
+        creatorLastName: true, creatorPhotoUrl: true, creatorUsername: true,
+        telegramCreatedAt: true, expireDate: true, memberLimit: true,
+        createsJoinRequest: true, isRevoked: true,
+      },
+    });
+    const knownInvite = stored?.creatorTelegramUserId ? {
+      url: stored.url, title: stored.name, telegramCreatorUserId: stored.creatorTelegramUserId,
+      creatorFirstName: stored.creatorFirstName, creatorLastName: stored.creatorLastName,
+      creatorPhotoUrl: stored.creatorPhotoUrl, creatorUsername: stored.creatorUsername,
+      createdAt: stored.telegramCreatedAt, startDate: null, expireDate: stored.expireDate,
+      usageLimit: stored.memberLimit, requestNeeded: stored.createsJoinRequest !== false,
+      permanent: false, revoked: stored.isRevoked,
+    } : undefined;
     const sources = await this.accessSources(workspaceId, channelId);
     const candidates = [...sources].sort((left, right) =>
       this.sourceAccess.scoreSource(right, TelegramChannelDataType.INVITE_LINKS) -
       this.sourceAccess.scoreSource(left, TelegramChannelDataType.INVITE_LINKS),
-    ).slice(0, 3);
+    ).slice(0, 3).map((candidate) => candidate.sourceId);
     let remote: Awaited<ReturnType<TelegramMtprotoClient['getChannelInviteLink']>> | undefined;
-    for (const candidate of candidates) {
+    const tryAccount = async (accountId: string) => {
       try {
-        const account = await this.access.connectedAccount(workspaceId, channelId, candidate.sourceId);
+        const account = await this.access.connectedAccount(workspaceId, channelId, accountId);
         const result = await this.mtproto.getChannelInviteLink({
           ...this.access.accountCredentials(account), channel, inviteLink,
           joinedFrom: period?.from, joinedUntil: period?.until,
           includePendingSince: period?.includePending,
+          ...(knownInvite ? { knownInvite } : {}),
           ...(!period ? { preferLivePending: true } : {}),
         });
         remote = {
@@ -72,15 +93,27 @@ export class TelegramInviteLinkRegistrationService {
             pendingWithinPeriod: result.pendingWithinPeriod ?? remote?.pendingWithinPeriod ?? null,
           } : {}),
         };
-        if (result.revoked || (result.expireDate && result.expireDate <= new Date()) ||
+        return Boolean(result.revoked || (result.expireDate && result.expireDate <= new Date()) ||
           (period ? remote.joinedWithinPeriod != null &&
             (!period.includePending || remote.pendingWithinPeriod != null)
-            : remote.usageObserved !== false && remote.requestedObserved !== false)) break;
+            : remote.usageObserved !== false && remote.requestedObserved !== false));
       } catch {
-        // Only a read is retried. ExportChatInvite is never repeated here.
+        return false;
+      }
+    };
+    let complete = false;
+    for (const candidate of candidates) {
+      if (await tryAccount(candidate)) { complete = true; break; }
+    }
+    if (knownInvite && !complete) {
+      const verified = await this.accounts(userId, channelId);
+      const alternates = verified.filter((account) => !candidates.includes(account.sourceId)).slice(0, 3);
+      for (const alternate of alternates) {
+        if (await tryAccount(alternate.sourceId)) break;
       }
     }
-    if (!remote) {
+    const observation = remote as Awaited<ReturnType<TelegramMtprotoClient['getChannelInviteLink']>> | undefined;
+    if (!observation) {
       await this.prisma.telegramInviteLink.updateMany({
         where: {
           workspaceId, telegramChannelId: channelId, url: inviteLink,
@@ -93,8 +126,8 @@ export class TelegramInviteLinkRegistrationService {
       );
     }
     if (
-      remote.revoked ||
-      (remote.expireDate && remote.expireDate.getTime() <= Date.now())
+      observation.revoked ||
+      (observation.expireDate && observation.expireDate.getTime() <= Date.now())
     ) {
       throw new BadRequestException(
         'This Telegram invite link is revoked or expired.',
@@ -105,7 +138,7 @@ export class TelegramInviteLinkRegistrationService {
     const persisted = await this.inviteSync.persistInviteLinkFromRemote({
       workspaceId,
       channelId,
-      link: remote,
+      link: observation,
       maps,
       processedCount: 1,
       totalLinks: 1,
@@ -117,14 +150,63 @@ export class TelegramInviteLinkRegistrationService {
       id: persisted.upserted.id,
       // The selector that initiated registration needs the Telegram title
       // immediately, before its invite-links query is refetched.
-      name: remote.title || 'Imported MTProto link',
-      url: remote.url,
+      name: observation.title || 'Imported MTProto link',
+      url: observation.url,
       workspaceId,
-      currentJoinedCount: remote.usageObserved === false ? null : persisted.upserted.joinedCount,
-      currentRequestedCount: remote.requestedObserved === false ? null : persisted.upserted.requestedCount,
-      joinedWithinPeriod: remote.joinedWithinPeriod ?? null,
-      ...(period?.includePending ? { pendingWithinPeriod: remote.pendingWithinPeriod ?? null } : {}),
+      currentJoinedCount: observation.usageObserved === false ? null : persisted.upserted.joinedCount,
+      currentRequestedCount: observation.requestedObserved === false ? null : persisted.upserted.requestedCount,
+      joinedWithinPeriod: observation.joinedWithinPeriod ?? null,
+      ...(period?.includePending ? { pendingWithinPeriod: observation.pendingWithinPeriod ?? null } : {}),
     };
+  }
+
+  async accounts(userId: string, channelId: string): Promise<TelegramInviteLinkAccount[]> {
+    const workspaceId = await this.workspaceService.resolveWorkspaceIdForUser(userId);
+    const channel = await this.prisma.telegramChannel.findFirst({
+      where: { id: channelId, workspaceId, isActive: true },
+      select: { username: true, telegramChatId: true, inviteLink: true },
+    });
+    if (!channel) throw new NotFoundException('Telegram channel not found');
+    const accounts = await this.prisma.telegramUserAccountIntegration.findMany({
+      where: {
+        workspaceId, isActive: true, status: TelegramUserAccountStatus.connected,
+        sessionEncrypted: { not: null },
+      },
+      select: {
+        id: true, username: true, label: true, firstName: true, photoUrl: true,
+        isPreferredInviteLinkAccount: true,
+        apiId: true, apiHashEncrypted: true, apiHashIv: true, apiHashAuthTag: true,
+        sessionEncrypted: true, sessionIv: true, sessionAuthTag: true,
+      },
+    });
+    const expectedId = normalizeTelegramChannelId(channel.telegramChatId);
+    const verified = await runBounded(accounts, 3, async (account): Promise<TelegramInviteLinkAccount | null> => {
+      try {
+        const observed = await this.mtproto.getPublicChannelInfo({
+          ...this.access.accountCredentials(account), channel, accessOnly: true,
+        });
+        if (observed.kind !== 'channel' ||
+            (expectedId && normalizeTelegramChannelId(observed.telegramChatId) !== expectedId)) return null;
+        const role = observed.isCreator ? 'OWNER' : observed.adminRights?.inviteUsers ? 'ADMIN' : null;
+        if (!role) return null;
+        return {
+          sourceId: account.id,
+          displayName: this.access.sourceDisplayName(account),
+          avatarUrl: account.photoUrl,
+          role,
+          isPreferredInviteLinkAccount: account.isPreferredInviteLinkAccount,
+        };
+      } catch {
+        return null;
+      }
+    });
+    return verified
+      .filter((account): account is TelegramInviteLinkAccount => account != null)
+      .sort((left, right) =>
+        Number(right.isPreferredInviteLinkAccount) - Number(left.isPreferredInviteLinkAccount) ||
+        Number(right.role === 'OWNER') - Number(left.role === 'OWNER') ||
+        left.displayName.localeCompare(right.displayName),
+      );
   }
 
   async create(
@@ -161,8 +243,8 @@ export class TelegramInviteLinkRegistrationService {
     );
     const requestedAccountId = input.mtprotoAccountId?.trim();
     const candidates = requestedAccountId
-      ? sources.filter((item) => item.sourceId === requestedAccountId)
-      : sources.slice(0, 3);
+      ? [requestedAccountId]
+      : sources.slice(0, 3).map((source) => source.sourceId);
     if (!candidates.length) {
       throw new BadRequestException(
         'Select a connected MTProto account that manages invite links for this channel.',
@@ -175,8 +257,8 @@ export class TelegramInviteLinkRegistrationService {
       );
     }
     let remote: Awaited<ReturnType<TelegramInviteLinkCreatorService['create']>> | undefined;
-    for (const source of candidates) {
-      const account = await this.access.connectedAccount(workspaceId, channelId, source.sourceId).catch((error: unknown) => {
+    for (const sourceId of candidates) {
+      const account = await this.access.connectedAccount(workspaceId, channelId, sourceId).catch((error: unknown) => {
         if (requestedAccountId) throw error;
         return null;
       });

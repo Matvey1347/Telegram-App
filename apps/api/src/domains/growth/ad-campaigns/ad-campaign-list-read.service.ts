@@ -2,7 +2,8 @@ import { savedTrackingScope } from './ad-campaign-link-selection';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { campaignInviteWindowMetrics } from './ad-campaign-invite-window-metrics';
-import { overlapShare, type CampaignWindow } from './bot-request-allocation';
+import { DEFAULT_BOT_PLACEMENT_DURATION_MS, overlapShare, type CampaignWindow } from './bot-request-allocation';
+import { loadBotRequestExposures } from './bot-request-exposures';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import {
   createPaginatedResponse,
@@ -34,6 +35,7 @@ const CAMPAIGN_LIST_SELECT = {
   priceInPrimaryCurrency: true,
   exchangeRateToPrimary: true,
   placementDate: true,
+  sourcePostViews: true,
   startedAt: true,
   endedAt: true,
   trackingScope: true,
@@ -104,7 +106,7 @@ const CAMPAIGN_LIST_SELECT = {
       creatorPhotoUrl: true,
     },
   },
-  inviteLinkWindows: { select: { inviteLinkId: true, fromDate: true, joinedCount: true, pendingCount: true, computedAt: true, lastAttemptAt: true, lastAttemptStatus: true, lastAttemptReason: true } },
+  inviteLinkWindows: { select: { inviteLinkId: true, fromDate: true, timezone: true, joinedCount: true, pendingCount: true, computedAt: true, lastAttemptAt: true, lastAttemptStatus: true, lastAttemptReason: true } },
   botInviteLinks: {
     select: {
       kind: true,
@@ -393,12 +395,13 @@ export class AdCampaignListReadService {
         const inviteLink = link.inviteLink;
         return {
           campaignId: campaign.id,
+          kind: link.kind,
           inviteLinkId: inviteLink.id,
           channelId: inviteLink.telegramChannelId,
           channelTitle: inviteLink.telegramChannel.title,
           channelPhotoUrl: inviteLink.telegramChannel.photoUrl,
           startsAt:
-            campaign.placementDate ?? campaign.startedAt ?? campaign.createdAt,
+            campaign.startedAt ?? campaign.placementDate ?? campaign.createdAt,
           baselineJoined: Number(link.baselineJoinedCount ?? 0),
           baselineRequested: Number(link.baselineRequestedCount ?? 0),
           currentJoined: Number(inviteLink.joinedCount ?? 0),
@@ -409,20 +412,26 @@ export class AdCampaignListReadService {
       }),
     );
     if (!tracked.length) return new Map<string, BotRequestPerformance>();
-    const claims = await this.prisma.adCampaignBotInviteLink.findMany({
-      where: { inviteLinkId: { in: [...new Set(tracked.map((entry) => entry.inviteLinkId))] }, adCampaign: { workspaceId } },
-      select: { inviteLinkId: true, adCampaign: { select: { id: true, placementDate: true, startedAt: true, createdAt: true, endedAt: true } } },
-    });
-    const windowsByLink = new Map<string, CampaignWindow[]>();
-    for (const claim of claims) {
-      const windows = windowsByLink.get(claim.inviteLinkId) ?? [];
-      windows.push({ campaignId: claim.adCampaign.id, startsAt: claim.adCampaign.placementDate ?? claim.adCampaign.startedAt ?? claim.adCampaign.createdAt, endsAt: claim.adCampaign.endedAt });
-      windowsByLink.set(claim.inviteLinkId, windows);
-    }
-    // A bot request can be approved after the placement end date. These are
-    // campaign-specific invite links with a saved baseline, so their outcome
-    // must continue to accumulate instead of being cut off at `endedAt`.
     const latest = new Date();
+    const sharedEntries = tracked.filter((entry) => entry.kind === 'BOT');
+    const [claims, exposures] = await Promise.all([
+      this.prisma.adCampaignBotInviteLink.findMany({
+        where: { inviteLinkId: { in: [...new Set(tracked.map((entry) => entry.inviteLinkId))] }, adCampaign: { workspaceId } },
+        select: { inviteLinkId: true, kind: true, adCampaign: { select: { id: true, placementDate: true, startedAt: true, createdAt: true, endedAt: true, sourcePostViews: true } } },
+      }),
+      sharedEntries.length ? loadBotRequestExposures(
+        this.prisma, workspaceId, [...new Set(sharedEntries.map((entry) => entry.channelId))],
+        new Date(Math.min(...sharedEntries.map((entry) => entry.startsAt.getTime()))), latest,
+      ) : new Map<string, CampaignWindow[]>(),
+    ]);
+    const windowsByLink = new Map<string, CampaignWindow[]>();
+    for (const { inviteLinkId, adCampaign, kind } of claims) {
+      const startsAt = adCampaign.startedAt ?? adCampaign.placementDate ?? adCampaign.createdAt;
+      const endsAt = adCampaign.endedAt ?? (kind === 'BOT' ? new Date(startsAt.getTime() + DEFAULT_BOT_PLACEMENT_DURATION_MS) : null);
+      const windows = windowsByLink.get(inviteLinkId) ?? [];
+      windows.push({ campaignId: adCampaign.id, startsAt, endsAt, views: adCampaign.sourcePostViews });
+      windowsByLink.set(inviteLinkId, windows);
+    }
     const snapshots = await this.prisma.telegramInviteLinkSnapshot.findMany({
       where: {
         workspaceId,
@@ -467,12 +476,21 @@ export class AdCampaignListReadService {
       >();
       for (const entry of entries) {
         const snapshotsForEntry = snapshotsByLink.get(entry.inviteLinkId) ?? [];
-        const windows = windowsByLink.get(entry.inviteLinkId) ?? [];
+        const shared = entry.kind === 'BOT';
+        const candidates = [
+          ...(shared ? exposures.get(entry.channelId) ?? [] : []),
+          ...(windowsByLink.get(entry.inviteLinkId) ?? []),
+        ];
+        const windows = [...new Map(candidates.map((window) => [window.campaignId, window])).values()];
         const opening = snapshotsForEntry.findLast((point) => point.syncedAt <= entry.startsAt &&
           point.joinedCount != null && point.requestedCount != null);
         const baselineJoined = opening?.joinedCount ?? entry.baselineJoined;
         const baselineRequested = opening?.requestedCount ?? entry.baselineRequested;
-        const endsAt = savedTrackingScope(campaign.trackingScope) ? campaign.endedAt : null;
+        const endsAt = shared
+          ? campaign.endedAt ?? new Date(entry.startsAt.getTime() + DEFAULT_BOT_PLACEMENT_DURATION_MS)
+          : savedTrackingScope(campaign.trackingScope) ? campaign.endedAt : null;
+        const own = { campaignId: entry.campaignId, startsAt: entry.startsAt, endsAt, views: campaign.sourcePostViews };
+        estimated ||= shared && !campaign.endedAt;
         let previousAt = entry.startsAt, previousJoined = baselineJoined, previousRequested = baselineRequested, allocatedJoined = 0, allocatedRequested = 0;
         const current = channels.get(entry.channelId) ?? {
           telegramChannelId: entry.channelId,
@@ -487,7 +505,7 @@ export class AdCampaignListReadService {
         ) => {
           const key = at.toISOString();
           const pointsAt = current.points.get(key) ?? new Map();
-          const share = overlapShare(previousAt, at, entry.campaignId, windows);
+          const share = overlapShare(previousAt, at, own, windows);
           estimated ||= share < 1;
           allocatedJoined = Math.max(0, allocatedJoined + (Math.max(0, joinedCount - baselineJoined) - Math.max(0, previousJoined - baselineJoined)) * share);
           allocatedRequested = Math.max(0, allocatedRequested + (Math.max(0, requestedCount - baselineRequested) - Math.max(0, previousRequested - baselineRequested)) * share);
@@ -497,7 +515,8 @@ export class AdCampaignListReadService {
         };
         addPoint(entry.startsAt, baselineJoined, baselineRequested);
         for (const snapshot of snapshotsForEntry) {
-          if (snapshot.syncedAt > entry.startsAt && (!endsAt || snapshot.syncedAt <= endsAt) &&
+          if (shared && endsAt && previousAt >= endsAt) break;
+          if (snapshot.syncedAt > entry.startsAt && (shared || !endsAt || snapshot.syncedAt <= endsAt) &&
             (snapshot.joinedCount != null || snapshot.requestedCount != null)) {
             confirmed = true;
             addPoint(
@@ -509,7 +528,7 @@ export class AdCampaignListReadService {
         }
         // Some links are only synced intermittently. Always add their live
         // counters so every linked channel contributes to the current total.
-        if (!endsAt) {
+        if (!endsAt || (shared && previousAt < endsAt)) {
           const hasJoined = Boolean(entry.joinedObservedAt && entry.joinedObservedAt >= entry.startsAt);
           const hasRequested = Boolean(entry.requestedObservedAt && entry.requestedObservedAt >= entry.startsAt);
           if (hasJoined || hasRequested) {
@@ -562,18 +581,18 @@ export class AdCampaignListReadService {
         };
       });
       const points = aggregateBotRequestPoints(channelRows);
+      const startsAt = campaign.startedAt ?? campaign.placementDate ?? campaign.createdAt;
+      const fallbackEnd = entries.every((entry) => entry.kind === 'BOT')
+        ? new Date(startsAt.getTime() + DEFAULT_BOT_PLACEMENT_DURATION_MS)
+        : null;
       result.set(campaign.id, {
         total: points.at(-1)?.totalAttributed ?? 0,
         estimated,
         confirmed,
         points,
         channels: channelRows.sort((a, b) => b.requests - a.requests),
-        startsAt: (
-          campaign.placementDate ??
-          campaign.startedAt ??
-          campaign.createdAt
-        ).toISOString(),
-        endsAt: campaign.endedAt?.toISOString() ?? null,
+        startsAt: startsAt.toISOString(),
+        endsAt: (campaign.endedAt ?? fallbackEnd)?.toISOString() ?? null,
       });
     }
     return result;
@@ -608,7 +627,7 @@ export class AdCampaignListReadService {
     ]);
     const attributionCount =
       row.advertisingTelegramChannels.length + row.advertisingChannels.length;
-    const counts = campaignInviteWindowMetrics(row.inviteLinks, row.inviteLinkWindows);
+    const counts = campaignInviteWindowMetrics(row.inviteLinks, row.inviteLinkWindows, row.startedAt ?? row.placementDate);
     const unavailable = counts.joined == null || counts.pending == null;
     const effectiveJoined = row.inviteLinks.length ? counts?.joined ?? null : row.joinedCount;
     const requestedCount = counts.pending;

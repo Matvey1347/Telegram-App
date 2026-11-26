@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -41,6 +41,11 @@ export class TelegramChannelInviteLinkRegistrationController {
     private readonly registration: TelegramInviteLinkRegistrationService,
     private readonly maintenance: TelegramInviteLinkMaintenanceService,
   ) {}
+
+  @Get(':id/invite-links/accounts')
+  accounts(@CurrentUser() user: JwtUser, @Param('id') id: string) {
+    return this.registration.accounts(user.sub, id);
+  }
 
   @Post(':id/invite-links/register')
   register(

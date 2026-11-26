@@ -3,7 +3,7 @@
 import { formatDateTime } from "@/lib/date-format";
 
 import { useState, type ReactNode } from "react";
-import { RefreshCw, Settings2, Share2, Trash2 } from "lucide-react";
+import { Link2, RefreshCw, Settings2, Share2, Trash2 } from "lucide-react";
 import type { TelegramUserAccount } from "@/lib/api";
 import { Button } from "@/components/ui/primitives";
 import { ChannelPreview } from "./channel-preview";
@@ -156,14 +156,16 @@ function AccountCapabilityBadges({
           Premium
         </CapabilityBadge>
       ) : null}
-      {account.mtprotoPublishingEnabled ? (
-        <CapabilityBadge className="border-violet-500/40 bg-violet-500/10 text-violet-200">
-          <Share2 size={12} /> Publishing
+      {account.mtprotoPublishingEnabled || account.isPriorityPublisher ? (
+        <CapabilityBadge className={account.isPriorityPublisher
+          ? "border-sky-400/60 bg-sky-500/20 text-sky-100"
+          : "border-violet-500/40 bg-violet-500/10 text-violet-200"}>
+          <Share2 size={12} aria-hidden /> {account.isPriorityPublisher ? "Priority publishing" : "Publishing"}
         </CapabilityBadge>
       ) : null}
-      {account.isPriorityPublisher ? (
-        <CapabilityBadge className="border-sky-500/40 bg-sky-500/10 text-sky-200">
-          Priority
+      {account.isPreferredInviteLinkAccount ? (
+        <CapabilityBadge className="border-emerald-500/40 bg-emerald-500/10 text-emerald-200">
+          <Link2 size={12} aria-hidden /> Default for invite links
         </CapabilityBadge>
       ) : null}
     </>

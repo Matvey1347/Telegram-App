@@ -204,7 +204,6 @@ export function AdSaleModal(props: AdSaleModalProps) {
           : null
         }
         size="2xl"
-        extraViewportSpace
         footer={!pickerDrafts.length ? (
           <div className="grid grid-flow-col auto-cols-fr gap-2 [&>button]:whitespace-normal sm:flex sm:justify-end [&>button]:sm:px-5">
             {onSaveDraft ? (

@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/api", () => ({
   telegramChannelsApi: {
-    sources: mocks.sources,
+    inviteLinkAccounts: mocks.sources,
     createInviteLink: mocks.createInviteLink,
   },
 }));
@@ -28,20 +28,18 @@ beforeAll(() => {
 describe("TelegramInviteLinkCreateInline", () => {
   it.each([true, false])("uses the default when eligible and falls back otherwise (eligible: %s)", async (eligible) => {
     mocks.sources.mockResolvedValue([
-      {
+      ...(eligible ? [{
         sourceId: "other",
-        sourceType: "MTPROTO",
+        role: "ADMIN",
         displayName: "@other",
-        isPreferredInviteLinkAccount: !eligible,
-        permissions: { canManageInviteLinks: eligible },
-      },
+        isPreferredInviteLinkAccount: false,
+      }] : []),
       {
         sourceId: "account-1",
         isPreferredInviteLinkAccount: eligible,
-        sourceType: "MTPROTO",
+        role: "OWNER",
         displayName: "@creator",
         avatarUrl: "https://cdn.test/creator.jpg",
-        permissions: { canManageInviteLinks: true },
       },
     ]);
     const created = {
@@ -88,7 +86,7 @@ describe("TelegramInviteLinkCreateInline", () => {
         expect.objectContaining({ mtprotoAccountId: "account-1" }),
       ),
     );
-    act(() => client.setQueryData([...telegramChannelKeys.sources(), "channel-1"], []));
+    act(() => client.setQueryData(telegramChannelKeys.inviteLinkAccounts("channel-1"), []));
     await screen.findByText("No connected MTProto account can manage invite links for this channel.");
     await act(async () => { finishRequest(created); });
 
