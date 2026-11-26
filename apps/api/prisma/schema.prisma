@@ -3634,7 +3634,9 @@ model AdCampaignInviteLinkWindow {
   id             String   @id @default(cuid())
   adCampaignId   String
   inviteLinkId   String
-  fromDate       String   @db.VarChar(10)
+  fromDate       String?  @db.VarChar(10)
+  currentRequests Boolean @default(false)
+  peakPendingCount Int?
   timezone       String
   joinedCount    Int?
   pendingCount   Int?

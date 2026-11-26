@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { CircleHelp } from "lucide-react";
-import { resolveTitleTemplate } from "@telegram-system/shared";
+import { resolveTitleTemplate, type ResolvedEmoji } from "@telegram-system/shared";
 import {
   accountsApi,
   getTelegramChannelPromos,
@@ -13,6 +13,7 @@ import {
   adCampaignsApi,
   type Promo,
 } from "@/lib/api";
+import { IconAvatar } from "@/components/icons/icon-avatar";
 import { MemberSelect } from "@/components/features/workspace/member-select";
 import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import { featureModalIcon } from "@/components/ui/feature-modal-icons";
@@ -61,6 +62,8 @@ type CampaignChannel = {
   photoUrl?: string | null;
   username?: string | null;
   adminLinks?: unknown[];
+  presentationIconPresentation?: ResolvedEmoji | null;
+  avatarPresentation?: ResolvedEmoji | null;
 };
 type CampaignSource = {
   id?: string;
@@ -146,7 +149,7 @@ function initialValues(row?: CampaignInitial): CampaignValues {
           : row.telegramInviteLinkId
             ? [row.telegramInviteLinkId]
             : [],
-        inviteLinkWindows: Object.fromEntries((row.inviteLinkWindows ?? []).map((window) => [window.inviteLinkId, window.fromDate])),
+        inviteLinkWindows: Object.fromEntries((row.inviteLinkWindows ?? []).map((window) => [window.inviteLinkId, { fromDate: window.fromDate, currentRequests: window.currentRequests }])),
         botInviteLinkIds: Array.isArray(row.botInviteLinkIds)
           ? row.botInviteLinkIds
           : [],
@@ -317,7 +320,7 @@ export function CampaignModal({
     if (open) reset(initialValues(initial));
   }, [open, initial, reset]);
   useEffect(() => {
-    if (open && windowsQuery.data) setValue("inviteLinkWindows", Object.fromEntries(windowsQuery.data.map((item) => [item.inviteLinkId, item.fromDate])));
+    if (open && windowsQuery.data) setValue("inviteLinkWindows", Object.fromEntries(windowsQuery.data.map((item) => [item.inviteLinkId, { fromDate: item.fromDate, currentRequests: item.currentRequests }])));
   }, [open, initial, windowsQuery.data, setValue]);
   useEffect(() => {
     if (!selectedChannelId) return;
@@ -477,6 +480,9 @@ export function CampaignModal({
                 options={ownChannels.map((channel) => ({
                   value: channel.id,
                   label: channel.title,
+                  icon: channel.presentationIconPresentation || channel.avatarPresentation
+                    ? <span aria-hidden><IconAvatar size="xs" label={channel.title} icon={channel.presentationIconPresentation ?? channel.avatarPresentation} /></span>
+                    : undefined,
                   iconUrl: channel.photoUrl ?? undefined,
                   iconFallback: channel.title,
                 }))}
@@ -502,7 +508,8 @@ export function CampaignModal({
                 enabled={open && !loading}
                 onChange={(value) => setArray("inviteLinkIds", value)}
                 windows={inviteLinkWindows}
-                onWindowChange={(id, date) => setValue("inviteLinkWindows", { ...getValues("inviteLinkWindows"), [id]: date }, { shouldDirty: true })}
+                observations={windowsQuery.data}
+                onWindowChange={(id, rule) => setValue("inviteLinkWindows", { ...getValues("inviteLinkWindows"), [id]: rule }, { shouldDirty: true })}
               />
             </FormField></div>
           </div>
@@ -516,7 +523,6 @@ export function CampaignModal({
               }
             }}
             label="Track cross-channel requests"
-            description="Track requests to other owned channels through their system links."
             activeTone="blue"
           />
           {trackCrossChannelRequests && (
@@ -535,7 +541,6 @@ export function CampaignModal({
                 setValue("trackingAllChannels", all, { shouldDirty: true });
                 setArray("trackingChannelIds", ids);
               }}
-              endedAt={watch("endedAt")}
             />
           )}
           <div className="grid gap-3 sm:grid-cols-2">
@@ -581,13 +586,6 @@ export function CampaignModal({
             {...register("telegramChannelId", { required: true })}
           />
           <input type="hidden" {...register("accountId")} />
-          {windowsQuery.data?.map((window) => (
-            <p key={window.inviteLinkId} className="text-sm text-neutral-400">
-              {window.fromDate} · {window.computedAt
-                ? `Подтверждено Telegram: ${new Date(window.computedAt).toLocaleString()}`
-                : "Telegram ещё не подтвердил данные за этот период"}
-            </p>
-          ))}
           {windowsQuery.isError && <p role="alert" className="text-sm text-red-400">Не удалось загрузить даты ссылок. Закройте окно и попробуйте снова.</p>}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" type="button" onClick={onClose}>

@@ -28,7 +28,7 @@ export class AdCampaignInviteWindowsService {
     await this.context(userId, campaignId);
     return this.prisma.adCampaignInviteLinkWindow.findMany({
       where: { adCampaignId: campaignId, inviteLink: { adCampaignId: campaignId } },
-      select: { inviteLinkId: true, fromDate: true, timezone: true, joinedCount: true, pendingCount: true, computedAt: true, lastAttemptAt: true, lastAttemptStatus: true, lastAttemptReason: true },
+      select: { inviteLinkId: true, fromDate: true, currentRequests: true, peakPendingCount: true, timezone: true, joinedCount: true, pendingCount: true, computedAt: true, lastAttemptAt: true, lastAttemptStatus: true, lastAttemptReason: true },
     });
   }
 
@@ -57,18 +57,20 @@ export class AdCampaignInviteWindowsService {
       await tx.adCampaignInviteLinkWindow.deleteMany({ where: { adCampaignId: campaignId, inviteLinkId: { notIn: [...linkIds] } } });
       for (const entry of dto.windows) {
         const old = byLink.get(entry.inviteLinkId);
-        if (!entry.fromDate) {
+        if (!entry.fromDate && !entry.currentRequests) {
           if (old) await tx.adCampaignInviteLinkWindow.delete({ where: { id: old.id } });
           continue;
         }
-        const fromDate = campaignDate && campaignDate > entry.fromDate ? campaignDate : entry.fromDate;
-        if (old?.fromDate === fromDate && old.timezone === timezone) continue;
+        const fromDate = entry.fromDate && campaignDate && campaignDate > entry.fromDate
+          ? campaignDate : entry.fromDate ?? null;
+        const currentRequests = Boolean(entry.currentRequests);
+        if (old?.fromDate === fromDate && old.timezone === timezone && old.currentRequests === currentRequests) continue;
         changed.push(entry.inviteLinkId);
         const configurationToken = randomUUID();
         await tx.adCampaignInviteLinkWindow.upsert({
           where: { adCampaignId_inviteLinkId: { adCampaignId: campaignId, inviteLinkId: entry.inviteLinkId } },
-          create: { adCampaignId: campaignId, inviteLinkId: entry.inviteLinkId, fromDate, timezone, configurationToken },
-          update: { fromDate, timezone, configurationToken, joinedCount: null, pendingCount: null, computedAt: null, lastAttemptAt: null, lastAttemptToken: null, lastAttemptStatus: null, lastAttemptReason: null },
+          create: { adCampaignId: campaignId, inviteLinkId: entry.inviteLinkId, fromDate, currentRequests, timezone, configurationToken },
+          update: { fromDate, currentRequests, timezone, configurationToken, joinedCount: null, pendingCount: null, peakPendingCount: null, computedAt: null, lastAttemptAt: null, lastAttemptToken: null, lastAttemptStatus: null, lastAttemptReason: null },
         });
       }
     });
@@ -87,7 +89,7 @@ export class AdCampaignInviteWindowsService {
       if (!link) continue;
       const start = campaign.startedAt ?? campaign.placementDate;
       const campaignDate = start ? utcDateKey(start, window.timezone) : null;
-      const clamped = Boolean(campaignDate && campaignDate > window.fromDate);
+      const clamped = Boolean(window.fromDate && campaignDate && campaignDate > window.fromDate);
       const fromDate = clamped ? campaignDate! : window.fromDate;
       const observedUntil = new Date();
       const lastAttemptToken = randomUUID();
@@ -101,7 +103,7 @@ export class AdCampaignInviteWindowsService {
       const reserved = await this.prisma.adCampaignInviteLinkWindow.updateMany({
         where: { ...identity, lastAttemptToken: window.lastAttemptToken },
         data: {
-          ...(clamped ? { fromDate, joinedCount: null, pendingCount: null, computedAt: null } : {}),
+          ...(clamped ? { fromDate, joinedCount: null, pendingCount: null, peakPendingCount: null, computedAt: null } : {}),
           lastAttemptAt: observedUntil, lastAttemptToken, lastAttemptStatus: 'RUNNING', lastAttemptReason: null,
         },
       });
@@ -111,11 +113,14 @@ export class AdCampaignInviteWindowsService {
       let pendingCount: number | null = null;
       let reason: string | null = null;
       try {
-        const localStart = zonedDateTimeToUtc(fromDate, '00:00', window.timezone);
-        const from = start && start > localStart ? start : localStart;
-        const result = await this.registration.register(userId, link.telegramChannelId, link.url, { from, until: observedUntil, includePending: true });
-        joinedCount = result.joinedWithinPeriod;
-        pendingCount = result.pendingWithinPeriod ?? null;
+        const localStart = fromDate ? zonedDateTimeToUtc(fromDate, '00:00', window.timezone) : null;
+        const from = localStart && start && start > localStart ? start : localStart;
+        const result = await this.registration.register(
+          userId, link.telegramChannelId, link.url,
+          from ? { from, until: observedUntil, includePending: !window.currentRequests } : undefined,
+        );
+        joinedCount = from ? result.joinedWithinPeriod : 0;
+        pendingCount = (window.currentRequests ? result.currentRequestedCount : result.pendingWithinPeriod) ?? null;
         if (joinedCount == null || pendingCount == null) reason = 'INCOMPLETE_TELEGRAM_DATA';
       } catch {
         reason = 'TELEGRAM_REFRESH_FAILED';
@@ -125,7 +130,10 @@ export class AdCampaignInviteWindowsService {
         where: { ...identity, lastAttemptToken },
         data: {
           ...(joinedCount == null ? {} : { joinedCount }),
-          ...(pendingCount == null ? {} : { pendingCount }),
+          ...(pendingCount == null ? {} : {
+            pendingCount,
+            peakPendingCount: Math.max(pendingCount, clamped ? 0 : window.peakPendingCount ?? window.pendingCount ?? 0),
+          }),
           ...(complete ? { computedAt: observedUntil } : {}),
           lastAttemptStatus: complete ? 'SUCCESS' : joinedCount != null || pendingCount != null ? 'PARTIAL' : 'FAILED',
           lastAttemptReason: reason,

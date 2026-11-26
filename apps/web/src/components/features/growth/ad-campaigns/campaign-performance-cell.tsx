@@ -173,9 +173,9 @@ export function PerformanceCell({
       className="rounded border border-cyan-800/80 bg-cyan-950/20 px-1.5 py-0.5 text-cyan-200"
       title={
         botPerformance.confirmed === false
-          ? "Telegram has not confirmed the bot request counters for this campaign."
+          ? "За период кампании недостаточно снимков счётчиков Telegram."
           : botPerformance.estimated
-            ? "При пересечении кампаний заявки распределяются приблизительно по времени снимков."
+            ? "Оценка по изменениям счётчиков Telegram за период и доле конкурирующих размещений."
             : botPerformance.channels.map((channel) =>
                 `${channel.title}: +${formatMetric(channel.requests)}`,
               ).join("\n")

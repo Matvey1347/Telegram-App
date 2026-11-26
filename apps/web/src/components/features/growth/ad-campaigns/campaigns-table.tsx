@@ -65,7 +65,9 @@ function SourceChip({
   const label = source?.title || source?.name || fallback || "-";
   const content = (
     <>
-      {source?.photoUrl || source?.imageUrl ? (
+      {source?.avatarPresentation ? (
+        <IconAvatar icon={source.avatarPresentation} label={label} size="xs" bordered={false} />
+      ) : source?.photoUrl || source?.imageUrl ? (
         <img
           src={source.photoUrl || source.imageUrl}
           alt=""

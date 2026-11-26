@@ -1,5 +1,7 @@
 "use client";
 
+import type { CampaignInviteRule } from "@telegram-system/shared";
+
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { adCampaignsApi } from "@/lib/api";
 import { useAppToast } from "@/providers/toast-provider";
@@ -25,10 +27,10 @@ function affectedKeys() {
 export function useAdCampaignMutations() {
   const queryClient = useQueryClient();
   const { pushToast } = useAppToast();
-  const saveWindows = async (id: string, windows: Array<{ inviteLinkId: string; fromDate: string | null }>) => {
+  const saveWindows = async (id: string, windows: Array<CampaignInviteRule & { inviteLinkId: string }>) => {
     const result = await adCampaignsApi.setInviteLinkWindows(id, windows);
-    await queryClient.invalidateQueries({ queryKey: adCampaignKeys.inviteLinkWindows(id) });
-    if (result.failed.length) pushToast("Даты сохранены, но Telegram не вернул данные по некоторым ссылкам. Обновите ссылки позже.", "info");
+    queryClient.setQueryData(adCampaignKeys.inviteLinkWindows(id), result.windows);
+    if (result.failed.length) pushToast("Настройки подсчёта сохранены, но Telegram не вернул данные по некоторым ссылкам. Обновите ссылки позже.", "info");
   };
   const invalidateAffected = () =>
     Promise.all(
@@ -37,11 +39,11 @@ export function useAdCampaignMutations() {
       ),
     );
   const createMutation = useMutation({
-    mutationFn: async (payload: Omit<Parameters<typeof adCampaignsApi.create>[0], "inviteLinkWindows"> & { inviteLinkWindows?: Record<string, string> }) => {
+    mutationFn: async (payload: Omit<Parameters<typeof adCampaignsApi.create>[0], "inviteLinkWindows"> & { inviteLinkWindows?: Record<string, CampaignInviteRule> }) => {
       const { inviteLinkWindows, ...campaign } = payload;
       const result = await adCampaignsApi.create(campaign);
-      if (inviteLinkWindows && Object.values(inviteLinkWindows).some(Boolean)) {
-        const windows = (Array.isArray(payload.inviteLinkIds) ? payload.inviteLinkIds as string[] : []).map((inviteLinkId) => ({ inviteLinkId, fromDate: inviteLinkWindows[inviteLinkId] || null }));
+      if (inviteLinkWindows && Object.values(inviteLinkWindows).some((rule) => rule.fromDate || rule.currentRequests)) {
+        const windows = (Array.isArray(payload.inviteLinkIds) ? payload.inviteLinkIds as string[] : []).map((inviteLinkId) => ({ inviteLinkId, ...inviteLinkWindows[inviteLinkId] }));
         await saveWindows(result.id, windows);
       }
       return result;
@@ -54,12 +56,12 @@ export function useAdCampaignMutations() {
       payload,
     }: {
       id: string;
-      payload: Omit<Parameters<typeof adCampaignsApi.update>[1], "inviteLinkWindows"> & { inviteLinkWindows?: Record<string, string> };
+      payload: Omit<Parameters<typeof adCampaignsApi.update>[1], "inviteLinkWindows"> & { inviteLinkWindows?: Record<string, CampaignInviteRule> };
     }) => {
       const { inviteLinkWindows, ...campaign } = payload;
       return adCampaignsApi.update(id, campaign).then(async (result) => {
         if (inviteLinkWindows) {
-          const windows = (Array.isArray(payload.inviteLinkIds) ? payload.inviteLinkIds as string[] : []).map((inviteLinkId) => ({ inviteLinkId, fromDate: inviteLinkWindows[inviteLinkId] || null }));
+          const windows = (Array.isArray(payload.inviteLinkIds) ? payload.inviteLinkIds as string[] : []).map((inviteLinkId) => ({ inviteLinkId, ...inviteLinkWindows[inviteLinkId] }));
           await saveWindows(id, windows);
         }
         return result;

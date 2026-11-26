@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { CampaignInviteRule } from "@telegram-system/shared";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { CampaignInviteLinksSelect } from "./campaign-invite-links-select";
@@ -13,7 +14,7 @@ vi.mock("@/components/ui/primitives", async (importOriginal) => ({ ...(await imp
 describe("campaign invite link dates", () => {
   it("shows and updates the date of each selected link independently", () => {
     const change = vi.fn();
-    render(<CampaignInviteLinksSelect channelId="channel" value={["a", "b"]} initialLinks={[]} enabled onChange={vi.fn()} windows={{ a: "2026-11-01" }} onWindowChange={change} />);
+    render(<CampaignInviteLinksSelect channelId="channel" value={["a", "b"]} initialLinks={[]} enabled onChange={vi.fn()} windows={{ a: { fromDate: "2026-11-01" } }} onWindowChange={change} />);
     expect(screen.getByLabelText("Считать с даты: Первая")).toHaveValue("2026-11-01");
     expect(screen.getByRole("img", { name: "А" })).toHaveAttribute("src", "https://example.test/a.jpg");
     fireEvent.click(screen.getByRole("button", { name: "Ограничить ссылку по дате" }));
@@ -22,10 +23,17 @@ describe("campaign invite link dates", () => {
     const date = screen.getByLabelText("Считать с даты: Вторая");
     expect(date).toHaveValue("");
     fireEvent.change(date, { target: { value: "2026-11-12" } });
-    expect(change).toHaveBeenCalledWith("b", "2026-11-12");
+    expect(change).toHaveBeenCalledWith("b", { fromDate: "2026-11-12" });
     expect(screen.getByRole("button", { name: "Убрать ограничение: Вторая" })).toHaveClass("border-red-600", "text-red-400");
     fireEvent.click(screen.getByRole("button", { name: "Убрать ограничение: Вторая" }));
     expect(screen.queryByLabelText("Считать с даты: Вторая")).not.toBeInTheDocument();
+  });
+  it("can show all current requests without changing the join date", () => {
+    const change = vi.fn();
+    render(<CampaignInviteLinksSelect channelId="channel" value={["a"]} initialLinks={[]} enabled onChange={vi.fn()} windows={{ a: { fromDate: "2026-11-01" } }} onWindowChange={change} />);
+    fireEvent.click(screen.getByRole("button", { name: "Подсчёт заявок: Первая" }));
+    fireEvent.click(screen.getByRole("button", { name: "Текущие заявки" }));
+    expect(change).toHaveBeenCalledWith("a", { fromDate: "2026-11-01", currentRequests: true });
   });
   it("hides the restriction selector when no links are selected", () => {
     render(<CampaignInviteLinksSelect channelId="channel" value={[]} initialLinks={[]} enabled onChange={vi.fn()} windows={{}} onWindowChange={vi.fn()} />);
@@ -33,7 +41,7 @@ describe("campaign invite link dates", () => {
   });
   it("moves the date with the restriction when another link is selected", () => {
     function Form() {
-      const [windows, setWindows] = useState<Record<string, string>>({ a: "2026-11-01" });
+      const [windows, setWindows] = useState<Record<string, CampaignInviteRule>>({ a: { fromDate: "2026-11-01" } });
       return <CampaignInviteLinksSelect channelId="channel" value={["a", "b"]} initialLinks={[]} enabled onChange={vi.fn()} windows={windows} onWindowChange={(id, date) => setWindows((current) => ({ ...current, [id]: date }))} />;
     }
     render(<Form />);

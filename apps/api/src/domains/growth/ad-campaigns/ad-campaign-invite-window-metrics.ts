@@ -17,7 +17,8 @@ export function campaignInviteWindowMetrics(
     inviteLinkId: string;
     joinedCount: number | null;
     pendingCount: number | null;
-    fromDate?: string;
+    fromDate?: string | null;
+    currentRequests?: boolean;
     timezone?: string;
   }>,
   campaignStart?: Date | null,
@@ -30,12 +31,11 @@ export function campaignInviteWindowMetrics(
     if (window?.fromDate && window.timezone && campaignStart &&
         window.fromDate < utcDateKey(campaignStart, window.timezone)) {
       joined = null;
-      pending = null;
-      continue;
+      if (!window.currentRequests) { pending = null; continue; }
     }
     const joinedValue = window ? window.joinedCount :
       link.joinedObserved === false && !link.joinedObservedAt || link.joinedObserved === null && !link.joinedObservedAt && !link.lastSyncedAt ? null : link.joinedCount;
-    const pendingValue = window ? window.pendingCount :
+    const pendingValue = window && !window.currentRequests ? window.pendingCount :
       link.requestedObserved === false && !link.requestedObservedAt || link.requestedObserved === null && !link.requestedObservedAt && !link.lastSyncedAt ? null : link.requestedCount;
     joined = joined == null || joinedValue == null ? null : joined + joinedValue;
     pending = pending == null || pendingValue == null ? null : pending + pendingValue;

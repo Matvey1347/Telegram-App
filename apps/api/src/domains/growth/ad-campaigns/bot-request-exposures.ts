@@ -15,16 +15,40 @@ export async function loadBotRequestExposures(
   const exposures = await prisma.$queryRaw<ChannelExposure[]>`
     SELECT c.id AS "campaignId", c."telegramChannelId" AS "channelId",
       COALESCE(c."startedAt", c."placementDate") AS "startsAt",
-      COALESCE(c."endedAt", COALESCE(c."startedAt", c."placementDate") + interval '24 hours') AS "endsAt",
-      c."sourcePostViews" AS views
+      COALESCE(c."endedAt", GREATEST(COALESCE(c."startedAt", c."placementDate") + interval '24 hours', traffic."peakAt")) AS "endsAt",
+      c."sourcePostViews" AS views, traffic.requests
     FROM "AdCampaign" c
+    LEFT JOIN LATERAL (
+      SELECT SUM(GREATEST(0, last.total - first.total))::int AS requests,
+        MAX(last."syncedAt") FILTER (WHERE last.total > first.total) AS "peakAt"
+      FROM "TelegramInviteLink" link
+      CROSS JOIN LATERAL (
+        SELECT s."joinedCount" + s."requestedCount" AS total
+        FROM "TelegramInviteLinkSnapshot" s
+        WHERE s."workspaceId" = c."workspaceId" AND s."inviteLinkId" = link.id
+          AND s."syncedAt" BETWEEN COALESCE(c."startedAt", c."placementDate") - interval '48 hours'
+                              AND COALESCE(c."startedAt", c."placementDate")
+          AND s."joinedCount" IS NOT NULL AND s."requestedCount" IS NOT NULL
+        ORDER BY s."syncedAt" DESC LIMIT 1
+      ) first
+      CROSS JOIN LATERAL (
+        SELECT s."joinedCount" + s."requestedCount" AS total, s."syncedAt"
+        FROM "TelegramInviteLinkSnapshot" s
+        WHERE s."workspaceId" = c."workspaceId" AND s."inviteLinkId" = link.id
+          AND s."syncedAt" > COALESCE(c."startedAt", c."placementDate")
+          AND s."syncedAt" <= COALESCE(c."endedAt", COALESCE(c."startedAt", c."placementDate") + interval '24 hours') + interval '12 hours'
+          AND s."joinedCount" IS NOT NULL AND s."requestedCount" IS NOT NULL
+        ORDER BY total DESC, s."syncedAt" ASC LIMIT 1
+      ) last
+      WHERE link."workspaceId" = c."workspaceId" AND link."adCampaignId" = c.id
+    ) traffic ON true
     WHERE c."workspaceId" = ${workspaceId} AND c."telegramChannelId" IN (${channels})
       AND c.status NOT IN ('cancelled', 'archived') AND NOT c."excludeFromAnalytics"
       AND COALESCE(c."startedAt", c."placementDate") < ${until}
-      AND COALESCE(c."endedAt", COALESCE(c."startedAt", c."placementDate") + interval '24 hours') > ${from}
+      AND COALESCE(c."endedAt", GREATEST(COALESCE(c."startedAt", c."placementDate") + interval '24 hours', traffic."peakAt")) > ${from}
     UNION ALL
     SELECT 'promotion:' || p.id, target."telegramChannelId", p."scheduledAt",
-      COALESCE(CASE WHEN p."trackingEndsAt" > p."scheduledAt" THEN p."trackingEndsAt" END, p."scheduledAt" + interval '24 hours'), reach.views
+      COALESCE(CASE WHEN p."trackingEndsAt" > p."scheduledAt" THEN p."trackingEndsAt" END, p."scheduledAt" + interval '24 hours'), reach.views, NULL::int
     FROM "CrossPromotionPlan" p
     CROSS JOIN LATERAL (
       SELECT DISTINCT entry->>'telegramChannelId' AS "telegramChannelId"
@@ -45,7 +69,7 @@ export async function loadBotRequestExposures(
       AND p."scheduledAt" < ${until}
       AND COALESCE(CASE WHEN p."trackingEndsAt" > p."scheduledAt" THEN p."trackingEndsAt" END, p."scheduledAt" + interval '24 hours') > ${from}
     UNION ALL
-    SELECT 'folder:' || f.id, participant."telegramChannelId", f."startsAt", f."endsAt", reach.views
+    SELECT 'folder:' || f.id, participant."telegramChannelId", f."startsAt", f."endsAt", reach.views, NULL::int
     FROM "MutualPromotionFolderParticipant" participant
     JOIN "MutualPromotionFolder" f ON f.id = participant."folderId" AND f."workspaceId" = participant."workspaceId"
     LEFT JOIN LATERAL (

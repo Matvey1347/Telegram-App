@@ -1,5 +1,6 @@
 "use client";
 
+import type { CampaignInviteRule, CampaignInviteWindow } from "@telegram-system/shared";
 import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import type { TelegramInviteLink, TelegramInviteLinkOption } from "@/lib/api";
@@ -24,6 +25,7 @@ export function CampaignInviteLinksSelect({
   onChange,
   windows,
   onWindowChange,
+  observations = [],
 }: {
   channelId: string;
   campaignId?: string;
@@ -31,8 +33,9 @@ export function CampaignInviteLinksSelect({
   initialLinks: TelegramInviteLink[];
   enabled: boolean;
   onChange: (value: string[]) => void;
-  windows: Record<string, string>;
-  onWindowChange: (id: string, date: string) => void;
+  windows: Record<string, CampaignInviteRule>;
+  observations?: CampaignInviteWindow[];
+  onWindowChange: (id: string, rule: CampaignInviteRule) => void;
 }) {
   const [registeredLinks, setRegisteredLinks] = useState<TelegramInviteLinkOption[]>([]);
   const [openWindows, setOpenWindows] = useState<string[]>([]);
@@ -71,7 +74,7 @@ export function CampaignInviteLinksSelect({
     [...query.links, ...registeredLinks.filter((link) => link.telegramChannelId === channelId)]
       .map((link) => [link.id, link]),
   );
-  const activeWindows = value.filter((id) => openWindows.includes(id) || windows[id]);
+  const activeWindows = value.filter((id) => openWindows.includes(id) || windows[id]?.fromDate || windows[id]?.currentRequests);
   const availableIds = value.filter((id) => !activeWindows.includes(id));
   const windowOption = (id: string) => {
     const link = optionsById.get(id);
@@ -114,20 +117,34 @@ export function CampaignInviteLinksSelect({
         await registerLink.mutateAsync(url);
       }}
     />
-    {activeWindows.map((id) => (
-      <div key={id} className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
+    {activeWindows.map((id) => {
+      const rule = windows[id] ?? {};
+      const observation = observations.find((item) => item.inviteLinkId === id);
+      return <div key={id} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
         <CustomSelect ariaLabel={`Ссылка для ограничения: ${windowOption(id).label}`} value={id} searchable={false} options={[id, ...availableIds].map(windowOption)} onChange={(next) => {
           if (!next || next === id) return;
-          onWindowChange(id, "");
-          onWindowChange(next, windows[id] || "");
+          onWindowChange(id, {});
+          onWindowChange(next, rule);
           setOpenWindows((current) => [...new Set([...current.filter((item) => item !== id), next])]);
         }} />
-        <DateInput aria-label={`Считать с даты: ${windowOption(id).label}`} value={windows[id] || ""} onChange={(event) => onWindowChange(id, event.target.value)} />
-        <button type="button" aria-label={`Убрать ограничение: ${windowOption(id).label}`} title="Убрать ограничение" className="flex h-9 w-9 items-center justify-center rounded-lg border border-red-600 text-red-400 hover:bg-red-950/50 hover:text-red-300" onClick={() => { onWindowChange(id, ""); setOpenWindows((current) => current.filter((item) => item !== id)); }}><Trash2 size={16} /></button>
-      </div>
-    ))}
-    {availableIds.length > 0 && <CustomSelect ariaLabel="Ограничить ссылку по дате" value="" placeholder="Ограничить ссылку по дате…" searchable={false} options={availableIds.map(windowOption)} onChange={(id) => { if (id) setOpenWindows((current) => [...new Set([...current, id])]); }} />}
-    {activeWindows.length > 0 && <p className="text-xs text-muted-foreground">Считаются вступившие и ожидающие с указанной даты. Отклонённые заявки Telegram не предоставляет.</p>}
+        <DateInput className="col-span-2 sm:col-span-1" aria-label={`Считать с даты: ${windowOption(id).label}`} value={rule.fromDate || ""} onChange={(event) => onWindowChange(id, { ...rule, fromDate: event.target.value })} />
+        <CustomSelect
+          ariaLabel={`Подсчёт заявок: ${windowOption(id).label}`}
+          value={rule.currentRequests ? "current" : "period"}
+          searchable={false}
+          options={[{ value: "period", label: "Заявки с даты" }, { value: "current", label: "Текущие заявки" }]}
+          onChange={(mode) => onWindowChange(id, { ...rule, currentRequests: mode === "current" })}
+        />
+        <button type="button" aria-label={`Убрать ограничение: ${windowOption(id).label}`} title="Убрать ограничение" className="flex h-9 w-9 items-center justify-center rounded-lg border border-red-600 text-red-400 hover:bg-red-950/50 hover:text-red-300" onClick={() => { onWindowChange(id, {}); setOpenWindows((current) => current.filter((item) => item !== id)); }}><Trash2 size={16} /></button>
+        {observation?.pendingCount != null && (
+          <p className="col-span-full text-xs text-neutral-400">
+            В очереди {observation.pendingCount.toLocaleString()}
+            {observation.peakPendingCount != null ? ` · Пик ${observation.peakPendingCount.toLocaleString()}` : ""}
+          </p>
+        )}
+      </div>;
+    })}
+    {availableIds.length > 0 && <CustomSelect ariaLabel="Ограничить ссылку по дате" value="" placeholder="Настроить подсчёт для ссылки…" searchable={false} options={availableIds.map(windowOption)} onChange={(id) => { if (id) setOpenWindows((current) => [...new Set([...current, id])]); }} />}
     </div>
   );
 }

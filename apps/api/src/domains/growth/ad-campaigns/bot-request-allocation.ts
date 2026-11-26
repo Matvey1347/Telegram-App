@@ -1,10 +1,13 @@
 export const DEFAULT_BOT_PLACEMENT_DURATION_MS = 86_400_000;
 
+export const MAX_BOT_OBSERVATION_GAP_MS = 48 * 3_600_000;
+
 export type CampaignWindow = {
   campaignId: string;
   startsAt: Date;
   endsAt: Date | null;
   views?: number | null;
+  requests?: number | null;
 };
 
 function activeAt(window: CampaignWindow, at: number) {
@@ -15,9 +18,17 @@ function exposureShare(at: number, own: CampaignWindow, rivals: CampaignWindow[]
   if (!activeAt(own, at)) return 0;
   const competing = rivals.filter((window) => activeAt(window, at));
   if (!competing.length) return 1;
-  const measured = [own, ...competing].flatMap(({ views }) => views && views > 0 ? [views] : []);
-  const defaultViews = measured.length ? measured.reduce((sum, views) => sum + views, 0) / measured.length : 1;
-  const weight = (window: CampaignWindow) => window.views && window.views > 0 ? window.views : defaultViews;
+  const active = [own, ...competing];
+  const metric = active.filter((window) => (window.requests ?? 0) > 0).length >= 2 ? 'requests' : 'views';
+  const measured = active.flatMap((window) => {
+    const value = window[metric];
+    return value != null && value > 0 ? [value] : [];
+  });
+  const fallback = measured.length ? measured.reduce((sum, value) => sum + value, 0) / measured.length : 1;
+  const weight = (window: CampaignWindow) => {
+    const value = window[metric];
+    return value != null && value > 0 ? value : fallback;
+  };
   const ownWeight = weight(own);
   return ownWeight / (ownWeight + competing.reduce((sum, window) => sum + weight(window), 0));
 }

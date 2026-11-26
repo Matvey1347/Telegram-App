@@ -1,3 +1,5 @@
+import type { ResolvedEmoji } from "./resolved-emoji";
+
 export type AdCampaignTrackingScope = {
   kind: string;
   /** null selects all other owned channels, including subsequently configured channels. */
@@ -8,5 +10,6 @@ export type AdCampaignTrackingChannel = {
   id: string;
   title: string;
   photoUrl: string | null;
+  avatarPresentation?: ResolvedEmoji | null;
   hasSystemLink: boolean;
 };

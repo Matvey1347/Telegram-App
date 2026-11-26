@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CampaignTrackingEditor } from "./campaign-tracking-editor";
 
 describe("Campaign tracking editor", () => {
-  it("summarizes automatic tracking as all channels and reports unconfigured destinations", () => {
+  it("starts with all channels and selects a destination directly", () => {
+    const onScopeChange = vi.fn();
     render(
       <CampaignTrackingEditor
         allChannels
@@ -17,13 +18,13 @@ describe("Campaign tracking editor", () => {
         channelId="main"
         selectedIds={[]}
         onKindChange={vi.fn()}
-        onScopeChange={vi.fn()}
+        onScopeChange={onScopeChange}
       />,
     );
-    expect(screen.getByText("All channels · Bot")).toBeVisible();
-    expect(screen.getByText("Channels awaiting a system link: 1")).toBeVisible();
-    expect(screen.queryByText("Configured destination")).not.toBeInTheDocument();
-    expect(screen.getByText("Unconfigured destination")).not.toBeVisible();
-    expect(screen.getByText("Edit tracking")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: /Edit tracking/ }));
+    expect(screen.queryByText(/awaiting a system link/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "All channels" }));
+    fireEvent.click(screen.getByRole("button", { name: "Configured destination" }));
+    expect(onScopeChange).toHaveBeenCalledWith(false, ["configured"]);
   });
 });

@@ -1,4 +1,4 @@
-import type { AdCampaignTrackingChannel, CampaignInviteWindow } from "@telegram-system/shared";
+import type { AdCampaignTrackingChannel, CampaignInviteRule, CampaignInviteWindow } from "@telegram-system/shared";
 import type { AxiosInstance, AxiosRequestConfig } from "axios";
 import type { PaginatedResponse } from "@telegram-system/shared";
 import type {
@@ -84,8 +84,8 @@ export function createMarketingApi({
     update: campaignCrud.update,
     remove: campaignCrud.remove,
     inviteLinkWindows: async (id: string) => (await api.get<CampaignInviteWindow[]>(`/ad-campaigns/${id}/invite-link-windows`, { headers: { "X-Bypass-Response-Cache": "true" } })).data,
-    setInviteLinkWindows: async (id: string, windows: Array<{ inviteLinkId: string; fromDate?: string | null }>) =>
-      (await api.put<{ failed: string[] }>(`/ad-campaigns/${id}/invite-link-windows`, { windows }, quietMutationConfig)).data,
+    setInviteLinkWindows: async (id: string, windows: Array<CampaignInviteRule & { inviteLinkId: string }>) =>
+      (await api.put<{ windows: CampaignInviteWindow[]; failed: string[] }>(`/ad-campaigns/${id}/invite-link-windows`, { windows }, quietMutationConfig)).data,
     refreshInviteLinkWindows: async (id: string) =>
       (await api.post<string[]>(`/ad-campaigns/${id}/invite-link-windows/refresh`, {}, quietMutationConfig)).data,
     trackingInviteLinks: async () =>

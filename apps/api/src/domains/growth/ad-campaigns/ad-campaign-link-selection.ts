@@ -1,3 +1,4 @@
+import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { acquirePostgresTransactionLock } from '../../../prisma/postgres-advisory-lock';
 import { Prisma } from '@prisma/client';
 import type { AdCampaignTrackingScope } from '@telegram-system/shared';
@@ -239,6 +240,7 @@ export async function trackingInviteLinks(
       id: true,
       title: true,
       photoUrl: true,
+      presentationIcon: true,
       defaultInviteLinkId: true,
       publicInviteLinkId: true,
       botInviteLinkId: true,
@@ -260,6 +262,9 @@ export async function trackingInviteLinks(
             id: channel.id,
             title: channel.title,
             photoUrl: channel.photoUrl,
+            avatarPresentation: iconToResolvedEmoji(channel.presentationIcon) ?? (channel.photoUrl
+              ? { type: 'image' as const, id: channel.id, url: channel.photoUrl }
+              : null),
             hasSystemLink: trackingInviteLinkIds(channel, kind).length > 0,
           })),
       }))

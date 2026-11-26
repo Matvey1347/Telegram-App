@@ -49,6 +49,17 @@ describe('AdCampaignInviteWindowsService', () => {
     }));
   });
 
+  it('retains a higher observed request count after the live queue drops', async () => {
+    prisma.adCampaignInviteLinkWindow.findMany.mockResolvedValue([
+      { inviteLinkId: 'a', fromDate: null, timezone: 'Europe/Kyiv', currentRequests: true, pendingCount: 18, peakPendingCount: 32 },
+    ]);
+    registration.register.mockResolvedValue({ currentRequestedCount: 11 });
+    expect(await service.refresh('user', 'c')).toEqual([]);
+    expect(prisma.adCampaignInviteLinkWindow.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ joinedCount: 0, pendingCount: 11, peakPendingCount: 32 }),
+    }));
+  });
+
   it('marks results unavailable when Telegram cannot return complete counts', async () => {
     prisma.adCampaignInviteLinkWindow.findMany.mockResolvedValue([{ inviteLinkId: 'a', fromDate: '2026-11-12', timezone: 'Europe/Kyiv' }]);
     registration.register.mockResolvedValue({ joinedWithinPeriod: 10, pendingWithinPeriod: null });

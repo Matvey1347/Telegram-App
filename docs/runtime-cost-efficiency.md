@@ -299,9 +299,9 @@ worker, polling, history, or idle database activity is introduced.
 
 Campaign results use one batched exposure query for the destination channels
 with shared bot links on the requested page. It joins recorded ad, own-channel
-and mutual-promotion placements intersecting the date range. Attribution uses
-stored reach when available and a proportional estimate when request timestamps
-or reach are missing. Historical entries with no recorded end use the first
+and mutual-promotion placements intersecting the date range. Attribution uses changes between nearby observations, comparing measured
+invite-link traffic across comparable placements or recorded reach when available.
+Gaps longer than 48 hours are not spread over campaign days. Historical entries with no recorded end use the first
 24 hours. Exact campaign-link counters remain separate from this estimate.
 
 The invite-account picker checks Telegram for one selected channel on demand,
@@ -309,3 +309,11 @@ with at most three concurrent calls and a 30-second browser cache. Work scales
 with connected accounts, independent of the other channels in the workspace.
 There is no polling, background job or write on access checks. Existing sync
 retention, write paths and idle Neon/Railway behavior remain the same.
+
+Campaign invite rules store current queue and observed peak on one existing
+window row. The existing manual refresh and due sync update both atomically
+with the observation token. The form does not poll. Bot attribution adds
+bounded indexed snapshot lookups for direct links of overlapping ads within the
+existing batched read. With 100 channels the database request count is unchanged;
+work scales with the linked channels and overlapping placements, without any
+new idle Neon queries or Railway worker.

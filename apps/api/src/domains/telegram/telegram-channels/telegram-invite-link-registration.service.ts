@@ -80,7 +80,7 @@ export class TelegramInviteLinkRegistrationService {
           joinedFrom: period?.from, joinedUntil: period?.until,
           includePendingSince: period?.includePending,
           ...(knownInvite ? { knownInvite } : {}),
-          ...(!period ? { preferLivePending: true } : {}),
+          ...(!period || !period.includePending ? { preferLivePending: true } : {}),
         });
         remote = {
           ...result,

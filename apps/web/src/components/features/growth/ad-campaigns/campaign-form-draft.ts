@@ -1,3 +1,4 @@
+import type { CampaignInviteRule } from "@telegram-system/shared";
 import { formatAdCampaignLocalDate } from "./ad-campaign-route-state";
 
 export type CampaignValues = {
@@ -5,7 +6,7 @@ export type CampaignValues = {
   assignedMemberId?: string | null;
   promoIds: string[];
   inviteLinkIds: string[];
-  inviteLinkWindows?: Record<string, string>;
+  inviteLinkWindows?: Record<string, CampaignInviteRule>;
   botInviteLinkIds: string[];
   trackingLinkKind: string;
   trackingChannelIds: string[];
@@ -57,7 +58,9 @@ export function normalizeCampaignDraft(value: unknown): CampaignValues | null {
     inviteLinkIds: Array.isArray(draft.inviteLinkIds)
       ? draft.inviteLinkIds.filter((id): id is string => typeof id === "string")
       : [],
-    inviteLinkWindows: draft.inviteLinkWindows && typeof draft.inviteLinkWindows === "object" ? Object.fromEntries(Object.entries(draft.inviteLinkWindows).filter(([, date]) => typeof date === "string")) : {},
+    inviteLinkWindows: draft.inviteLinkWindows && typeof draft.inviteLinkWindows === "object" ? Object.fromEntries(Object.entries(draft.inviteLinkWindows as Record<string, CampaignInviteRule | string>).flatMap<[string, CampaignInviteRule]>(([id, rule]) =>
+      typeof rule === "string" ? [[id, { fromDate: rule }]] :
+      rule && typeof rule === "object" ? [[id, { fromDate: typeof rule.fromDate === "string" ? rule.fromDate : null, currentRequests: rule.currentRequests === true }]] : [])) : {},
     botInviteLinkIds: Array.isArray(draft.botInviteLinkIds)
       ? draft.botInviteLinkIds.filter((id): id is string => typeof id === "string")
       : [],
