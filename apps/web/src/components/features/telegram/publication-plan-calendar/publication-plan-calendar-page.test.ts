@@ -109,4 +109,24 @@ describe("indexPublicationCalendarItems", () => {
         ?.eventsBySlot.get(`${slot.slotId}:${slot.scheduledAt}`),
     ).toEqual([event]);
   });
+  it("preserves separate VP reservations with the same title both inside and outside a slot", () => {
+    const scheduledAt = "2026-10-25T09:10:00.000Z";
+    const first: TelegramPublicationPlanCalendarEvent = {
+      id: "placement-1",
+      crossPromotionPlanId: "promotion-1",
+      channelId: "channel-1",
+      scheduledAt,
+      title: "Same promotion title",
+      kind: "VP",
+      slotId: null,
+    };
+    const second = { ...first, id: "placement-2", crossPromotionPlanId: "promotion-2" };
+    const slot = { slotId: "ad-1010", scheduledAt, title: "Ad slot", time: "10:10" };
+
+    const withSlot = indexPublicationCalendarItems([slot], [first, second], "Europe/Warsaw");
+    expect(withSlot.get("2026-10-25")?.eventsBySlot.get(`${slot.slotId}:${scheduledAt}`)).toEqual([first, second]);
+    const withoutSlot = indexPublicationCalendarItems([], [first, second], "Europe/Warsaw");
+    expect(withoutSlot.get("2026-10-25")?.outsideEvents).toEqual([first, second]);
+  });
+
 });

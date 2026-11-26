@@ -354,11 +354,13 @@ export async function readTelegramPublicationCalendar(
     })),
     ...vpEventsByPublication.values(),
   ];
-  // A VP can have both its plan record and a materialized managed post: collapse that representation.
+  // Promotions are already grouped by plan and publication. Preserve separate reservations with the same title.
   const events = [
     ...new Map(
       rawEvents.map((event) => [
-        `${event.channelId}:${event.scheduledAt}:${event.kind}:${event.title}`,
+        event.kind === 'VP'
+          ? event.id
+          : `${event.channelId}:${event.scheduledAt}:${event.kind}:${event.title}`,
         event,
       ]),
     ).values(),

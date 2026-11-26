@@ -364,10 +364,10 @@ export function PublicationPlanCalendarPage() {
                     view === "month" && day.getMonth() !== cursor.getMonth();
                   const rows = dayItems?.slots ?? [];
                   const outside = dayItems?.outsideEvents ?? [];
-                  const vpByTime = new Map<number, TelegramPublicationPlanCalendarEvent[]>();
+                  const vpByTime = new Map<string, TelegramPublicationPlanCalendarEvent[]>();
                   for (const event of [...outside, ...(dayItems?.eventsBySlot.values() ?? [])].flat()) {
                     if (event.kind !== "VP") continue;
-                    const time = Date.parse(event.scheduledAt);
+                    const time = `${event.channelId}:${Math.floor(Date.parse(event.scheduledAt) / 60_000)}`;
                     const simultaneous = vpByTime.get(time) ?? [];
                     simultaneous.push(event);
                     vpByTime.set(time, simultaneous);

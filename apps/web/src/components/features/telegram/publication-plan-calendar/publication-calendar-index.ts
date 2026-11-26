@@ -62,7 +62,8 @@ export function eventMatchesPublicationSlot(
 function relevantEvents(events: TelegramPublicationPlanCalendarEvent[]) {
   const unique = new Map<string, TelegramPublicationPlanCalendarEvent>();
   for (const event of events) {
-    if (event.kind !== "CONTENT") unique.set(`${event.kind}:${event.title}`, event);
+    if (event.kind === "CONTENT") continue;
+    unique.set(event.kind === "VP" ? event.id : `${event.kind}:${event.title}`, event);
   }
   return [...unique.values()];
 }
