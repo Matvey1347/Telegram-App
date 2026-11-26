@@ -11,6 +11,7 @@ import {
 import { resolveChannelKpiStatus } from '../../../common/analytics/channel-financial-summary';
 import { iconToResolvedEmoji } from '../../../common/icons/resolved-emoji';
 import { WorkspaceService } from '../../../common/workspace.service';
+import { MemberFinanceReadService } from '../../finance/member-finance/member-finance-read.service';
 import { WorkspaceAuthorizationService } from '../../workspace/workspace-authorization/workspace-authorization.service';
 import {
   dashboardDateRange,
@@ -53,6 +54,7 @@ export class DashboardService {
     private readonly reads: DashboardReadService,
     private readonly authorization?: WorkspaceAuthorizationService,
     private readonly insights?: DashboardInsightsReadService,
+    private readonly memberFinance?: MemberFinanceReadService,
   ) {}
 
   async summary(
@@ -98,11 +100,14 @@ export class DashboardService {
       insights && access?.sales ? insights.salesForPeriod(workspaceId, from, to, access.finance) : undefined,
       insights && access?.traffic ? insights.trafficForPeriod(workspaceId, from, to) : undefined,
     ]);
-    const [[salesMix, trafficLinks], dashboardData] = await Promise.all([
+    const [[salesMix, trafficLinks], dashboardData, reinvestedEarningsForPeriod] = await Promise.all([
       insightsResult,
       access
         ? this.reads.load(workspaceId, from, to, access)
         : this.reads.load(workspaceId, from, to),
+      access?.finance
+        ? this.memberFinance?.retainedEarningsForPeriod(workspaceId, from, to)
+        : undefined,
     ]);
     const {
       workspace,
@@ -478,6 +483,7 @@ export class DashboardService {
       investedCapital: totalInvestedPrimary,
       investedCapitalForPeriod: investedForPeriod,
       investmentBreakdownForPeriod,
+      reinvestedEarningsForPeriod,
       operatingProfitAllTime,
       remainingToBreakEven,
       projectedMonthlyProfit,

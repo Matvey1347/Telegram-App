@@ -234,6 +234,12 @@ baseline and a date range per link. It sends one aggregate per measured link
 back to the API. The all-time view reads the available observation history, so
 its cost grows with stored snapshots. Sales counts are grouped in PostgreSQL. A second workspace-scoped aggregate reads posted receipts for seller revenue only when the viewer may access both finance and sales. Idle dashboards add no polling or connection activity.
 
+The capital chart reuses the member finance allocation in a fixed batch of
+workspace reads, with income limited to the selected period and no member
+timeline load. Historical contributions are needed to attribute each receipt
+to the investors present on that date. The account total reuses the balances
+already in the dashboard response and adds no client request.
+
 ### Publication coverage notifications
 
 A subscribed workspace has one indexed due timestamp. The existing due-driven

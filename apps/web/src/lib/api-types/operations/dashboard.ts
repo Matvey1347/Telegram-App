@@ -1,9 +1,9 @@
-import type { DashboardSalesMix, DashboardSpendingMix, DashboardTrafficSource } from "@telegram-system/shared";
+import type { DashboardRetainedEarnings, DashboardSalesMix, DashboardSpendingMix, DashboardTrafficSource } from "@telegram-system/shared";
 import type { Currency, Icon, ResolvedEmoji } from "../core";
 import type { TransactionType } from "../finance/finance";
 import type { AdCampaign } from "../growth/ad-campaigns";
 
-export type DashboardSummary = {
+export type DashboardSummary = DashboardRetainedEarnings & {
   spendingMix?: DashboardSpendingMix;
   trafficSources?: DashboardTrafficSource[];
   salesMix?: DashboardSalesMix;

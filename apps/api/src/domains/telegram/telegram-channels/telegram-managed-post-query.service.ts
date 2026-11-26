@@ -211,6 +211,7 @@ export class TelegramManagedPostQueryService {
       workspaceId,
       telegramChannelId: channel.id,
       origin: 'TELEGRAM' as const,
+      aiGenerated: false,
       readOnlyTelegramPost: true,
       telegramPostId: post.id,
       assignedMemberId: member.id,

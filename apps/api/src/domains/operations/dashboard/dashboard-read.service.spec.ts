@@ -76,6 +76,16 @@ describe('DashboardReadService', () => {
       from,
       to,
     );
+    expect(prisma.account.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          workspaceId: 'workspace-1',
+          isActive: true,
+          deletedAt: null,
+          OR: [{ assignedMemberId: null }, { assignedMember: { isHidden: false } }],
+        }),
+      }),
+    );
 
     expect(result.accountRows[0].balance).toBe(125);
     expect(prisma.transaction.findMany).toHaveBeenCalledWith(

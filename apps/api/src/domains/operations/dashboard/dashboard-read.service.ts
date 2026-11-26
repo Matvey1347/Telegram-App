@@ -75,6 +75,7 @@ export class DashboardReadService {
             where: {
               workspaceId,
               isActive: true,
+              deletedAt: null,
               OR: [
                 { assignedMemberId: null },
                 { assignedMember: { isHidden: false } },

@@ -116,6 +116,10 @@ describe("display-currency balances", () => {
   it("withholds an incomplete total and handles an empty or zero balance", () => {
     expect(sumDisplayBalances([{ balance: 5, currency: "GBP" }], "UAH", rates)).toBeNull();
     expect(sumDisplayBalances([{ balance: 0, currency: "GBP" }], "UAH", rates)).toBe(0);
+    expect(sumDisplayBalances([
+      { balance: 50, currency: "GBP" },
+      { balance: -50, currency: "GBP" },
+    ], "UAH", rates)).toBe(0);
     expect(sumDisplayBalances([], "UAH")).toBe(0);
   });
 });

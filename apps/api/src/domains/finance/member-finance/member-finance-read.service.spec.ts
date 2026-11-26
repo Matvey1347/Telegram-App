@@ -257,6 +257,48 @@ describe('MemberFinanceReadService', () => {
     expect(rows.byMember.get('m2')?.investorEarnings).toBe(90);
   });
 
+  it('counts earned and recorded shares once, subtracting withdrawals in the selected period', async () => {
+    const from = new Date('2026-09-02T00:00:00.000Z');
+    const to = new Date('2026-09-06T23:59:59.999Z');
+    const payment = {
+      id: 'payment',
+      amountInPrimaryCurrency: 300,
+      sale: { sellerMemberId: 'm1', sellerCommissionRate: 10 },
+    };
+    const movement = (
+      id: string,
+      workspaceMemberId: string,
+      date: Date,
+      amountInPrimaryCurrency: number,
+      origin: string,
+      movementType = 'CONTRIBUTION',
+    ) => ({ id, workspaceMemberId, date, amountInPrimaryCurrency, origin, movementType });
+    const fixedDate = new Date('2026-09-04T12:00:00.000Z');
+    prisma.telegramAdSalePayment.findMany.mockResolvedValue([payment]);
+    prisma.workspaceMember.findMany.mockResolvedValue([{ id: 'm1' }, { id: 'm2' }]);
+    prisma.investment.findMany.mockResolvedValue([
+      movement('capital-1', 'm1', new Date('2026-09-01'), 100, 'EXTERNAL'),
+      movement('capital-2', 'm2', new Date('2026-09-01'), 100, 'EXTERNAL'),
+      {
+        ...movement('fixed', 'm2', fixedDate, 80, 'REINVESTMENT'),
+        reinvestmentDistribution: { periodStart: fixedDate, periodEnd: fixedDate },
+      },
+      movement('paid', 'm1', to, 35, 'REINVESTMENT', 'WITHDRAWAL'),
+      movement('later', 'm2', new Date('2026-09-07'), 12, 'REINVESTMENT', 'WITHDRAWAL'),
+    ]);
+    prisma.transaction.findMany.mockResolvedValue([
+      { id: 'earned', date: from, type: 'income', amountInPrimaryCurrency: 300, category: 'Sales', telegramAdSalePayment: { id: payment.id } },
+      { id: 'already-distributed', date: fixedDate, type: 'income', amountInPrimaryCurrency: 80, category: 'Sales' },
+      { id: 'adjustment', date: to, type: 'income', amountInPrimaryCurrency: 50, category: 'Balance adjustment' },
+    ]);
+
+    await expect(service.retainedEarningsForPeriod('workspace-1', from, to)).resolves.toBe(315);
+    expect(prisma.transaction.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { workspaceId: 'workspace-1', deletedAt: null, type: 'income', date: { gte: from, lte: to } },
+    }));
+    expect(prisma.memberCompensationSettlement.findMany).not.toHaveBeenCalled();
+  });
+
   it('does not backdate automatic profit shares to an investor added today', async () => {
     prisma.telegramAdSalePayment.findMany.mockResolvedValue([]);
     prisma.memberCompensationSettlement.findMany.mockResolvedValue([]);

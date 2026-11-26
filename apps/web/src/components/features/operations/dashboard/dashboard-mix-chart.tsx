@@ -35,7 +35,9 @@ export function DashboardMixChart({
     (sum, item) => sum + Math.max(0, item.value),
     0,
   );
-  const share = (value: number) => (total > 0 ? (100 * value) / total : null);
+  const hasNegative = segments.some(({ value }) => value < 0);
+  const net = segments.reduce((sum, { value }) => sum + value, 0);
+  const share = (value: number) => (total > 0 && !hasNegative ? (100 * value) / total : null);
   const active = segments.find(
     ({ key, label }) => (key ?? label) === highlighted,
   );
@@ -119,7 +121,7 @@ export function DashboardMixChart({
             </>
           ) : (
             <span className="max-w-full break-words text-sm font-semibold tabular-nums text-white">
-              {segments.length ? format(total) : "—"}
+              {segments.length ? format(net) : "—"}
             </span>
           )}
         </div>

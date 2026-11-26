@@ -304,8 +304,12 @@ export function sumDisplayBalances(
   target: string,
   rates?: ExchangeRate[],
 ): number | null {
-  let total = 0;
+  const totalsByCurrency = new Map<string, number>();
   for (const { balance, currency } of balances) {
+    totalsByCurrency.set(currency, (totalsByCurrency.get(currency) ?? 0) + balance);
+  }
+  let total = 0;
+  for (const [currency, balance] of totalsByCurrency) {
     const value = amountInDisplayCurrency(balance, currency, target, rates);
     if (value === null) return null;
     total += value;

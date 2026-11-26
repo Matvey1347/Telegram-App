@@ -123,6 +123,11 @@ describe("dashboard", () => {
     render(<DashboardOverview data={{
       primaryCurrency: "UAH",
       expensesBreakdownForPeriod: { channels: 75, other: 25 },
+      reinvestedEarningsForPeriod: 200,
+      accountBalances: [
+        { id: "current", name: "Current", currency: "UAH", balance: 2300 },
+        { id: "overdraft", name: "Overdraft", currency: "UAH", balance: -100 },
+      ],
       spendingMix: { advertising: 50, channelPurchases: 25, otherChannelExpenses: 0 },
       categoryBreakdown: [{
         id: "channel-purchase",
@@ -150,7 +155,11 @@ describe("dashboard", () => {
     } as DashboardSummary} />);
 
     expect(screen.getByRole("heading", { name: "Investment and spending" })).toBeInTheDocument();
-    expect(within(screen.getByText("Reinvestments").closest("div[tabindex]")!).getByText("25%")).toBeInTheDocument();
+    const reinvestments = within(screen.getByText("Reinvestments").closest("div[tabindex]")!);
+    expect(reinvestments.getByText("40%")).toBeInTheDocument();
+    expect(reinvestments.getByText("200.00 ₴")).toBeInTheDocument();
+    const accountsHeading = screen.getByRole("heading", { name: "Balance across all accounts" });
+    expect(within(accountsHeading.parentElement!).getByText("2,200.00 ₴")).toBeInTheDocument();
     expect(within(screen.getByText("Workspace owner").closest("div[tabindex]")!).getByText("75%")).toBeInTheDocument();
     expect(within(screen.getByText("Deals including external channels").closest("div[tabindex]")!).getByText("50%")).toBeInTheDocument();
     expect(screen.getByText("Bot share of measured requests · 50%")).toBeInTheDocument();

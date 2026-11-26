@@ -76,6 +76,7 @@ const KEYS_BY_FEATURE = {
     'investedCapital',
     'investedCapitalForPeriod',
     'investmentBreakdownForPeriod',
+    'reinvestedEarningsForPeriod',
     'spendingMix',
     'operatingProfitAllTime',
     'remainingToBreakEven',

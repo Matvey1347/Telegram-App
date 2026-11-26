@@ -11,6 +11,7 @@ import {
   Prisma,
   TelegramAdSalePaymentStatus,
   WorkspaceRole,
+  type MemberCompensationSettlement,
 } from '@prisma/client';
 import { WorkspaceService } from '../../../common/workspace.service';
 import { CurrencyConversionService } from '../../../common/currency-conversion.service';
@@ -39,6 +40,8 @@ type MemberTotals = {
   investorEarnings: number;
 };
 
+type EarningsPeriod = { from: Date; to: Date };
+
 @Injectable()
 export class MemberFinanceReadService {
   constructor(
@@ -61,6 +64,7 @@ export class MemberFinanceReadService {
     workspaceId: string,
     memberIds?: string[],
     client: MemberFinanceReader = this.prisma,
+    earningsPeriod?: EarningsPeriod,
   ) {
     const [
       payments,
@@ -94,10 +98,12 @@ export class MemberFinanceReadService {
           },
         },
       }),
-      client.memberCompensationSettlement.findMany({
-        where: { workspaceId },
-        orderBy: [{ date: 'desc' }, { id: 'desc' }],
-      }),
+      earningsPeriod
+        ? Promise.resolve<MemberCompensationSettlement[]>([])
+        : client.memberCompensationSettlement.findMany({
+            where: { workspaceId },
+            orderBy: [{ date: 'desc' }, { id: 'desc' }],
+          }),
       client.investment.findMany({
         where: { workspaceId },
         orderBy: [{ date: 'desc' }, { id: 'desc' }],
@@ -108,7 +114,14 @@ export class MemberFinanceReadService {
         },
       }),
       client.transaction.findMany({
-        where: { workspaceId, deletedAt: null },
+        where: {
+          workspaceId,
+          deletedAt: null,
+          ...(earningsPeriod && {
+            type: 'income',
+            date: { gte: earningsPeriod.from, lte: earningsPeriod.to },
+          }),
+        },
         select: {
           id: true,
           type: true,
@@ -169,8 +182,11 @@ export class MemberFinanceReadService {
       if (investment.origin === InvestmentOrigin.SALARY) row.salary += value;
       else if (investment.origin === InvestmentOrigin.EXTERNAL)
         row.external += value;
-      else if (investment.origin === InvestmentOrigin.REINVESTMENT)
-        row.investorEarnings += value;
+      else if (investment.origin === InvestmentOrigin.REINVESTMENT) {
+        if (!earningsPeriod ||
+            (investment.date >= earningsPeriod.from && investment.date <= earningsPeriod.to))
+          row.investorEarnings += value;
+      }
     }
     const visibleMemberIds = new Set(members.map((member) => member.id));
     const commissionByPayment = new Map(
@@ -272,6 +288,7 @@ export class MemberFinanceReadService {
       );
       for (const allocation of allocations) {
         get(allocation.memberId).investorEarnings += allocation.amount;
+        if (earningsPeriod) continue;
         const entries =
           automaticReinvestmentsByMember.get(allocation.memberId) ?? [];
         entries.push({
@@ -290,6 +307,21 @@ export class MemberFinanceReadService {
       investments,
       automaticReinvestmentsByMember,
     };
+  }
+
+  async retainedEarningsForPeriod(workspaceId: string, from: Date, to: Date) {
+    const { byMember } = await this.summaryRows(
+      workspaceId,
+      undefined,
+      this.prisma,
+      { from, to },
+    );
+    return roundMoney(
+      [...byMember.values()].reduce(
+        (sum, { investorEarnings }) => sum + roundMoney(investorEarnings),
+        0,
+      ),
+    );
   }
 
   private presentSummary(

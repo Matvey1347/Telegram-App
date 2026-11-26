@@ -27,9 +27,10 @@ import {
 } from "@/components/ui/primitives";
 import { getDashboardSummary, type DashboardSummary } from "@/lib/api";
 import { formatDate } from "@/lib/date-format";
-import { formatFinanceAmount } from "@/lib/features/finance/money";
+import { formatFinanceAmount, sumDisplayBalances } from "@/lib/features/finance/money";
 import { CurrencyAmount } from "@/components/ui/currency-amount";
 import { useFinanceDisplay } from "@/providers/finance-display-provider";
+import { useOptionalI18n } from "@/providers/i18n-provider";
 import { dashboardKeys } from "@/lib/query-keys";
 import {
   currentCalendarMonthPeriod,
@@ -150,8 +151,12 @@ function PeriodFilter({
 
 export function DashboardOverview({ data }: { data: DashboardSummary }) {
   const display = useFinanceDisplay();
+  const ru = useOptionalI18n()?.locale === "ru";
   const primaryCurrency = data.primaryCurrency ?? "USD";
   const currency = display.currency ?? primaryCurrency;
+  const accountTotal = data.accountBalances
+    ? sumDisplayBalances(data.accountBalances, currency, display.rates)
+    : null;
   const money = (value: number | null | undefined, source = primaryCurrency) => (
     <CurrencyAmount amount={value} currency={source} className="" fallbackCurrency={primaryCurrency} />
   );
@@ -173,32 +178,50 @@ export function DashboardOverview({ data }: { data: DashboardSummary }) {
 
   return (
     <div className="mt-6 space-y-6">
-      <Card className="overflow-hidden border-emerald-900/70 bg-emerald-950/20">
-        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-emerald-300">
-              <Users size={18} />
-              Revenue per active subscriber
+      <div className={data.accountBalances ? "grid gap-4 xl:grid-cols-[2fr_1fr]" : undefined}>
+        <Card className="overflow-hidden border-emerald-900/70 bg-emerald-950/20">
+          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-emerald-300">
+                <Users size={18} />
+                Revenue per active subscriber
+              </div>
+              <div className="tabular-nums text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+                {data.revenuePerActiveSubscriber == null
+                  ? "—"
+                  : money(data.revenuePerActiveSubscriber)}
+              </div>
             </div>
+            <div className="max-w-md text-sm text-neutral-400 md:text-right">
+              {hasAudience ? (
+                <>
+                  {formatFinanceAmount(incomeBreakdown.channels, primaryCurrency)} channel revenue divided by{" "}
+                  {data.activeSubscribersEstimate.toLocaleString()} active
+                  subscribers.
+                </>
+              ) : (
+                "Active subscriber data is required to calculate this metric."
+              )}
+            </div>
+          </div>
+        </Card>
+        {data.accountBalances && (
+          <Card>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium text-neutral-300">
+              <WalletCards size={18} aria-hidden />
+              {ru ? "Остаток на всех счетах" : "Balance across all accounts"}
+            </h3>
             <div className="tabular-nums text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-              {data.revenuePerActiveSubscriber == null
-                ? "—"
-                : money(data.revenuePerActiveSubscriber)}
+              {accountTotal === null ? "—" : formatFinanceAmount(accountTotal, currency)}
             </div>
-          </div>
-          <div className="max-w-md text-sm text-neutral-400 md:text-right">
-            {hasAudience ? (
-              <>
-                {formatFinanceAmount(incomeBreakdown.channels, primaryCurrency)} channel revenue divided by{" "}
-                {data.activeSubscribersEstimate.toLocaleString()} active
-                subscribers.
-              </>
-            ) : (
-              "Active subscriber data is required to calculate this metric."
+            {accountTotal === null && (
+              <p className="mt-2 text-sm text-neutral-400">
+                {ru ? "Не хватает курса для расчёта остатка." : "An exchange rate is unavailable."}
+              </p>
             )}
-          </div>
-        </div>
-      </Card>
+          </Card>
+        )}
+      </div>
 
       <DashboardInsights data={data} money={money} />
 
@@ -285,7 +308,7 @@ export function DashboardOverview({ data }: { data: DashboardSummary }) {
                     ? "External capital"
                     : group.origin === "SALARY"
                       ? "Salary invested"
-                      : "Reinvested profit",
+                      : "Recorded reinvestment movements",
                 value: money(group.amount),
                 icon: group.origin === "REINVESTMENT" ? Repeat2 : WalletCards,
                 iconTone:
@@ -397,7 +420,7 @@ function CashFlowRow({
                       ? "External capital"
                       : group.origin === "SALARY"
                         ? "Salary invested"
-                        : "Reinvested profit"}
+                        : "Recorded reinvestment movements"}
                   </strong>
                   <span className="tabular-nums text-neutral-200">
                     {money(group.amount)}

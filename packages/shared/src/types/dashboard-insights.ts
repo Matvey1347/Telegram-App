@@ -1,5 +1,9 @@
 import type { TelegramChannelTrafficSourceKind } from "./telegram-channel-traffic-attribution";
 
+export type DashboardRetainedEarnings = {
+  reinvestedEarningsForPeriod?: number;
+};
+
 export type DashboardTrafficKind = Exclude<
   TelegramChannelTrafficSourceKind,
   "UNATTRIBUTED"

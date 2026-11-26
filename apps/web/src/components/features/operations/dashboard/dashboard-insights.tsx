@@ -117,7 +117,7 @@ export function DashboardInsights({
                   ),
                   segment(
                     t("Reinvestments", "Реинвестиции"),
-                    contributions(true),
+                    data.reinvestedEarningsForPeriod ?? contributions(true),
                     1,
                     Repeat2,
                   ),

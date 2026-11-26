@@ -133,6 +133,8 @@ describe('dashboard insights', () => {
         trafficSources: [],
         spendingMix: {},
         investmentBreakdownForPeriod: [],
+        reinvestedEarningsForPeriod: 315,
+        accountBalances: [],
       },
       access,
       features,
@@ -142,6 +144,8 @@ describe('dashboard insights', () => {
       'trafficSources',
       'spendingMix',
       'investmentBreakdownForPeriod',
+      'reinvestedEarningsForPeriod',
+      'accountBalances',
     ]) {
       expect(summary).not.toHaveProperty(field);
     }

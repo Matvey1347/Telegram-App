@@ -8,6 +8,6 @@ import { MemberFinanceReadService } from './member-finance-read.service';
   imports: [FinanceCategoriesModule],
   controllers: [MemberFinanceController],
   providers: [MemberFinanceReadService, MemberFinanceService],
-  exports: [MemberFinanceService],
+  exports: [MemberFinanceService, MemberFinanceReadService],
 })
 export class MemberFinanceModule {}
