@@ -24,8 +24,10 @@ export function DashboardMixChart({
   segments,
   format,
   percent,
+  expanded = false,
 }: {
   title: string;
+  expanded?: boolean;
   segments: DashboardMixSegment[];
   format: (amount: number) => ReactNode;
   percent: (value: number | null) => string;
@@ -56,7 +58,7 @@ export function DashboardMixChart({
       className="@container min-w-0 rounded-lg border border-neutral-800 p-3"
     >
       <h4 className="text-sm font-medium text-neutral-200">{title}</h4>
-      <div className="relative mx-auto my-4 aspect-square w-36 @[26rem]:w-40">
+      <div className={`relative mx-auto my-4 aspect-square ${expanded ? "w-48 max-w-full @[36rem]:w-72" : "w-36 @[26rem]:w-40"}`}>
         <svg
           aria-hidden="true"
           viewBox="0 0 144 144"

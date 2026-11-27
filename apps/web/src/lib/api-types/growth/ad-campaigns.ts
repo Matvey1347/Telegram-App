@@ -206,55 +206,12 @@ export type AdCampaign = AdCampaignAnalyticsFields & {
   inviteLinkIds?: string[];
   inviteLinkWindows?: CampaignInviteWindow[];
   periodCountsUnavailable?: boolean;
-  botInviteLinkIds?: string[];
-  trackingLinkKind?: string;
-  trackingChannelIds?: string[];
-  trackingAllChannels?: boolean;
   accountId?: string;
   telegramChannel?: TelegramChannel;
   promo?: Promo | null;
   promos?: Promo[];
   telegramInviteLink?: TelegramInviteLink | null;
   inviteLinks?: TelegramInviteLink[];
-  botInviteLinks?: Array<
-    TelegramInviteLink & {
-      telegramChannel?: Pick<TelegramChannel, "id" | "title" | "photoUrl">;
-    }
-  >;
-  botRequestPerformance?: {
-    total: number;
-    estimated?: boolean;
-    confirmed?: boolean;
-    points: Array<{
-      syncedAt: string;
-      joinedCount: number;
-      requestedCount: number;
-      totalAttributed: number;
-      peakJoinedCount: number;
-      drawdownFromPeak: number;
-      drawdownPercent: number;
-    }>;
-    channels: Array<{
-      telegramChannelId: string;
-      title: string;
-      photoUrl?: string | null;
-      requests: number;
-      peak: number;
-      dropFromPeak: number;
-      dropPercent: number;
-      points: Array<{
-        syncedAt: string;
-        joinedCount: number;
-        requestedCount: number;
-        totalAttributed: number;
-        peakJoinedCount: number;
-        drawdownFromPeak: number;
-        drawdownPercent: number;
-      }>;
-    }>;
-    startsAt: string;
-    endsAt: string | null;
-  } | null;
   advertisingChannels: Array<TelegramChannel | AdvertisingChannel>;
   price: number;
   costAmount?: number;

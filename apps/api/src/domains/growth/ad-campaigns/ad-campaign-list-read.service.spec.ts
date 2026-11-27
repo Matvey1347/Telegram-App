@@ -1,54 +1,6 @@
 import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 
 describe('AdCampaignListReadService', () => {
-  it('shares bot requests between overlapping campaigns including those outside the page', async () => {
-    const start = new Date('2026-01-01T00:00:00Z');
-    const inviteLink = { id: 'link', telegramChannelId: 'channel', joinedCount: 0, requestedCount: 10, requestedObservedAt: new Date('2026-01-02T00:00:00Z'), telegramChannel: { title: 'Channel', photoUrl: null } };
-    const row = { id: 'first', placementDate: start, startedAt: null, createdAt: start, endedAt: null, botInviteLinks: [{ baselineJoinedCount: 0, baselineRequestedCount: 0, inviteLink }] };
-    const prisma = { adCampaignBotInviteLink: { findMany: jest.fn().mockResolvedValue(['first', 'second'].map((id) => ({ inviteLinkId: 'link', adCampaign: { id, placementDate: start, startedAt: null, createdAt: start, endedAt: null } }))) }, telegramInviteLinkSnapshot: { findMany: jest.fn().mockResolvedValue([]) } };
-    const service = new AdCampaignListReadService(prisma as never, {} as never);
-    const result = await (service as any).loadBotRequestMetrics('workspace', [row]);
-    expect(result.get('first')).toMatchObject({ total: 5, estimated: true });
-    expect(prisma.adCampaignBotInviteLink.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ adCampaign: { workspaceId: 'workspace' } }) }));
-  });
-
-  it('uses measured views of a competing promotion on the destination of a shared bot link', async () => {
-    const start = new Date('2026-01-01T00:00:00Z');
-    const end = new Date('2026-01-02T00:00:00Z');
-    const inviteLink = { id: 'link', telegramChannelId: 'channel', telegramChannel: { title: 'Channel', photoUrl: null } };
-    const row = { id: 'ad', telegramChannelId: 'primary-channel', placementDate: start, createdAt: start, endedAt: end, sourcePostViews: 100, botInviteLinks: [{ kind: 'BOT', createdAt: start, inviteLink }] };
-    const prisma = {
-      $queryRaw: jest.fn().mockResolvedValue([{ campaignId: 'vp', channelId: 'primary-channel', startsAt: start, endsAt: end, views: 300 }]),
-      adCampaignBotInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
-      telegramInviteLinkSnapshot: { findMany: jest.fn().mockResolvedValue([{ inviteLinkId: 'link', syncedAt: end, joinedCount: 0, requestedCount: 80 }]) },
-    };
-    const service = new AdCampaignListReadService(prisma as never, {} as never);
-    const result = await (service as any).loadBotRequestMetrics('workspace', [row]);
-    expect(result.get('ad')).toMatchObject({ total: 20, estimated: true });
-  });
-
-  it('does not attribute the first observation made a week after an unobserved campaign', async () => {
-    const start = new Date('2026-01-01T00:00:00Z');
-    const inviteLink = {
-      id: 'link', telegramChannelId: 'channel',
-      telegramChannel: { title: 'Channel', photoUrl: null },
-    };
-    const campaign = {
-      id: 'ad', telegramChannelId: 'channel', placementDate: start, createdAt: start,
-      botInviteLinks: [{ kind: 'BOT', createdAt: new Date('2026-01-08'), inviteLink }],
-    };
-    const prisma = {
-      $queryRaw: jest.fn().mockResolvedValue([]),
-      adCampaignBotInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
-      telegramInviteLinkSnapshot: { findMany: jest.fn().mockResolvedValue([
-        { inviteLinkId: 'link', syncedAt: new Date('2026-01-08'), joinedCount: 0, requestedCount: 250 },
-      ]) },
-    };
-    const service = new AdCampaignListReadService(prisma as never, {} as never);
-    const result = await (service as any).loadBotRequestMetrics('workspace', [campaign]);
-    expect(result.get('ad')).toMatchObject({ total: 0, confirmed: false });
-  });
-
   it('uses a compact, workspace-scoped list read with bounded operations', async () => {
     type ListQuery = {
       where: { workspaceId: string };
@@ -87,6 +39,7 @@ describe('AdCampaignListReadService', () => {
     );
     expect(query.select).not.toHaveProperty('account');
     expect(query.select).not.toHaveProperty('admissionAnalytics');
+    expect(query.select).not.toHaveProperty('botInviteLinks');
     expect(query.select.inviteLinks).toHaveProperty('select');
     expect(query.select.inviteLinks).not.toHaveProperty('include');
     expect(workspaceService.resolveWorkspaceIdForUser).toHaveBeenCalledTimes(1);

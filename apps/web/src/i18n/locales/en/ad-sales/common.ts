@@ -11,7 +11,6 @@ const messages = {
   "ads.pending": "Pending",
   "ads.peak": "Peak",
   "ads.drop_from_peak": "Drop from peak",
-  "ads.bot_requests": "Bot requests",
   "ads.kpi_hit": "KPI hit",
   "ads.kpi_ok": "KPI ok",
   "ads.kpi_missed": "KPI missed",

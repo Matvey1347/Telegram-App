@@ -7,11 +7,6 @@ export type CampaignValues = {
   promoIds: string[];
   inviteLinkIds: string[];
   inviteLinkWindows?: Record<string, CampaignInviteRule>;
-  botInviteLinkIds: string[];
-  trackingLinkKind: string;
-  trackingChannelIds: string[];
-  trackingAllChannels?: boolean;
-  trackCrossChannelRequests: boolean;
   advertisingChannelIds: string[];
   price?: number;
   accountId?: string;
@@ -29,9 +24,6 @@ export function isMeaningfulCampaignDraft(
     draft.telegramChannelId ||
       draft.promoIds?.length ||
       draft.inviteLinkIds?.length ||
-      draft.botInviteLinkIds?.length ||
-      draft.trackingChannelIds?.length ||
-      draft.trackCrossChannelRequests ||
       draft.advertisingChannelIds?.length ||
       Number(draft.price) ||
       draft.accountId ||
@@ -61,19 +53,6 @@ export function normalizeCampaignDraft(value: unknown): CampaignValues | null {
     inviteLinkWindows: draft.inviteLinkWindows && typeof draft.inviteLinkWindows === "object" ? Object.fromEntries(Object.entries(draft.inviteLinkWindows as Record<string, CampaignInviteRule | string>).flatMap<[string, CampaignInviteRule]>(([id, rule]) =>
       typeof rule === "string" ? [[id, { fromDate: rule }]] :
       rule && typeof rule === "object" ? [[id, { fromDate: typeof rule.fromDate === "string" ? rule.fromDate : null, currentRequests: rule.currentRequests === true }]] : [])) : {},
-    botInviteLinkIds: Array.isArray(draft.botInviteLinkIds)
-      ? draft.botInviteLinkIds.filter((id): id is string => typeof id === "string")
-      : [],
-    trackingLinkKind:
-      typeof draft.trackingLinkKind === "string" ? draft.trackingLinkKind : "BOT",
-    trackingChannelIds: Array.isArray(draft.trackingChannelIds)
-      ? draft.trackingChannelIds.filter((id): id is string => typeof id === "string")
-      : [],
-    ...(typeof draft.trackingAllChannels === "boolean" ? { trackingAllChannels: draft.trackingAllChannels } : {}),
-    trackCrossChannelRequests:
-      draft.trackCrossChannelRequests === true ||
-      (Array.isArray(draft.trackingChannelIds) && draft.trackingChannelIds.length > 0) ||
-      (Array.isArray(draft.botInviteLinkIds) && draft.botInviteLinkIds.length > 0),
     advertisingChannelIds: Array.isArray(draft.advertisingChannelIds)
       ? draft.advertisingChannelIds.filter(
           (id): id is string => typeof id === "string",

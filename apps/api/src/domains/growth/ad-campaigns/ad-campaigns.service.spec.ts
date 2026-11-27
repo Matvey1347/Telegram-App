@@ -1,9 +1,10 @@
+import { ValidationPipe } from '@nestjs/common';
+import { CreateAdCampaignDto } from './dto';
 import { shapeAdmissionViewAnalytics } from './ad-campaign-admission-view-read';
 import { AdCampaignsService } from './ad-campaigns.service';
-import { AdCampaignListReadService } from './ad-campaign-list-read.service';
 
 describe('AdCampaignsService.refreshInviteLinkData', () => {
-  it('refreshes each acquisition and bot-tracking link once before returning the campaign', async () => {
+  it('refreshes only links directly assigned to the campaign', async () => {
     const register = jest.fn().mockResolvedValue({ currentJoinedCount: 0, currentRequestedCount: 0 });
     const onProgress = jest.fn();
     const prisma = {
@@ -44,22 +45,16 @@ describe('AdCampaignsService.refreshInviteLinkData', () => {
       service.refreshInviteLinkData('user-1', 'campaign-1', onProgress),
     ).resolves.toEqual({
       campaignId: 'campaign-1',
-      totalLinks: 2,
-      refreshedLinks: 2,
+      totalLinks: 1,
+      refreshedLinks: 1,
       failedLinks: [],
     });
-    expect(register).toHaveBeenCalledTimes(2);
+    expect(register).toHaveBeenCalledTimes(1);
     expect(register).toHaveBeenNthCalledWith(
       1,
       'user-1',
       'channel-1',
       'https://t.me/+one',
-    );
-    expect(register).toHaveBeenNthCalledWith(
-      2,
-      'user-1',
-      'channel-2',
-      'https://t.me/+two',
     );
     expect(onProgress).toHaveBeenNthCalledWith(
       1,
@@ -70,18 +65,7 @@ describe('AdCampaignsService.refreshInviteLinkData', () => {
         message: 'Invite link refreshed',
       },
       1,
-      2,
-    );
-    expect(onProgress).toHaveBeenNthCalledWith(
-      2,
-      {
-        telegramChannelId: 'channel-2',
-        url: 'https://t.me/+two',
-        status: 'refreshed',
-        message: 'Invite link refreshed',
-      },
-      2,
-      2,
+      1,
     );
   });
 
@@ -346,10 +330,6 @@ describe('AdCampaignsService campaign creation without a cost', () => {
       advertisingSource: { findMany: jest.fn().mockResolvedValue([]) },
       telegramInviteLink: { updateMany: jest.fn() },
       adCampaignPromo: { deleteMany: jest.fn() },
-      adCampaignBotInviteLink: {
-        findMany: jest.fn().mockResolvedValue([]),
-        deleteMany: jest.fn(),
-      },
       transaction: { upsert: jest.fn() },
     };
     const prisma = {
@@ -372,7 +352,15 @@ describe('AdCampaignsService campaign creation without a cost', () => {
     jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'campaign-1' });
 
     await expect(
-      service.create('user-1', { telegramChannelId: 'channel-1' }),
+      service.create('user-1', await new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }).transform({
+        telegramChannelId: 'channel-1',
+        trackingAllChannels: true,
+        botInviteLinkIds: ['old-client-link'],
+      }, { metatype: CreateAdCampaignDto, type: 'body' }) as CreateAdCampaignDto),
     ).resolves.toEqual({ id: 'campaign-1' });
 
     expect(tx.adCampaign.create).toHaveBeenCalledWith({
@@ -384,6 +372,7 @@ describe('AdCampaignsService campaign creation without a cost', () => {
         accountId: null,
       }),
     });
+    expect(tx.adCampaign.create).not.toHaveBeenCalledWith({ data: expect.objectContaining({ trackingScope: expect.anything() }) });
     expect(tx.transaction.upsert).not.toHaveBeenCalled();
     expect(analytics.recalculateCampaignAnalytics).toHaveBeenCalledWith(
       'workspace-1',
@@ -393,149 +382,6 @@ describe('AdCampaignsService campaign creation without a cost', () => {
     await expect(
       service.create('user-1', { telegramChannelId: 'channel-1', price: 100 }),
     ).rejects.toThrow('Select an account before setting a campaign cost');
-  });
-});
-
-describe('AdCampaignListReadService bot request performance', () => {
-  it('uses the verified opening observation when tracking was enabled retroactively', async () => {
-    const prisma = {
-      adCampaignBotInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
-      telegramInviteLinkSnapshot: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            inviteLinkId: 'bot-link',
-            syncedAt: new Date('2026-10-01T00:00:00Z'),
-            joinedCount: 0,
-            requestedCount: 8,
-          },
-          {
-            inviteLinkId: 'bot-link',
-            syncedAt: new Date('2026-10-02T00:00:00Z'),
-            joinedCount: 1,
-            requestedCount: 3,
-          },
-          {
-            inviteLinkId: 'bot-link',
-            syncedAt: new Date('2026-10-03T00:00:00Z'),
-            joinedCount: 1,
-            requestedCount: 9,
-          },
-        ]),
-      },
-    };
-    const reader = new AdCampaignListReadService(prisma as never, {} as never);
-    const result = await (reader as any).loadBotRequestMetrics('workspace-1', [
-      {
-        id: 'campaign-1',
-        placementDate: new Date('2026-10-01T12:00:00Z'),
-        startedAt: null,
-        endedAt: null,
-        createdAt: new Date('2026-10-01T00:00:00Z'),
-        botInviteLinks: [
-          {
-            inviteLink: {
-              id: 'bot-link',
-              telegramChannelId: 'channel-1',
-              joinedCount: 1,
-              requestedCount: 9,
-              telegramChannel: { title: 'Bot channel' },
-            },
-            baselineJoinedCount: 1,
-            baselineRequestedCount: 9,
-          },
-        ],
-      },
-    ]);
-
-    expect(result.get('campaign-1')).toMatchObject({
-      total: 2,
-      confirmed: true,
-      points: expect.arrayContaining([
-        expect.objectContaining({
-          syncedAt: '2026-10-01T12:00:00.000Z',
-          totalAttributed: 0,
-        }),
-        expect.objectContaining({
-          syncedAt: '2026-10-03T00:00:00.000Z',
-          totalAttributed: 2,
-        }),
-      ]),
-      channels: [
-        {
-          telegramChannelId: 'channel-1',
-          title: 'Bot channel',
-          requests: 2,
-          peak: 2,
-        },
-      ],
-    });
-  });
-
-  it('keeps all campaign bot links in the result after the placement ends', async () => {
-    const prisma = {
-      adCampaignBotInviteLink: { findMany: jest.fn().mockResolvedValue([]) },
-      telegramInviteLinkSnapshot: {
-        findMany: jest.fn().mockResolvedValue([
-          {
-            inviteLinkId: 'synced-link',
-            syncedAt: new Date('2026-10-13T00:00:00Z'),
-            joinedCount: 0,
-            requestedCount: 26,
-          },
-        ]),
-      },
-    };
-    const reader = new AdCampaignListReadService(prisma as never, {} as never);
-    const result = await (reader as any).loadBotRequestMetrics('workspace-1', [
-      {
-        id: 'campaign-1',
-        placementDate: new Date('2026-10-10T00:00:00Z'),
-        startedAt: null,
-        endedAt: new Date('2026-10-12T00:00:00Z'),
-        createdAt: new Date('2026-10-10T00:00:00Z'),
-        botInviteLinks: [
-          {
-            inviteLink: {
-              id: 'synced-link',
-              telegramChannelId: 'channel-1',
-              joinedCount: 0,
-              requestedCount: 26,
-              telegramChannel: { title: 'Synced channel' },
-            },
-            baselineJoinedCount: 0,
-            baselineRequestedCount: 0,
-          },
-          {
-            inviteLink: {
-              id: 'live-only-link',
-              telegramChannelId: 'channel-2',
-              joinedCount: 0,
-              requestedCount: 29,
-              requestedObservedAt: new Date('2026-10-14T00:00:00Z'),
-              telegramChannel: { title: 'Live-only channel' },
-            },
-            baselineJoinedCount: 0,
-            baselineRequestedCount: 0,
-          },
-        ],
-      },
-    ]);
-
-    expect(result.get('campaign-1')).toMatchObject({
-      total: 55,
-      channels: expect.arrayContaining([
-        expect.objectContaining({
-          telegramChannelId: 'channel-1',
-          requests: 26,
-          peak: 26,
-        }),
-        expect.objectContaining({
-          telegramChannelId: 'channel-2',
-          requests: 29,
-          peak: 29,
-        }),
-      ]),
-    });
   });
 });
 

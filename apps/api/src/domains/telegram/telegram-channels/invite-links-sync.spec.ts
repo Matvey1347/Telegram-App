@@ -341,11 +341,7 @@ describe('TelegramChannelsService invite link sync', () => {
     });
   });
 
-  it.each([
-    [true, 8, 1],
-    [false, 8, 0],
-    [true, 12, 0],
-  ])('closes tracking only after confirmed admissions with a falling pending queue', async (observed, requested, writes) => {
+  it('observes admitted requests without ending a campaign on behalf of cross-channel tracking', async () => {
     const at = new Date('2026-11-20T00:00:00Z');
     prisma.telegramInviteLink.findUnique.mockResolvedValueOnce({
       id: 'link', name: 'Tracked link', adCampaignId: 'campaign',
@@ -355,16 +351,13 @@ describe('TelegramChannelsService invite link sync', () => {
     await (service as any).persistInviteLinkFromRemote({
       workspaceId: 'ws-1', channelId: 'channel-1',
       link: {
-        url: 'https://t.me/+tracked', usage: 7, requested, requestNeeded: true, revoked: false,
-        usageObserved: observed, requestedObserved: observed,
+        url: 'https://t.me/+tracked', usage: 7, requested: 8, requestNeeded: true, revoked: false,
+        usageObserved: true, requestedObserved: true,
       },
       maps: { memberByUsername: new Map(), memberByTelegramUserId: new Map(), memberByMtprotoUsername: new Map() },
       processedCount: 1, totalLinks: 1, warnings: [], progressStep: { current: 1, total: 1 },
     });
-    expect(prisma.adCampaign.updateMany).toHaveBeenCalledTimes(writes);
-    if (writes) expect(prisma.adCampaign.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ id: 'campaign', workspaceId: 'ws-1', endedAt: null }),
-    }));
+    expect(prisma.adCampaign.updateMany).not.toHaveBeenCalled();
   });
 
   it('preserves the materialized peak when a later invite sync counter drops', async () => {

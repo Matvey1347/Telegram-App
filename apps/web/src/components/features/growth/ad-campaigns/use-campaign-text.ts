@@ -14,7 +14,6 @@ const keys: Record<string, TranslationKey> = {
   "Pending": "ads.pending",
   "Peak": "ads.peak",
   "Drop from peak": "ads.drop_from_peak",
-  "Bot requests": "ads.bot_requests",
   "KPI hit": "ads.kpi_hit",
   "KPI ok": "ads.kpi_ok",
   "KPI missed": "ads.kpi_missed",

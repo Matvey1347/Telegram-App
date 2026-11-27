@@ -1,4 +1,3 @@
-import { savedTrackingScope } from './ad-campaign-link-selection';
 import { NotFoundException } from '@nestjs/common';
 import { campaignDetailMetrics } from './ad-campaign-detail-metrics';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -97,11 +96,6 @@ export class AdCampaignDetailRead {
           }
         : null,
     }));
-    const botInviteLinks = (
-      Array.isArray(row.botInviteLinks) ? row.botInviteLinks : []
-    )
-      .map((item: any) => item.inviteLink)
-      .filter(Boolean);
     const telegramInviteLink =
       enrichedInviteLinks.find(
         (link: any) => link.id === row.telegramInviteLinkId,
@@ -121,13 +115,6 @@ export class AdCampaignDetailRead {
       promoInviteLinkId: telegramInviteLink?.id || row.telegramInviteLinkId,
       telegramInviteLinkId: telegramInviteLink?.id || row.telegramInviteLinkId,
       inviteLinkIds: inviteLinks.map((link: any) => link.id),
-      botInviteLinkIds: botInviteLinks.map((link: any) => link.id),
-      trackingAllChannels: row.trackingScope == null ? undefined : savedTrackingScope(row.trackingScope)?.channelIds === null,
-      trackingLinkKind: savedTrackingScope(row.trackingScope)?.kind ?? row.botInviteLinks?.[0]?.kind ?? 'BOT',
-      trackingChannelIds: savedTrackingScope(row.trackingScope)?.channelIds ?? [
-        ...new Set(botInviteLinks.map((link: any) => link.telegramChannelId)),
-      ],
-      botInviteLinks,
       costAmount: Number(row.price),
       advertisingChannels: dedupeAdvertisingSources([
         ...row.advertisingTelegramChannels.map((x: any) =>
@@ -190,24 +177,6 @@ export class AdCampaignDetailRead {
           creatorMember: WorkspaceService.assignedMemberInclude,
         },
       },
-      botInviteLinks: {
-        select: {
-          kind: true,
-          inviteLink: {
-            select: {
-              id: true,
-              telegramChannelId: true,
-              name: true,
-              url: true,
-              joinedCount: true,
-              requestedCount: true,
-              telegramChannel: {
-                select: { id: true, title: true, photoUrl: true },
-              },
-            },
-          },
-        },
-      },
       advertisingTelegramChannels: {
         include: {
           telegramChannel: {
@@ -231,6 +200,7 @@ export class AdCampaignDetailRead {
     try {
       row = await (this.prisma.adCampaign as any).findFirst({
         where: { id, workspaceId },
+        omit: { trackingScope: true },
         include: this.adCampaignInclude(
           await this.promoStorage.hasCampaignPromoStorage(),
         ),
@@ -240,6 +210,7 @@ export class AdCampaignDetailRead {
       this.promoStorage.markMissing();
       row = await (this.prisma.adCampaign as any).findFirst({
         where: { id, workspaceId },
+        omit: { trackingScope: true },
         include: this.adCampaignInclude(false),
       });
     }

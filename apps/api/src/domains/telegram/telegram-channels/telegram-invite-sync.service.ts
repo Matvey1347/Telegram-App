@@ -170,21 +170,6 @@ export class TelegramInviteSyncService {
       },
     );
 
-    if (existing?.adCampaignId && existing.joinedObservedAt && existing.requestedObservedAt &&
-      countersConfirmed && params.link.requestNeeded && !params.link.revoked &&
-      params.link.usage > existing.joinedCount && params.link.requested < existing.requestedCount) {
-      await this.prisma.adCampaign.updateMany({
-        where: {
-          id: existing.adCampaignId, workspaceId: params.workspaceId, telegramChannelId: params.channelId,
-          endedAt: null,
-          OR: [{ placementDate: { lte: observedAt } }, { placementDate: null, createdAt: { lte: observedAt } }],
-          botInviteLinks: { some: {} },
-          inviteLinks: { some: { id: existing.id } },
-        },
-        data: { endedAt: observedAt },
-      });
-    }
-
     return {
       existing,
       upserted,

@@ -55,10 +55,6 @@ export class AdCampaignsController {
     return this.service.performanceSummary(user.sub, query);
   }
 
-  @Get('tracking/invite-links')
-  trackingInviteLinks(@CurrentUser() user: JwtUser) {
-    return this.service.trackingInviteLinks(user.sub);
-  }
 
   @Get(':id')
   findOne(@CurrentUser() user: JwtUser, @Param('id') id: string) {

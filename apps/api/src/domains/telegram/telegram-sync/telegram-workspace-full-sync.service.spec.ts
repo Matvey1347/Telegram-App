@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment -- Jest mocks intentionally use partial canonical sync results. */
-jest.mock('../../growth/ad-campaigns/ad-campaign-tracking-sync', () => ({
-  attachNewCampaignTrackingLinks: jest.fn(),
+jest.mock('../../growth/ad-campaigns/ad-campaign-invite-window-sync', () => ({
   loadDueCampaignInviteWindows: jest.fn().mockResolvedValue(new Map()),
 }));
 
-import { loadDueCampaignInviteWindows } from '../../growth/ad-campaigns/ad-campaign-tracking-sync';
+import { loadDueCampaignInviteWindows } from '../../growth/ad-campaigns/ad-campaign-invite-window-sync';
 import { AdCampaignInviteWindowsService } from '../../growth/ad-campaigns/ad-campaign-invite-windows.service';
 import { TelegramWorkspaceFullSyncService } from './telegram-workspace-full-sync.service';
 

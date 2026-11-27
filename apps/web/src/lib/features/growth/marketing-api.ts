@@ -1,4 +1,4 @@
-import type { AdCampaignTrackingChannel, CampaignInviteRule, CampaignInviteWindow } from "@telegram-system/shared";
+import type { CampaignInviteRule, CampaignInviteWindow } from "@telegram-system/shared";
 import type { AxiosInstance, AxiosRequestConfig } from "axios";
 import type { PaginatedResponse } from "@telegram-system/shared";
 import type {
@@ -88,17 +88,6 @@ export function createMarketingApi({
       (await api.put<{ windows: CampaignInviteWindow[]; failed: string[] }>(`/ad-campaigns/${id}/invite-link-windows`, { windows }, quietMutationConfig)).data,
     refreshInviteLinkWindows: async (id: string) =>
       (await api.post<string[]>(`/ad-campaigns/${id}/invite-link-windows/refresh`, {}, quietMutationConfig)).data,
-    trackingInviteLinks: async () =>
-      (
-        await api.get<{
-          kinds: Array<{
-            kind: string;
-            label: string;
-            tag: string;
-            channels: AdCampaignTrackingChannel[];
-          }>;
-        }>("/ad-campaigns/tracking/invite-links")
-      ).data,
     listPage: async (
       params?: PaginationParams & {
         telegramChannelId?: string;

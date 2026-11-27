@@ -148,8 +148,8 @@ describe("dashboard", () => {
       ],
       salesMix: { total: 4, owner: 3, otherSellers: 1, unassigned: 0, external: 2 },
       trafficSources: [
-        { kind: "BOT", trackedLinks: 2, measuredLinks: 1, arrivals: 2, requests: 2, joined: 1, departures: 0, departurePercent: 0 },
-        { kind: "AD_CAMPAIGNS", trackedLinks: 1, measuredLinks: 1, arrivals: 3, requests: 2, joined: 3, departures: 1, departurePercent: 25, spend: 100, costPerRequest: 50 },
+        { kind: "BOT", trackedLinks: 2, measuredLinks: 1, arrivals: 1000, requests: 1000, joined: 1, departures: 0, departurePercent: 0 },
+        { kind: "AD_CAMPAIGNS", trackedLinks: 1, measuredLinks: 1, arrivals: 3000, requests: 3000, joined: 3000, departures: 95, departurePercent: 2.5, spend: 100, costPerRequest: 50 },
         { kind: "BROADCAST", trackedLinks: 1, measuredLinks: 0, arrivals: null },
       ],
     } as DashboardSummary} />);
@@ -162,12 +162,21 @@ describe("dashboard", () => {
     expect(within(accountsHeading.parentElement!).getByText("2,200.00 ₴")).toBeInTheDocument();
     expect(within(screen.getByText("Workspace owner").closest("div[tabindex]")!).getByText("75%")).toBeInTheDocument();
     expect(within(screen.getByText("Deals including external channels").closest("div[tabindex]")!).getByText("50%")).toBeInTheDocument();
-    expect(screen.getByText("Bot share of measured requests · 50%")).toBeInTheDocument();
+    const botConversion = within(screen.getByRole("region", { name: "Bot conversion" }));
+    expect(botConversion.getByText("33.3%")).toBeInTheDocument();
+    expect(botConversion.getByText("1,000 bot requests / 3,000 measured inbound requests")).toBeInTheDocument();
+    expect(botConversion.getByText("10,000")).toBeInTheDocument();
+    fireEvent.change(botConversion.getByRole("spinbutton", { name: "Planned inbound requests" }), { target: { value: "6000" } });
+    expect(botConversion.getByText("2,000")).toBeInTheDocument();
+    fireEvent.change(botConversion.getByRole("spinbutton", { name: "Planned inbound requests" }), { target: { value: "" } });
+    expect(botConversion.getByText("—")).toBeInTheDocument();
+    const unsubscribeRates = within(screen.getByRole("region", { name: "Unsubscribe rate by source" }));
+    expect(unsubscribeRates.getByText("3.2%")).toBeInTheDocument();
     expect(screen.getByText("Deals in the selected period · 4")).toBeInTheDocument();
-    expect(within(screen.getByText("Buy Channels").parentElement!).getByText("📣")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Channel expense categories" })).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Capital contributions" }).querySelector("svg [data-segment]")).not.toBeNull();
     expect(screen.getByRole("row", { name: /Welcome bot/ }).querySelector("svg")).not.toBeNull();
-    expect(within(screen.getByRole("row", { name: /Ad campaigns/ })).getByText("1 · 25%")).toBeInTheDocument();
+    expect(within(screen.getByRole("row", { name: /Ad campaigns/ })).getByText("95")).toBeInTheDocument();
     expect(within(screen.getByRole("row", { name: /Broadcast links/ })).getAllByText("—").length).toBeGreaterThan(0);
   });
 

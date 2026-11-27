@@ -285,63 +285,6 @@ describe('TelegramChannelLifecycleService system groups', () => {
     );
   });
 
-  it('moves bot-request campaign tracking to a replacement bot link', async () => {
-    const updateChannel = jest.fn().mockResolvedValue({ id: 'channel-1' });
-    const findTrackers = jest
-      .fn()
-      .mockResolvedValueOnce([{ id: 'tracker-1', adCampaignId: 'campaign-1' }])
-      .mockResolvedValueOnce([]);
-    const updateTrackers = jest.fn().mockResolvedValue({ count: 1 });
-    const tx = {
-      telegramChannel: { update: updateChannel },
-      adCampaignBotInviteLink: {
-        findMany: findTrackers,
-        deleteMany: jest.fn(),
-        updateMany: updateTrackers,
-      },
-    };
-    const prisma = {
-      icon: { findFirst: jest.fn() },
-      telegramInviteLink: {
-        findFirst: jest.fn(),
-        count: jest.fn().mockResolvedValue(1),
-      },
-      $transaction: jest.fn(async (work) => work(tx)),
-    };
-    const catalog = {
-      findOne: jest.fn().mockResolvedValue({
-        id: 'channel-1',
-        targetCpa: null,
-        stopCpaFrom: null,
-        botInviteLinkId: 'retired-bot-link',
-      }),
-    };
-    const service = new TelegramChannelLifecycleService(
-      prisma as never,
-      {} as never,
-      {
-        workspace: jest.fn().mockResolvedValue('workspace-1'),
-        normalizeUsername: jest.fn(),
-      } as never,
-      { resolveImportPolicy: jest.fn().mockResolvedValue({}) } as never,
-      {} as never,
-      catalog as never,
-      {} as never,
-    );
-
-    await service.update('user-1', 'channel-1', {
-      botInviteLinkId: 'replacement-bot-link',
-    });
-
-    expect(updateTrackers).toHaveBeenCalledWith({
-      where: { id: { in: ['tracker-1'] } },
-      data: {
-        inviteLinkId: 'replacement-bot-link',
-        baselineJoinedCount: 0,
-        baselineRequestedCount: 0,
-      },
-    });
-  });
 });
 
 

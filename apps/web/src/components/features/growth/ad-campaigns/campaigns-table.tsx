@@ -12,7 +12,6 @@ import { inviteLinkCreatorFallback } from "@/lib/features/telegram/telegram-invi
 import { TelegramInviteLinkCreatorAvatar as SharedInviteLinkCreatorAvatar } from "@/components/features/telegram/telegram/telegram-invite-link-creator-avatar";
 import type { AdCampaign, AdCampaignInviteLinkRefreshProgress, Promo, TelegramChannel, TelegramInviteLink } from "@/lib/api";
 import { AdCampaignRowActions } from "./ad-campaign-row-actions";
-import { CampaignBotRequestsModal } from "./campaign-bot-requests-modal";
 import { effectiveCampaignKpiStatus, campaignMetrics } from "./campaign-performance-metrics";
 import { KpiTooltip, PerformanceCell } from "./campaign-performance-cell";
 
@@ -383,8 +382,6 @@ export function AdCampaignsTable({
   );
   const [admissionAnalyticsCampaign, setAdmissionAnalyticsCampaign] =
     useState<AdCampaign | null>(null);
-  const [botRequestsCampaign, setBotRequestsCampaign] =
-    useState<AdCampaign | null>(null);
 
   const normalizedCampaigns = useMemo(
     () =>
@@ -561,7 +558,6 @@ export function AdCampaignsTable({
                     onOpenAdmissionAnalytics={() =>
                       setAdmissionAnalyticsCampaign(row.campaign)
                     }
-                    onOpenBotRequests={() => setBotRequestsCampaign(row.campaign)}
                   />
                 </td>
                 {showHypotheses ? (
@@ -626,10 +622,6 @@ export function AdCampaignsTable({
       <CampaignAdmissionViewAnalyticsModal
         campaign={admissionAnalyticsCampaign}
         onClose={() => setAdmissionAnalyticsCampaign(null)}
-      />
-      <CampaignBotRequestsModal
-        campaign={botRequestsCampaign}
-        onClose={() => setBotRequestsCampaign(null)}
       />
     </>
   );

@@ -1,5 +1,5 @@
 import { AdCampaignInviteWindowsService } from '../../growth/ad-campaigns/ad-campaign-invite-windows.service';
-import { attachNewCampaignTrackingLinks, loadDueCampaignInviteWindows } from '../../growth/ad-campaigns/ad-campaign-tracking-sync';
+import { loadDueCampaignInviteWindows } from '../../growth/ad-campaigns/ad-campaign-invite-window-sync';
 import {
   BadRequestException,
   ForbiddenException,
@@ -44,8 +44,6 @@ export class TelegramWorkspaceFullSyncService {
       throw new BadRequestException('Select at least one sync section');
     }
     const startedAt = Date.now();
-    if (input.actor.type === 'SCHEDULED_TASK')
-      await attachNewCampaignTrackingLinks(this.prisma, input.workspaceId);
     const [workspace, channels, actorUserId] = await Promise.all([
       this.prisma.workspace.findUniqueOrThrow({
         where: { id: input.workspaceId },

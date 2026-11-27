@@ -95,7 +95,6 @@ export function PerformanceCell({
   onHideKpiTooltip,
   onOpenHistory,
   onOpenAdmissionAnalytics,
-  onOpenBotRequests,
 }: {
   campaign: AdCampaign;
   cost: number;
@@ -117,7 +116,6 @@ export function PerformanceCell({
   onHideKpiTooltip: () => void;
   onOpenHistory?: () => void;
   onOpenAdmissionAnalytics?: () => void;
-  onOpenBotRequests?: () => void;
 }) {
   const incomplete = campaign.periodCountsUnavailable === true;
   const kpiTextClass = kpiMetricTextClass(incomplete ? "unknown" : kpiStatus);
@@ -164,29 +162,6 @@ export function PerformanceCell({
   const shownPending = incomplete ? campaign.analytics?.requestedCount : pending;
   const t = useCampaignText();
   const displayMode = moneySettings?.currencyDisplayMode ?? "code";
-
-  const botPerformance = campaign.botRequestPerformance;
-  const botBadge = botPerformance ? (
-    <button
-      type="button"
-      onClick={onOpenBotRequests}
-      className="rounded border border-cyan-800/80 bg-cyan-950/20 px-1.5 py-0.5 text-cyan-200"
-      title={
-        botPerformance.confirmed === false
-          ? "За период кампании недостаточно снимков счётчиков Telegram."
-          : botPerformance.estimated
-            ? "Оценка по изменениям счётчиков Telegram за период и доле конкурирующих размещений."
-            : botPerformance.channels.map((channel) =>
-                `${channel.title}: +${formatMetric(channel.requests)}`,
-              ).join("\n")
-      }
-    >
-      {t("Bot requests")}{" "}
-      {botPerformance.confirmed === false
-        ? "—"
-        : `${botPerformance.estimated ? "≈" : "+"}${formatMetric(botPerformance.total)}`}
-    </button>
-  ) : null;
 
   return (
     <div
@@ -299,7 +274,6 @@ export function PerformanceCell({
             ) : null}
           </>
         ) : null}
-        {botBadge}
       </div>
       <AdmissionViewUpliftBlock
         campaign={campaign}

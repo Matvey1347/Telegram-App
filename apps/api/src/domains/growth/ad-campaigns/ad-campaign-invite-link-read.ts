@@ -37,11 +37,6 @@ export class AdCampaignInviteLinkRead {
       select: {
         id: true,
         inviteLinks: { select: { telegramChannelId: true, url: true } },
-        botInviteLinks: {
-          select: {
-            inviteLink: { select: { telegramChannelId: true, url: true } },
-          },
-        },
       },
     });
     if (!campaign) throw new NotFoundException('Campaign not found');
@@ -49,13 +44,9 @@ export class AdCampaignInviteLinkRead {
       throw new NotFoundException('Invite-link refresh is unavailable');
     }
 
-    const links = [
-      ...campaign.inviteLinks,
-      ...campaign.botInviteLinks.map(({ inviteLink }) => inviteLink),
-    ];
-    const uniqueLinks = [
+      const uniqueLinks = [
       ...new Map(
-        links.map((link) => [`${link.telegramChannelId}:${link.url}`, link]),
+        campaign.inviteLinks.map((link) => [`${link.telegramChannelId}:${link.url}`, link]),
       ).values(),
     ];
     if (!uniqueLinks.length) {

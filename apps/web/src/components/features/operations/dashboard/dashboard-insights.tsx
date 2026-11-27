@@ -24,6 +24,7 @@ import {
   DashboardMixChart,
   type DashboardMixSegment,
 } from "./dashboard-mix-chart";
+import { DashboardTrafficRates } from "./dashboard-traffic-rates";
 import { Card } from "@/components/ui/primitives";
 import type { DashboardSummary } from "@/lib/api-types/operations/dashboard";
 import { useOptionalI18n } from "@/providers/i18n-provider";
@@ -81,7 +82,7 @@ export function DashboardInsights({
       .filter((movement) => movement.movementType === "CONTRIBUTION")
       .reduce((sum, movement) => sum + movement.amountInPrimaryCurrency, 0);
   const categories = (data.categoryBreakdown ?? [])
-    .filter((item) => item.flow === "expense")
+    .filter((item) => item.flow === "expense" && item.bucket === "other")
     .sort((a, b) => b.amount - a.amount);
   const segment = (
     label: string,
@@ -174,37 +175,17 @@ export function DashboardInsights({
             )}
           </div>
           {expenses && categories.length > 0 && (
-            <div className="mt-3 grid gap-3 xl:grid-cols-2">
-              {(["channels", "other"] as const).map((bucket) => {
-                const items = categories.filter(
-                  (item) => item.bucket === bucket,
-                );
-                return (
-                  items.length > 0 && (
-                    <DashboardMixChart
-                      percent={percent}
-                      key={bucket}
-                      title={
-                        bucket === "channels"
-                          ? t(
-                              "Channel expense categories",
-                              "Категории расходов на каналы",
-                            )
-                          : t(
-                              "Other expense categories",
-                              "Категории прочих расходов",
-                            )
-                      }
-                      format={money}
-                      segments={items.map((item, index) => ({
-                        ...segment(item.name, item.amount, index, Tags),
-                        key: item.id ?? item.name,
-                        iconPresentation: item.iconPresentation,
-                      }))}
-                    />
-                  )
-                );
-              })}
+            <div className="mt-3">
+              <DashboardMixChart
+                percent={percent}
+                title={t("Other expense categories", "Категории прочих расходов")}
+                format={money}
+                segments={categories.map((item, index) => ({
+                  ...segment(item.name, item.amount, index, Tags),
+                  key: item.id ?? item.name,
+                  iconPresentation: item.iconPresentation,
+                }))}
+              />
             </div>
           )}
         </Card>
@@ -321,15 +302,6 @@ function Traffic({
     OTHER: t("Other invite links", "Прочие пригласительные ссылки"),
     FOLDERS: t("Folders", "Папки"),
   };
-  const requestTotal = sources.reduce(
-    (sum, source) => sum + (source.requests ?? 0),
-    0,
-  );
-  const botRequests = sources.find((source) => source.kind === "BOT")?.requests;
-  const botShare =
-    botRequests != null && requestTotal > 0
-      ? (100 * botRequests) / requestTotal
-      : null;
   const amount = (value: number | null) => (value == null ? "—" : money(value));
   const headings = [
     t("Source", "Источник"),
@@ -344,19 +316,11 @@ function Traffic({
 
   return (
     <Card>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-        <h3 className="text-lg font-semibold text-white">
-          {t("Audience acquisition", "Привлечение аудитории")}
-        </h3>
-        <span className="rounded-md bg-sky-500/10 px-2.5 py-1 text-sm text-sky-200">
-          {t(
-            "Bot share of measured requests",
-            "Доля бота в измеренных заявках",
-          )}{" "}
-          · {percent(botShare)}
-        </span>
-      </div>
-      <div className="mb-4 grid gap-3 lg:grid-cols-2">
+      <h3 className="mb-4 text-lg font-semibold text-white">
+        {t("Audience acquisition", "Привлечение аудитории")}
+      </h3>
+      <DashboardTrafficRates sources={sources} labels={labels} t={t} count={count} percent={percent} />
+      <div className="mb-4 grid gap-3">
         {(
           [
             [
@@ -372,6 +336,7 @@ function Traffic({
           <DashboardMixChart
             key={key}
             title={title}
+            expanded
             format={count}
             percent={percent}
             segments={sources
@@ -427,11 +392,7 @@ function Traffic({
                 <td className="px-3 py-2">{count(source.arrivals)}</td>
                 <td className="px-3 py-2">{count(source.requests)}</td>
                 <td className="px-3 py-2">{count(source.joined)}</td>
-                <td className="px-3 py-2">
-                  {count(source.departures)}
-                  {source.departurePercent != null &&
-                    ` · ${percent(source.departurePercent)}`}
-                </td>
+                <td className="px-3 py-2">{count(source.departures)}</td>
                 <td className="px-3 py-2">{amount(source.spend)}</td>
                 <td className="px-3 py-2">{amount(source.costPerRequest)}</td>
                 <td className="px-3 py-2">
@@ -444,8 +405,8 @@ function Traffic({
       </div>
       <p className="mt-3 text-xs leading-relaxed text-neutral-400">
         {t(
-          "Estimates use Telegram counter changes in the selected period. Arrivals mean new joins or pending requests observed in the counters. The departure rate uses the starting audience plus new joins. It covers all subscribers on those links during the period. Unit costs divide period spend by measured results.",
-          "Оценки основаны на изменениях счётчиков Telegram за выбранный период. Переходы — новые вступления или заявки, видимые в счётчиках. Процент отписок считается от аудитории на начало периода плюс новые вступления и включает всех подписчиков по этим ссылкам за период. Стоимость результата считается по расходам за период и измеренным результатам.",
+          "Estimates use Telegram counter changes in the selected period. Arrivals mean new joins or pending requests observed in the counters. Unit costs divide period spend by measured results.",
+          "Оценки основаны на изменениях счётчиков Telegram за выбранный период. Переходы — новые вступления или заявки, видимые в счётчиках. Стоимость результата считается по расходам за период и измеренным результатам.",
         )}
       </p>
     </Card>

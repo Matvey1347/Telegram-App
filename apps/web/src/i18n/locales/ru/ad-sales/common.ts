@@ -11,7 +11,6 @@ const messages = {
   "ads.pending": "Заявки",
   "ads.peak": "Пик",
   "ads.drop_from_peak": "Снижение от пика",
-  "ads.bot_requests": "Заявки через бота",
   "ads.kpi_hit": "KPI достигнут",
   "ads.kpi_ok": "KPI допустимый",
   "ads.kpi_missed": "KPI не достигнут",

@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  Allow,
   IsArray,
   IsBoolean,
   IsDateString,
@@ -60,7 +61,15 @@ export class AdCampaignAnalyticsInputDto {
   @IsOptional() @IsBoolean() excludeFromAnalytics?: boolean;
 }
 
-export class CreateAdCampaignDto {
+// Cached clients can still submit these keys during a rolling deployment.
+class RetiredCampaignTrackingFields {
+  @Allow() botInviteLinkIds?: unknown;
+  @Allow() trackingLinkKind?: unknown;
+  @Allow() trackingAllChannels?: unknown;
+  @Allow() trackingChannelIds?: unknown;
+}
+
+export class CreateAdCampaignDto extends RetiredCampaignTrackingFields {
   @IsOptional() @IsString() assignedMemberId?: string | null;
   @IsOptional() @IsString() customTitle?: string | null;
   @IsString() telegramChannelId!: string;
@@ -74,16 +83,6 @@ export class CreateAdCampaignDto {
   @IsArray()
   @IsString({ each: true })
   inviteLinkIds?: string[];
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  botInviteLinkIds?: string[];
-  @IsOptional() @IsString() trackingLinkKind?: string;
-  @IsOptional() @IsBoolean() trackingAllChannels?: boolean;
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  trackingChannelIds?: string[];
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
@@ -140,7 +139,7 @@ export class CreateAdCampaignDto {
   @IsOptional() @IsBoolean() excludeFromAnalytics?: boolean;
 }
 
-export class UpdateAdCampaignDto {
+export class UpdateAdCampaignDto extends RetiredCampaignTrackingFields {
   @IsOptional() @IsString() assignedMemberId?: string | null;
   @IsOptional() @IsString() customTitle?: string | null;
   @IsOptional() @IsString() telegramChannelId?: string;
@@ -154,16 +153,6 @@ export class UpdateAdCampaignDto {
   @IsArray()
   @IsString({ each: true })
   inviteLinkIds?: string[];
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  botInviteLinkIds?: string[];
-  @IsOptional() @IsString() trackingLinkKind?: string;
-  @IsOptional() @IsBoolean() trackingAllChannels?: boolean;
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  trackingChannelIds?: string[];
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

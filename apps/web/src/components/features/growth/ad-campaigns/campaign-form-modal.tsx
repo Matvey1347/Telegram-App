@@ -24,7 +24,6 @@ import {
   FormField,
   Input,
   Modal,
-  ToggleRow,
   Tooltip,
   Textarea,
 } from "@/components/ui/primitives";
@@ -48,11 +47,10 @@ import { CampaignInviteLinksSelect } from "./campaign-invite-links-select";
 import { accountAdCampaignSelectOption } from "./ad-campaign-view-options";
 import { AdFormSkeleton } from "./ad-form-skeleton";
 import { CurrencyAmountInput } from "@/components/ui/currency-amount-input";
-import { CampaignTrackingEditor } from "./campaign-tracking-editor";
 
 type CampaignSubmission = Omit<
   CampaignValues,
-  "customTitle" | "trackCrossChannelRequests" | "endedAt"
+  "customTitle" | "endedAt"
 > & {
   customTitle: string | null;
 };
@@ -85,9 +83,6 @@ type CampaignInitial = Partial<AdCampaign> & {
   assignedMember?: { id?: string } | null;
   promoIds?: string[];
   inviteLinkIds?: string[];
-  botInviteLinkIds?: string[];
-  trackingLinkKind?: string;
-  trackingChannelIds?: string[];
   advertisingChannels?: CampaignSource[];
   advertisingSources?: CampaignSource[];
   advertisingChannelIds?: Array<string | CampaignSource>;
@@ -150,17 +145,6 @@ function initialValues(row?: CampaignInitial): CampaignValues {
             ? [row.telegramInviteLinkId]
             : [],
         inviteLinkWindows: Object.fromEntries((row.inviteLinkWindows ?? []).map((window) => [window.inviteLinkId, { fromDate: window.fromDate, currentRequests: window.currentRequests }])),
-        botInviteLinkIds: Array.isArray(row.botInviteLinkIds)
-          ? row.botInviteLinkIds
-          : [],
-        trackingLinkKind: row.trackingLinkKind || "BOT",
-        trackingChannelIds: Array.isArray(row.trackingChannelIds)
-          ? row.trackingChannelIds
-          : [],
-        trackingAllChannels: row.trackingAllChannels,
-        trackCrossChannelRequests: row.trackingAllChannels === true || Boolean(
-          row.trackingChannelIds?.length || row.botInviteLinkIds?.length,
-        ),
         advertisingChannelIds: campaignSources(row)
           .map(selectionId)
           .filter(Boolean),
@@ -177,11 +161,6 @@ function initialValues(row?: CampaignInitial): CampaignValues {
         promoIds: [],
         inviteLinkIds: [],
         inviteLinkWindows: {},
-        botInviteLinkIds: [],
-        trackingLinkKind: "BOT",
-        trackingChannelIds: [],
-        trackCrossChannelRequests: false,
-        trackingAllChannels: true,
         advertisingChannelIds: [],
         price: undefined,
         accountId: "",
@@ -254,10 +233,6 @@ export function CampaignModal({
   const selectedInviteLinkIds = watch("inviteLinkIds") || [];
   const inviteLinkWindows = watch("inviteLinkWindows") || {};
   const windowsQuery = useQuery({ queryKey: adCampaignKeys.inviteLinkWindows(initial?.id), queryFn: () => adCampaignsApi.inviteLinkWindows(initial!.id!), enabled: open && Boolean(initial?.id), staleTime: 0 });
-  const selectedTrackingChannelIds = watch("trackingChannelIds") || [];
-  const savedAllChannels = watch("trackingAllChannels");
-  const trackingLinkKind = watch("trackingLinkKind") || "BOT";
-  const trackCrossChannelRequests = watch("trackCrossChannelRequests") || false;
   const watchedAdChannels = watch("advertisingChannelIds");
   const selectedAdChannels = useMemo(
     () => watchedAdChannels || [],
@@ -312,9 +287,6 @@ export function CampaignModal({
     register("promoIds");
     register("inviteLinkIds");
     register("inviteLinkWindows");
-    register("botInviteLinkIds");
-    register("trackCrossChannelRequests");
-    register("trackingAllChannels");
   }, [register]);
   useEffect(() => {
     if (open) reset(initialValues(initial));
@@ -345,21 +317,6 @@ export function CampaignModal({
     queryFn: accountsApi.list,
     enabled: open && !loading,
   });
-  const {
-    data: trackingInviteLinks,
-    isError: trackingInviteLinksError,
-  } = useQuery({
-    queryKey: adCampaignKeys.trackingInviteLinks(),
-    queryFn: adCampaignsApi.trackingInviteLinks,
-    enabled: open && !loading && trackCrossChannelRequests,
-  });
-  const configuredDestinations = trackingInviteLinks?.kinds.find((item) => item.kind === trackingLinkKind)
-    ?.channels.filter((channel) => channel.id !== selectedChannelId && channel.hasSystemLink) ?? [];
-  const trackingAllChannels = savedAllChannels === true || (
-    savedAllChannels === undefined && configuredDestinations.length > 0 &&
-    configuredDestinations.length === selectedTrackingChannelIds.length &&
-    configuredDestinations.every(({ id }) => selectedTrackingChannelIds.includes(id))
-  );
   const ownChannels = useMemo(
     () => (channels || []).filter(isOwnChannel),
     [channels],
@@ -375,7 +332,7 @@ export function CampaignModal({
     [promos, initial],
   );
   const setArray = (
-    name: "promoIds" | "inviteLinkIds" | "botInviteLinkIds" | "trackingChannelIds" | "advertisingChannelIds",
+    name: "promoIds" | "inviteLinkIds" | "advertisingChannelIds",
     value: string[],
   ) => setValue(name, value, { shouldValidate: true, shouldDirty: true });
 
@@ -408,16 +365,11 @@ export function CampaignModal({
               await onSubmit({
                 telegramChannelId: value.telegramChannelId,
                 inviteLinkWindows: value.inviteLinkWindows,
-                trackingLinkKind: value.trackingLinkKind || "BOT",
                 date: value.date,
                 notes: value.notes,
                 assignedMemberId: value.assignedMemberId || null,
                 promoIds: value.promoIds || [],
                 inviteLinkIds: value.inviteLinkIds || [],
-                botInviteLinkIds: [],
-                trackingAllChannels: value.trackCrossChannelRequests && trackingAllChannels,
-                trackingChannelIds: value.trackCrossChannelRequests && !trackingAllChannels
-                  ? value.trackingChannelIds.filter((id) => id !== value.telegramChannelId) : [],
                 ...(Number.isFinite(Number(price)) && Number(price) > 0
                   ? { price: Number(price) }
                   : {}),
@@ -513,36 +465,6 @@ export function CampaignModal({
               />
             </FormField></div>
           </div>
-          <ToggleRow
-            checked={trackCrossChannelRequests}
-            onChange={(enabled) => {
-              setValue("trackCrossChannelRequests", enabled, { shouldDirty: true });
-              if (enabled) {
-                setValue("trackingAllChannels", true, { shouldDirty: true });
-                setValue("trackingLinkKind", "BOT", { shouldDirty: true });
-              }
-            }}
-            label="Track cross-channel requests"
-            activeTone="blue"
-          />
-          {trackCrossChannelRequests && (
-            <CampaignTrackingEditor
-              allChannels={trackingAllChannels}
-              kinds={trackingInviteLinks?.kinds ?? []}
-              hasError={trackingInviteLinksError}
-              kind={trackingLinkKind}
-              channelId={selectedChannelId}
-              selectedIds={selectedTrackingChannelIds}
-              onKindChange={(kind) => {
-                setValue("trackingAllChannels", trackingAllChannels, { shouldDirty: true });
-                setValue("trackingLinkKind", kind, { shouldDirty: true });
-              }}
-              onScopeChange={(all, ids) => {
-                setValue("trackingAllChannels", all, { shouldDirty: true });
-                setArray("trackingChannelIds", ids);
-              }}
-            />
-          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField label="Account">
               <CustomSelect
@@ -568,7 +490,7 @@ export function CampaignModal({
             </FormField>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label={trackCrossChannelRequests ? "Date start" : "Date"}>
+            <FormField label="Date">
               <DateInput
                 name="date"
                 value={selectedDate || ""}

@@ -45,7 +45,7 @@ export function AdCampaignRowActions({
         />
       ) : null}
       {onRefreshInviteLinks &&
-      (campaign.inviteLinks?.length || campaign.botInviteLinks?.length) ? (
+      campaign.inviteLinks?.length ? (
         <CardMenuAction
           label={
             refreshingInviteLinks
