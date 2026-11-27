@@ -11,8 +11,8 @@ import { CampaignMultiValueSelect } from "./campaign-multi-value-select";
 export type PromoChoice = Pick<Promo, "id" | "title"> &
   Partial<Pick<Promo, "iconPresentation" | "archivedAt" | "status" | "text">>;
 
-const priority = (promo: PromoChoice) =>
-  promo.archivedAt || promo.status === "archived" ? 2 : promo.status === "active" ? 0 : 1;
+const isArchived = (promo: PromoChoice) =>
+  Boolean(promo.archivedAt || promo.status === "archived");
 
 export function usePromoChoices(channelId: string, enabled: boolean) {
   const workspaceId = useAppShellWorkspace()?.workspaceId;
@@ -49,7 +49,7 @@ export function PromoPicker({
 }: { promos: PromoChoice[]; placeholder: string; disabled?: boolean; ariaLabel?: string } & PickerSelection) {
   const activeLabel = useOptionalI18n()?.t("ads.status_active") ?? "Active";
   const options = [...new Map(promos.map((promo) => [promo.id, promo])).values()]
-    .sort((a, b) => priority(a) - priority(b))
+    .sort((a, b) => Number(isArchived(a)) - Number(isArchived(b)))
     .map((promo) => ({
       value: promo.id,
       label: promo.title,
@@ -58,7 +58,7 @@ export function PromoPicker({
       labelContent: (
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="min-w-0 truncate">{promo.title}</span>
-          {priority(promo) === 0 && (
+          {!isArchived(promo) && (
             <span className="shrink-0 rounded bg-emerald-950 px-1.5 text-[10px] text-emerald-200">{activeLabel}</span>
           )}
         </span>

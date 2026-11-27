@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { Api, TelegramClient } from 'telegram';
+import { returnBigInt } from 'telegram/Helpers';
 import {
   MatchScore,
   canonicalTelegramInviteLink,
@@ -232,11 +233,11 @@ export class TelegramMtprotoChannelResolution {
 
   private storedInputPeer(channel: StoredTelegramChannelReference) {
     const channelId = this.context.toBigInt(channel.telegramChatId);
-    const accessHash = this.context.toBigInt(channel.telegramAccessHash);
-    if (!channelId || accessHash == null) return null;
+    const accessHash = channel.telegramAccessHash?.trim();
+    if (!channelId || !accessHash || !/^-?\d+$/.test(accessHash)) return null;
     return new Api.InputPeerChannel({
-      channelId: channelId as any,
-      accessHash: accessHash as any,
+      channelId: returnBigInt(String(channelId)),
+      accessHash: returnBigInt(accessHash),
     });
   }
 

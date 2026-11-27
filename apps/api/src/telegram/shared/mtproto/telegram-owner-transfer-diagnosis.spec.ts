@@ -264,6 +264,26 @@ describe('Owner transfer diagnosis — regression coverage', () => {
     ).toBe(true);
   });
 
+  it('keeps the sign of a stored Telegram channel access hash', async () => {
+    const { mtproto, peer } = inviteReader(1600);
+    const getEntity = jest.fn(async (input: Api.InputPeerChannel) => {
+      if (input.accessHash.toString() !== '-7123456789012345678') {
+        throw new Error('CHANNEL_INVALID');
+      }
+      return peer;
+    });
+    const client = { getEntity, getDialogs: jest.fn().mockResolvedValue([]) } as unknown as TelegramClient;
+
+    const resolved = await mtproto.resolveStoredChannel(
+      client,
+      { telegramChatId: `-100${peer.id}`, telegramAccessHash: '-7123456789012345678' },
+      true,
+    );
+
+    expect(resolved.channel.resolvedBy).toBe('stored-peer');
+    expect(getEntity).toHaveBeenCalledTimes(1);
+  });
+
   it('OT-17 rejects the peer for a recycled username when it disagrees with the stored channel ID', async () => {
     const { mtproto, peer } = inviteReader(1700);
     const inputPeer = new Api.InputPeerChannel({

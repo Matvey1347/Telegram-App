@@ -78,6 +78,22 @@ describe('TelegramManagedPostRemoteDeletionService', () => {
     expect(access.connectedAccount).toHaveBeenCalledWith('workspace-1', row.telegramChannelId, row.sourceId);
   });
 
+  it.each([true, false])('only cancels a scheduled ID with matching content (match: %s)', async (matches) => {
+    const row = { ...nativeScheduledPost('duplicate'), scheduledAt: new Date(Date.now() + 86_400_000) };
+    prisma.telegramManagedPost.findMany.mockResolvedValue([row]);
+    mtproto.getScheduledMessagesByIds.mockResolvedValueOnce([{
+      id: '301', date: row.scheduledAt.toISOString(), text: matches ? row.text : 'An unrelated publication', hasMedia: false,
+    }]);
+
+    const result = await service.deletePublishedManagedPosts({
+      workspaceId: 'workspace-1', managedPostIds: [row.id], exactNativeSchedules: true,
+    });
+
+    expect(result).toMatchObject({ failed: Number(!matches), deleted: Number(matches) });
+    expect(mtproto.deleteScheduledPost).toHaveBeenCalledTimes(Number(matches));
+    expect(mtproto.deletePublishedMessages).not.toHaveBeenCalled();
+  });
+
   it('batches posts through their original capable bot and retains their rows', async () => {
     prisma.telegramManagedPost.findMany.mockResolvedValue([
       post('post-1', ['11', '12']),

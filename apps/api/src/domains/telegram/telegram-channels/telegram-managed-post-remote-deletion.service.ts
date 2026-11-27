@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  type Prisma,
   TelegramManagedPostOrigin,
   TelegramManagedPostRemoteStatus,
   TelegramManagedPostStatus,
@@ -16,6 +17,7 @@ import {
   TelegramManagedPostRemoteDeleteExecutor,
 } from './telegram-managed-post-remote-delete-executor.service';
 import { normalizeTelegramPostMediaItems } from '@telegram-system/shared';
+import { nativeScheduleContentMatches } from './telegram-managed-post-rescheduler-repair';
 
 const CHANNEL_DELETE_CONCURRENCY = 5;
 
@@ -24,7 +26,7 @@ type ManagedPostDeletionCandidate = {
   origin: TelegramManagedPostOrigin;
   text: string | null;
   imageUrls: string[];
-  mediaItems: unknown;
+  mediaItems: Prisma.JsonValue;
   scheduledAt: Date | null;
   publishedAt: Date | null;
   scheduleMode: string | null;
@@ -247,22 +249,27 @@ export class TelegramManagedPostRemoteDeletionService {
       }
       const pending = await this.mtproto.getScheduledMessagesByIds({ ...credentials, channel, messageIds: ids, requireCompleteResponse: true });
       for (const post of posts) {
-        if (!post.scheduledAt || post.scheduledAt.getTime() <= Date.now()) {
+        const scheduledAt = post.scheduledAt;
+        if (!scheduledAt || scheduledAt.getTime() <= Date.now()) {
           results.push(failure(post.id));
           continue;
         }
         const matched = pending.filter(({ id }) => post.telegramScheduledMessageIds.includes(id));
-        if (matched.some(({ date }) => date && Math.floor(Date.parse(date) / 1000) !== Math.floor(post.scheduledAt!.getTime() / 1000))) {
+        const scheduledSecond = Math.floor(scheduledAt.getTime() / 1000);
+        if (matched.length && (
+          !nativeScheduleContentMatches(post, matched) ||
+          matched.some(({ date }) => !date || Math.floor(Date.parse(date) / 1000) !== scheduledSecond)
+        )) {
           results.push(failure(post.id));
           continue;
         }
         const messageIds = matched.map(({ id }) => id);
         if (messageIds.length) {
           try {
-            await this.mtproto.deleteScheduledPost({ ...credentials, channel, messageIds, scheduleAt: post.scheduledAt });
+            await this.mtproto.deleteScheduledPost({ ...credentials, channel, messageIds, scheduleAt: scheduledAt });
           } catch {
             const remaining = await this.mtproto.getScheduledMessagesByIds({ ...credentials, channel, messageIds, requireCompleteResponse: true });
-            if (remaining.length || post.scheduledAt.getTime() <= Date.now()) {
+            if (remaining.length || scheduledAt.getTime() <= Date.now()) {
               results.push(failure(post.id));
               continue;
             }

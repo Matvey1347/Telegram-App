@@ -4,11 +4,11 @@ import { PromoPicker } from "./promo-picker";
 
 const promos = [
   { id: "archived", title: "Archived creative", archivedAt: "2026-10-01" },
-  { id: "active", title: "Current creative", status: "active" as const },
+  { id: "active", title: "Current creative", status: "draft" as const },
 ];
 
 describe("PromoPicker", () => {
-  it("shows active promos first and lets campaigns select archived promos", () => {
+  it("shows saved promos outside the archive first, including legacy draft-status records", () => {
     const onChange = vi.fn();
     render(<PromoPicker multiple value={[]} onChange={onChange} promos={promos} placeholder="Select promos" />);
     fireEvent.click(screen.getByRole("button", { name: "Select promos" }));
