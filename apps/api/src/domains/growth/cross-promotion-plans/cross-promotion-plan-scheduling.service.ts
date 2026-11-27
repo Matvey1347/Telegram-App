@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { TelegramChannelsService } from '../../telegram/telegram-channels/telegram-channels.service';
 import { TelegramSystemPostGroupsService } from '../../telegram/telegram-channels/telegram-system-post-groups.service';
 import { CreateCrossPromotionPlanDto } from './dto';
@@ -37,11 +37,11 @@ export class CrossPromotionPlanSchedulingService {
       const result = await this.remoteDeletion.deletePublishedManagedPosts({
         workspaceId: context.workspaceId,
         managedPostIds: context.remotePostIds,
+        exactNativeSchedules: true,
       });
       if (result.failed) {
-        throw new Error(
-          result.results.find((item) => !item.success)?.error ??
-            'Telegram posts could not be deleted',
+        throw new ConflictException(
+          'Telegram could not confirm removal of all linked posts. The promotion was kept so the cancellation can be retried.',
         );
       }
     }
@@ -508,7 +508,6 @@ export class CrossPromotionPlanSchedulingService {
       publicationId,
       dto,
       resolvedPlacements,
-      'ACTIVE',
     );
     onProgress(
       { phase: 'SAVING', message: 'Partner post updated', success: true },

@@ -636,6 +636,24 @@ export function CrossPromotionPlansPage({
           })
         }
         onSaveDraft={(draft, id) => saveDraftMutation.mutateAsync({ draft, id })}
+        onApplyPublicationEdits={async (ids, payload) => {
+          if (!editingPlan) throw new Error("Promotion is not available");
+          try {
+            for (const publicationId of ids) {
+              await crossPromotionPlansApi.updatePublicationInTelegram(editingPlan.id, publicationId, payload, () => undefined);
+            }
+            await updateDetailsMutation.mutateAsync({
+              title: payload.title,
+              ...(payload.publicationPost.iconId !== editingPlan.publicationPost.iconId ? { iconId: payload.publicationPost.iconId } : {}),
+              advertiserId: payload.advertiserId,
+              partnerTelegramUsername: payload.partnerTelegramUsername,
+              ...(payload.kind === "DIRECT_MUTUAL" && JSON.stringify(editingPlan.targets) !== JSON.stringify(payload.targets)
+                ? { targets: payload.targets } : {}),
+            });
+          } finally {
+            await Promise.all([qc.invalidateQueries({ queryKey: crossPromotionPlanKeys.combined }), refreshCalendar()]);
+          }
+        }}
         onUpdateDetails={(details) => updateDetailsMutation.mutateAsync(details)}
       />
       <PromoFormModal

@@ -145,17 +145,17 @@ export function CampaignMultiValueSelect({
           onOpen?.();
           setOpen(true);
         }}
-        className="flex min-h-11 w-full flex-wrap items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white"
+        className="flex min-h-11 w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-left text-sm text-white"
       >
         {selected.length ? (
           selected.map((option) => (
             <span
               key={option.value}
-              className="inline-flex max-w-[220px] items-center gap-1.5 rounded-full border border-neutral-600 px-2 py-0.5 text-xs"
+              className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-neutral-600 px-2 py-0.5 text-xs"
             >
               <SelectOptionVisual option={option} />
               <span
-                className={`${option.badgeClassName ? "" : "truncate"} ${option.badgeClassName ?? ""}`}
+                className={`${option.badgeClassName ? "" : "min-w-0 truncate"} ${option.badgeClassName ?? ""}`}
               >
                 {option.labelContent ?? option.label}
               </span>

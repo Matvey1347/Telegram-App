@@ -47,13 +47,11 @@ export function CrossPromotionPlanView({
   savingDraft,
   onClose,
   onSubmit,
-  onReplaceAndPublishNow,
   onUpdatePublicationInTelegram,
   onReplacePublicationAndPublishNow,
   onUpdatePublicationChannelSchedule,
   onReplacePublicationChannelSchedule,
   onSaveDraft,
-  onUpdateDetails,
   state,
   allChannels,
   ownChannels,
@@ -72,8 +70,6 @@ export function CrossPromotionPlanView({
   resolveOutboundPreview,
   onSendPublisherPost,
   showValidationErrors,
-  sharedPublicationChanged,
-  requiresRepublish,
   publicationChanges,
   publicationHasTelegramMessage,
 }: {
@@ -87,13 +83,11 @@ export function CrossPromotionPlanView({
   savingDraft: boolean;
   onClose: () => void;
   onSubmit: () => void;
-  onReplaceAndPublishNow?: () => void;
   onUpdatePublicationInTelegram?: (publicationId: string) => void;
   onReplacePublicationAndPublishNow?: (publicationId: string) => void;
   onUpdatePublicationChannelSchedule?: (publicationId: string, channelId: string) => void;
   onReplacePublicationChannelSchedule?: (publicationId: string, channelId: string) => void;
   onSaveDraft: () => void;
-  onUpdateDetails?: () => void;
   state: DraftState;
   allChannels: TelegramChannel[];
   ownChannels: TelegramChannel[];
@@ -112,8 +106,6 @@ export function CrossPromotionPlanView({
   resolveOutboundPreview: (targetIndex?: number) => TelegramSystemBotPostDraft | undefined;
   onSendPublisherPost: (id: string, post: TelegramSystemBotPostDraft) => void;
   showValidationErrors: boolean;
-  sharedPublicationChanged: boolean;
-  requiresRepublish: boolean;
   publicationChanges: Record<string, boolean>;
   publicationHasTelegramMessage: Record<string, boolean>;
 }) {
@@ -194,7 +186,6 @@ export function CrossPromotionPlanView({
           ]),
         )
       : {};
-  const hasMultiplePublisherPosts = 1 + additionalPublisherPosts.length > 1;
   const publicationActions = (publicationId: string) => {
     const changed = publicationChanges[publicationId] ?? false;
     const published = publicationHasTelegramMessage[publicationId] ?? false;
@@ -262,14 +253,8 @@ export function CrossPromotionPlanView({
       mode={mode}
       saving={saving}
       savingDraft={savingDraft}
-      hasMultiplePublisherPosts={hasMultiplePublisherPosts}
       hasTitle={Boolean(title.trim())}
-      sharedPublicationChanged={sharedPublicationChanged}
-      requiresRepublish={requiresRepublish}
-      onClose={onClose}
       onSaveDraft={onSaveDraft}
-      onUpdateDetails={onUpdateDetails}
-      onReplaceAndPublishNow={onReplaceAndPublishNow}
       onSubmit={onSubmit}
     />
   );
@@ -283,7 +268,7 @@ export function CrossPromotionPlanView({
       }
       size="xl"
       compactTitle
-      footer={mode === "create" && !loading && (initial || !drafts.pendingDrafts.length) ? actions : undefined}
+      footer={!loading && (mode === "edit" || initial || !drafts.pendingDrafts.length) ? actions : undefined}
     >
       {loading ? (
         <LoadingState />
@@ -703,7 +688,6 @@ export function CrossPromotionPlanView({
             ) : null}
           </section>
           {error || botFlow.error ? <FormError message={error || botFlow.error} /> : null}
-          {mode === "edit" ? actions : null}
         </div>
         <CrossPromotionPlanSummary
           kind={kind}

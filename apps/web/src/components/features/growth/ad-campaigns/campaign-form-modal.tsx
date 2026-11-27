@@ -7,7 +7,6 @@ import { CircleHelp } from "lucide-react";
 import { resolveTitleTemplate, type ResolvedEmoji } from "@telegram-system/shared";
 import {
   accountsApi,
-  getTelegramChannelPromos,
   workspaceMembersApi,
   type AdCampaign,
   adCampaignsApi,
@@ -39,10 +38,7 @@ import {
   normalizeCampaignDraft,
   type CampaignValues,
 } from "./campaign-form-draft";
-import {
-  CampaignMultiValueSelect,
-  type CampaignSelectOption,
-} from "./campaign-multi-value-select";
+import { PromoPicker, usePromoChoices } from "./promo-picker";
 import { CampaignInviteLinksSelect } from "./campaign-invite-links-select";
 import { accountAdCampaignSelectOption } from "./ad-campaign-view-options";
 import { AdFormSkeleton } from "./ad-form-skeleton";
@@ -169,33 +165,6 @@ function initialValues(row?: CampaignInitial): CampaignValues {
         notes: "",
       };
 }
-function mergeOptions(
-  primary: CampaignSelectOption[],
-  fallback: CampaignSelectOption[],
-) {
-  const byId = new Map<string, CampaignSelectOption>();
-  [...fallback, ...primary].forEach(
-    (option) => option?.value && byId.set(option.value, option),
-  );
-  return [...byId.values()];
-}
-function promoOption(promo: Promo): CampaignSelectOption {
-  return {
-    value: promo.id,
-    label: promo.title,
-    iconUrl:
-      promo.iconPresentation?.type === "image"
-        ? promo.iconPresentation.url
-        : undefined,
-    iconEmoji:
-      promo.iconPresentation?.type === "unicode"
-        ? promo.iconPresentation.value
-        : undefined,
-    iconFallback: promo.title,
-    description: promo.telegramChannel?.title,
-    searchText: promo.text,
-  };
-}
 function isOwnChannel(channel: CampaignChannel) {
   return Array.isArray(channel?.adminLinks) && channel.adminLinks.length > 0;
 }
@@ -307,11 +276,7 @@ export function CampaignModal({
         },
       );
   }, [selectedAdChannels, selectedChannelId, setValue]);
-  const { data: promos } = useQuery({
-    queryKey: ["channel-promos", selectedChannelId],
-    queryFn: () => getTelegramChannelPromos(selectedChannelId),
-    enabled: open && !loading && !!selectedChannelId,
-  });
+  const { data: promos } = usePromoChoices(selectedChannelId, open && !loading);
   const { data: accounts } = useQuery({
     queryKey: ["accounts"],
     queryFn: accountsApi.list,
@@ -320,16 +285,6 @@ export function CampaignModal({
   const ownChannels = useMemo(
     () => (channels || []).filter(isOwnChannel),
     [channels],
-  );
-  const promoOptions = useMemo(
-    () =>
-      mergeOptions(
-        (promos ?? []).map(promoOption),
-        (initial?.promos || (initial?.promo ? [initial.promo] : [])).map(
-          promoOption,
-        ),
-      ),
-    [promos, initial],
   );
   const setArray = (
     name: "promoIds" | "inviteLinkIds" | "advertisingChannelIds",
@@ -440,14 +395,14 @@ export function CampaignModal({
                 }))}
               />
             </FormField>
-            <FormField label="Promos">
-              <CampaignMultiValueSelect
+            <div className="min-w-0"><FormField label="Promos">
+              <PromoPicker multiple
                 value={selectedPromoIds}
                 onChange={(value) => setArray("promoIds", value)}
-                options={promoOptions}
+                promos={[...(initial?.promos ?? (initial?.promo ? [initial.promo] : [])).filter((promo) => !promo.telegramChannelId || promo.telegramChannelId === selectedChannelId), ...(promos ?? [])]}
                 placeholder="Select promos"
               />
-            </FormField>
+            </FormField></div>
             <div className="min-w-0 sm:col-span-3"><FormField label="Invite Links">
               <CampaignInviteLinksSelect
                 channelId={selectedChannelId}
@@ -499,10 +454,10 @@ export function CampaignModal({
                 }
               />
             </FormField>
+            <FormField label="Notes">
+              <Textarea rows={1} {...register("notes")} />
+            </FormField>
           </div>
-          <FormField label="Notes">
-            <Textarea {...register("notes")} />
-          </FormField>
           <input
             type="hidden"
             {...register("telegramChannelId", { required: true })}

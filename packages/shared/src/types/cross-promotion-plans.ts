@@ -70,7 +70,7 @@ export type CreateCrossPromotionPlanPayload = {
 export type UpdateCrossPromotionPlanDetails = Pick<
   CreateCrossPromotionPlanPayload,
   "title" | "advertiserId" | "partnerTelegramUsername"
-> & { targets?: CrossPromotionTargetInput[] };
+> & { targets?: CrossPromotionTargetInput[]; iconId?: string | null };
 
 export type CrossPromotionSchedulingProgress = {
   phase: "VALIDATING" | "DELETING" | "SCHEDULING" | "SAVING" | "ROLLING_BACK";

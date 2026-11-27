@@ -73,7 +73,7 @@ export const botAdsApi = {
   },
   async placementPromos(scope: BotAdsApiScope) {
     return (
-      await api.get<Pick<BotAdPromoView, "id" | "title">[]>(
+      await api.get<Pick<BotAdPromoView, "id" | "title" | "archivedAt" | "iconPresentation">[]>(
         `${botAdsPath(scope)}/placements/promos`,
         {
           params: { environment: scope.environment },

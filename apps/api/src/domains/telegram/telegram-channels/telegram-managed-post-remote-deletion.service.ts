@@ -69,6 +69,7 @@ export class TelegramManagedPostRemoteDeletionService {
   async deletePublishedManagedPosts(input: {
     workspaceId: string;
     managedPostIds: string[];
+    exactNativeSchedules?: boolean;
   }): Promise<ManagedPostRemoteDeletionResult> {
     const ids = [...new Set(input.managedPostIds.filter(Boolean))];
     const posts = await this.prisma.telegramManagedPost.findMany({
@@ -120,7 +121,7 @@ export class TelegramManagedPostRemoteDeletionService {
     );
     const nativeByChannel = groupBy(
       nativeSchedules,
-      (post) => post.telegramChannelId,
+      (post) => input.exactNativeSchedules ? JSON.stringify([post.telegramChannelId, post.sourceId]) : post.telegramChannelId,
     );
     const nativeChannelGroups = [...nativeByChannel.entries()];
     for (
@@ -131,12 +132,10 @@ export class TelegramManagedPostRemoteDeletionService {
       const outcomes = await Promise.all(
         nativeChannelGroups
           .slice(index, index + CHANNEL_DELETE_CONCURRENCY)
-          .map(([channelId, channelPosts]) =>
-            this.resolveNativeScheduledPosts(
-              input.workspaceId,
-              channelId,
-              channelPosts,
-            ),
+          .map(([, channelPosts]) =>
+            input.exactNativeSchedules
+              ? this.deleteExactNativeSchedules(input.workspaceId, channelPosts)
+              : this.resolveNativeScheduledPosts(input.workspaceId, channelPosts[0].telegramChannelId, channelPosts),
           ),
       );
       for (const resolved of outcomes) {
@@ -220,6 +219,63 @@ export class TelegramManagedPostRemoteDeletionService {
       failed,
       results,
     };
+  }
+
+  private async deleteExactNativeSchedules(workspaceId: string, posts: ManagedPostDeletionCandidate[]) {
+    const { sourceId, sourceType, telegramChannelId, telegramChannel } = posts[0];
+    const results: ManagedPostRemoteDeletionResult['results'] = [];
+    const deletedPostIds: string[] = [];
+    const failure = (postId: string) => ({
+      postId,
+      success: false,
+      error: 'Telegram could not verify cancellation from the original publishing account. The promotion was kept.',
+    });
+    if (!sourceId || sourceType !== TelegramSourceType.MTPROTO || !telegramChannel.telegramChatId) {
+      return { deletedPostIds, results: posts.map(({ id }) => failure(id)) };
+    }
+    try {
+      const account = await this.access.connectedAccount(workspaceId, telegramChannelId, sourceId);
+      const credentials = this.access.accountCredentials(account);
+      const channel = this.access.mtprotoChannelReference(telegramChannel);
+      const ids = posts.flatMap((post) => post.telegramScheduledMessageIds);
+      const overlapping = await this.prisma.telegramManagedPost.findFirst({
+        where: { workspaceId, telegramChannelId, id: { notIn: posts.map(({ id }) => id) }, telegramScheduledMessageIds: { hasSome: ids } },
+        select: { id: true },
+      });
+      if (overlapping || new Set(ids).size !== ids.length) {
+        return { deletedPostIds, results: posts.map(({ id }) => failure(id)) };
+      }
+      const pending = await this.mtproto.getScheduledMessagesByIds({ ...credentials, channel, messageIds: ids, requireCompleteResponse: true });
+      for (const post of posts) {
+        if (!post.scheduledAt || post.scheduledAt.getTime() <= Date.now()) {
+          results.push(failure(post.id));
+          continue;
+        }
+        const matched = pending.filter(({ id }) => post.telegramScheduledMessageIds.includes(id));
+        if (matched.some(({ date }) => date && Math.floor(Date.parse(date) / 1000) !== Math.floor(post.scheduledAt!.getTime() / 1000))) {
+          results.push(failure(post.id));
+          continue;
+        }
+        const messageIds = matched.map(({ id }) => id);
+        if (messageIds.length) {
+          try {
+            await this.mtproto.deleteScheduledPost({ ...credentials, channel, messageIds, scheduleAt: post.scheduledAt });
+          } catch {
+            const remaining = await this.mtproto.getScheduledMessagesByIds({ ...credentials, channel, messageIds, requireCompleteResponse: true });
+            if (remaining.length || post.scheduledAt.getTime() <= Date.now()) {
+              results.push(failure(post.id));
+              continue;
+            }
+          }
+        }
+        deletedPostIds.push(post.id);
+        results.push({ postId: post.id, success: true });
+      }
+    } catch {
+      const accounted = new Set(results.map(({ postId }) => postId));
+      results.push(...posts.filter(({ id }) => !accounted.has(id)).map(({ id }) => failure(id)));
+    }
+    return { deletedPostIds, results };
   }
 
   private async resolveNativeScheduledPosts(
@@ -350,10 +406,7 @@ export class TelegramManagedPostRemoteDeletionService {
     channelId: string,
     channelPosts: ManagedPostDeletionCandidate[],
   ) {
-    const sources = await this.sourceAccess.sourcesForChannel(
-      workspaceId,
-      channelId,
-    );
+    const sources = await this.sourceAccess.sourcesForChannel(workspaceId, channelId).catch(() => []);
     const bySource = groupBy(channelPosts, (post) => {
       const selected = this.selectDeletionSource(sources, post);
       return selected

@@ -284,7 +284,7 @@ export class CrossPromotionPlansService {
     publicationId: string,
     dto: CreateCrossPromotionPlanDto,
     replacements: ScheduledPlacement[],
-    status: 'SCHEDULED' | 'ACTIVE',
+    status?: 'SCHEDULED' | 'ACTIVE',
   ) {
     const workspaceId = await this.workspace(userId);
     return this.placements.replacePublicationPlacements(
@@ -342,10 +342,17 @@ export class CrossPromotionPlansService {
       if (!advertiser)
         throw new NotFoundException('Partner CRM client is unavailable');
     }
+    if (details.iconId && !(await this.prisma.icon.findFirst({
+      where: { id: details.iconId, OR: [{ workspaceId }, { workspaceId: null }] },
+      select: { id: true },
+    }))) throw new BadRequestException('Promotion icon is unavailable');
     const updated = await this.prisma.crossPromotionPlan.update({
       where: { id, workspaceId },
       data: {
         ...await crossPromotionTrackingPatch(this.prisma, existing, details.targets),
+        ...(details.iconId !== undefined ? {
+          publicationPost: { ...(existing.publicationPost as CrossPromotionPlacementPost), iconId: details.iconId },
+        } : {}),
         title: details.title.trim(),
         advertiserId: details.advertiserId || null,
         partnerTelegramUsername:
@@ -733,13 +740,21 @@ export class CrossPromotionPlansService {
     const placements = json<
       Array<{ telegramChannelId: string; managedPostId: string }>
     >(row.placementPostIds, []);
+    const linkedPosts = { workspaceId, id: { in: placements.map(({ managedPostId }) => managedPostId) } };
     await this.prisma.$transaction(async (tx) => {
       await tx.telegramManagedPost.deleteMany({
         where: {
-          workspaceId,
-          id: { in: placements.map((placement) => placement.managedPostId) },
+          ...linkedPosts,
+          NOT: unsettledPublication,
+          OR: [
+            { telegramRemoteStatus: 'AUTO_DELETED' },
+            { status: { not: 'PUBLISHED' }, telegramMessageIds: { isEmpty: true }, telegramScheduledMessageIds: { isEmpty: true } },
+          ],
         },
       });
+      if (await tx.telegramManagedPost.findFirst({ where: linkedPosts, select: { id: true } })) {
+        throw new ConflictException('A linked publication is still in progress or awaiting confirmation from Telegram.');
+      }
       await tx.crossPromotionPlan.delete({ where: { id: row.id } });
     });
     return { id: row.id };
@@ -769,3 +784,9 @@ export class CrossPromotionPlansService {
     return { workspaceId, remotePostIds: remotePosts.map((post) => post.id) };
   }
 }
+
+const unsettledPublication: Prisma.TelegramManagedPostWhereInput = { OR: [
+  { status: 'PUBLISHING' },
+  { sendOperations: { some: { status: { in: ['STARTED', 'UNKNOWN'] } } } },
+  { nativeRecovery: { is: { status: { in: ['STARTED', 'UNKNOWN'] } } } },
+] };

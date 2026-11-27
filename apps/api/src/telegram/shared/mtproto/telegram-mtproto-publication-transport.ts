@@ -477,6 +477,7 @@ export class TelegramMtprotoPublicationTransport {
     channelRef?: string;
     channel?: StoredTelegramChannelReference;
     messageIds: string[];
+    requireCompleteResponse?: boolean;
   }): Promise<TelegramScheduledMessage[]> {
     const messageIds = [...new Set(params.messageIds)]
       .map(Number)
@@ -492,7 +493,7 @@ export class TelegramMtprotoPublicationTransport {
       close: (client) => this.context.closeClient(client),
       run: async (client) => {
         const resolved = params.channel
-          ? await this.context.resolveStoredChannel(client, params.channel)
+          ? await this.context.resolveStoredChannel(client, params.channel, params.requireCompleteResponse === true)
           : null;
         const peer =
           resolved?.peer ||
@@ -500,6 +501,15 @@ export class TelegramMtprotoPublicationTransport {
         const result = await client.invoke(
           new Api.messages.GetScheduledMessages({ peer, id: messageIds }),
         );
+        if (params.requireCompleteResponse) {
+          return completeTelegramScheduledMessages(result).flatMap((message) => {
+            if (message instanceof Api.MessageEmpty) return [];
+            if (!(message instanceof Api.Message) || !messageIds.includes(message.id)) {
+              throw new Error('Telegram returned an unexpected scheduled message');
+            }
+            return [this.serializeManagedPostMessage(message, true)];
+          });
+        }
         const messages = Array.isArray((result as any)?.messages)
           ? (result as any).messages
           : [];

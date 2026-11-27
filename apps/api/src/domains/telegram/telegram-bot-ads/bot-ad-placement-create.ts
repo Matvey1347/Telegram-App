@@ -82,7 +82,7 @@ export async function createBotAdPlacements({
     ...workspaceChannels,
     id: { in: channelIds },
   };
-  const promoWhere = { id: dto.promoId, runtimeInstanceId, archivedAt: null };
+  const promoWhere = { id: dto.promoId, runtimeInstanceId };
   const [channels, promo, networkOptions, icon] = await Promise.all([
     prisma.telegramChannel.findMany({
       where: channelWhere,
@@ -141,7 +141,7 @@ export async function createBotAdPlacements({
         'Network membership changed. Reload the publishing channels and try again.',
       );
   }
-  if (!promo) throw new NotFoundException('Active promo not found');
+  if (!promo) throw new NotFoundException('Promo not found');
   if (channels.length !== channelIds.length)
     throw new NotFoundException(
       'At least one workspace channel is unavailable',
@@ -171,7 +171,7 @@ export async function createBotAdPlacements({
       placements,
       async (tx, postIds) => {
         if (!(await tx.botAdPromo.count({ where: promoWhere })))
-          throw new NotFoundException('Active promo not found');
+          throw new NotFoundException('Promo not found');
         if (
           (await tx.telegramChannel.count({ where: channelWhere })) !==
           channelIds.length

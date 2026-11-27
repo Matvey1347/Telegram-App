@@ -1,5 +1,6 @@
 "use client";
 
+import { PromoPicker, usePromoChoices } from "./promo-picker";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 import type { CrossPromotionTargetInput } from "@telegram-system/shared";
@@ -14,7 +15,6 @@ import { TelegramInviteLinkSelect } from "@/components/features/telegram/telegra
 import { TelegramInviteLinkCreateInline } from "@/components/features/telegram/telegram/telegram-invite-link-create-inline";
 import {
   Button,
-  CustomSelect,
   FormField,
   Modal,
 } from "@/components/ui/primitives";
@@ -50,17 +50,7 @@ export function CrossPromotionTargetEditor({
   );
   const [creatingInviteLink, setCreatingInviteLink] = useState(false);
   const [inviteLinkSearch, setInviteLinkSearch] = useState("");
-  const promosQuery = useQuery({
-    queryKey: ["cross-promotion", "promos", channel.id],
-    queryFn: () =>
-      promosApi.listPage({
-        page: 1,
-        pageSize: 100,
-        telegramChannelId: channel.id,
-      }),
-    staleTime: 30_000,
-    enabled: showPromo,
-  });
+  const promosQuery = usePromoChoices(channel.id, showPromo);
   const linkOptions = useTelegramInviteLinkOptions({
     channelId: channel.id,
     selectedId: value.inviteLinkId,
@@ -74,7 +64,7 @@ export function CrossPromotionTargetEditor({
     enabled: showPromo && Boolean(value.promoId),
     staleTime: 30_000,
   });
-  const promos = promosQuery.data?.items ?? [];
+  const promos = promosQuery.data ?? [];
   const links = linkOptions.links;
   const resolvedPromo =
     promoDetailQuery.data ??
@@ -152,7 +142,7 @@ export function CrossPromotionTargetEditor({
         {showPromo ? (
           <div className="min-w-0">
             <FormField label="Promo" required>
-              <CustomSelect
+              <PromoPicker
                 value={value.promoId ?? ""}
                 onChange={(promoId) => {
                   const selectedPromo = promos.find(
@@ -175,12 +165,7 @@ export function CrossPromotionTargetEditor({
                 placeholder={
                   promosQuery.isLoading ? "Loading promos…" : "Select promo"
                 }
-                options={promos.map((promo) => ({
-                  value: promo.id,
-                  label: promo.title,
-                  iconPresentation: promo.iconPresentation ?? undefined,
-                  iconFallback: promo.title,
-                }))}
+                promos={promoDetailQuery.data ? [...promos, promoDetailQuery.data] : promos}
               />
             </FormField>
           </div>

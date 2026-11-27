@@ -123,6 +123,7 @@ function setup() {
       findMany: jest.fn().mockResolvedValue([]),
     },
     telegramManagedPost: {
+      findFirst: jest.fn().mockResolvedValue(null),
       findMany: jest.fn().mockResolvedValue([]),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
@@ -640,11 +641,24 @@ describe('CrossPromotionPlansService', () => {
       id: 'plan-1',
     });
     expect(prisma.telegramManagedPost.deleteMany).toHaveBeenCalledWith({
-      where: {
+      where: expect.objectContaining({
         workspaceId: 'workspace-1',
         id: { in: ['post-1'] },
-      },
+        NOT: expect.objectContaining({ OR: expect.arrayContaining([{ status: 'PUBLISHING' }]) }),
+      }),
     });
+  });
+
+  it('retains the plan when a publication is claimed before cancellation', async () => {
+    const { service, prisma } = setup();
+    prisma.crossPromotionPlan.findFirst.mockResolvedValueOnce({
+      id: 'plan-1',
+      placementPostIds: [{ telegramChannelId: 'publisher-1', managedPostId: 'post-1' }],
+    });
+    prisma.telegramManagedPost.findFirst.mockResolvedValueOnce({ id: 'post-1' });
+
+    await expect(service.remove('user-1', 'plan-1')).rejects.toThrow('still in progress');
+    expect(prisma.crossPromotionPlan.delete).not.toHaveBeenCalled();
   });
 
   it('returns grouped placements when a future scheduled promotion is edited', async () => {

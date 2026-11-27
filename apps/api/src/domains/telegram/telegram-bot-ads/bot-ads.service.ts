@@ -182,11 +182,12 @@ export class BotAdsService {
 
   async placementPromos(scope: Scope) {
     const { runtimeInstanceId } = await this.runtime(scope);
-    return this.prisma.botAdPromo.findMany({
-      where: { runtimeInstanceId, archivedAt: null },
-      select: { id: true, title: true },
+    const rows = await this.prisma.botAdPromo.findMany({
+      where: { runtimeInstanceId },
+      select: { id: true, title: true, archivedAt: true, icon: botAdPromoSelect.icon },
       orderBy: [{ title: 'asc' }, { id: 'asc' }],
     });
+    return rows.map(({ icon, ...promo }) => ({ ...promo, iconPresentation: iconToResolvedEmoji(icon) }));
   }
 
   async links(
@@ -305,10 +306,10 @@ export class BotAdsService {
     try {
       if (dto.promoId && dto.channelId) {
         const promo = await this.prisma.botAdPromo.findUnique({
-          where: { id: dto.promoId, runtimeInstanceId, archivedAt: null },
+          where: { id: dto.promoId, runtimeInstanceId },
           select: { post: true },
         });
-        if (!promo) throw new NotFoundException('Active promo not found');
+        if (!promo) throw new NotFoundException('Promo not found');
         const url = this.apiOrigin
           ? `${this.apiOrigin}/api/bot-ad-links/${dto.id}`
           : telegramBotAdUrl(username, dto.id);

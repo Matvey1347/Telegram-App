@@ -64,6 +64,7 @@ export class RenameCrossPromotionPlanDto {
 
 /** Fields that do not affect an already-created Telegram publication. */
 export class UpdateCrossPromotionPlanDetailsDto {
+  @IsOptional() @IsString() iconId?: string | null;
   @IsString() @MaxLength(160) title!: string;
   @IsOptional() @IsString() advertiserId?: string | null;
   @IsOptional() @IsString() @MaxLength(33) partnerTelegramUsername?:

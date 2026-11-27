@@ -12,6 +12,7 @@ describe('TelegramManagedPostRemoteDeletionService', () => {
   const prisma = {
     telegramManagedPost: {
       findMany: jest.fn(),
+      findFirst: jest.fn().mockResolvedValue(null),
       update: jest.fn(),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
@@ -35,6 +36,7 @@ describe('TelegramManagedPostRemoteDeletionService', () => {
     deletePublishedMessages: jest.fn(),
     deleteScheduledPost: jest.fn(),
     getManagedPostMessages: jest.fn(),
+    getScheduledMessagesByIds: jest.fn(),
   };
   const identity = { findPublishedIdentity: jest.fn() };
   const executor = new TelegramManagedPostRemoteDeleteExecutor(
@@ -58,6 +60,22 @@ describe('TelegramManagedPostRemoteDeletionService', () => {
     mtproto.deletePublishedMessages.mockResolvedValue(undefined);
     mtproto.deleteScheduledPost.mockResolvedValue(undefined);
     identity.findPublishedIdentity.mockReset();
+  });
+
+  it.each([true, false])('requires positive queue evidence before removing an absent reservation (verified: %s)', async (verified) => {
+    const row = { ...nativeScheduledPost('duplicate'), scheduledAt: new Date(Date.now() + 86_400_000) };
+    prisma.telegramManagedPost.findMany.mockResolvedValue([row]);
+    mtproto.getScheduledMessagesByIds.mockImplementationOnce(async () => {
+      if (!verified) throw new Error('Telegram unavailable');
+      return [];
+    });
+    const result = await service.deletePublishedManagedPosts({
+      workspaceId: 'workspace-1', managedPostIds: [row.id], exactNativeSchedules: true,
+    });
+    expect(result).toMatchObject({ failed: Number(!verified), deleted: Number(verified) });
+    expect(mtproto.getManagedPostMessages).not.toHaveBeenCalled();
+    expect(mtproto.deleteScheduledPost).not.toHaveBeenCalled();
+    expect(access.connectedAccount).toHaveBeenCalledWith('workspace-1', row.telegramChannelId, row.sourceId);
   });
 
   it('batches posts through their original capable bot and retains their rows', async () => {

@@ -29,6 +29,7 @@ import { ensureCrossPromotionPartnerClient } from "./cross-promotion-partner-cli
 import type { CrossPromotionModalMode } from "./cross-promotion-modal-title";
 import { useCrossPromotionDraftState } from "./use-cross-promotion-draft-state";
 import { CrossPromotionPlanView } from "./cross-promotion-plan-view";
+import { promotionScheduleChanged } from "./cross-promotion-edit-changes";
 import { Button, Modal } from "@/components/ui/primitives";
 
 const isOwn = (channel: TelegramChannel) => Boolean(channel.adminLinks?.length);
@@ -69,6 +70,7 @@ export function CrossPromotionPlanModal({
   onReplacePublicationChannelSchedule,
   onSaveDraft,
   onUpdateDetails,
+  onApplyPublicationEdits,
 }: {
   open: boolean;
   kind: CrossPromotionPlanKind;
@@ -107,6 +109,7 @@ export function CrossPromotionPlanModal({
     draft: Record<string, unknown>,
     id?: string,
   ) => Promise<unknown>;
+  onApplyPublicationEdits?: (ids: string[], payload: CreateCrossPromotionPlanPayload) => Promise<unknown>;
   onUpdateDetails?: (details: UpdateCrossPromotionPlanDetails) => Promise<unknown>;
 }) {
   const state = useCrossPromotionDraftState({
@@ -291,15 +294,6 @@ export function CrossPromotionPlanModal({
     outboundPost.imageUrls.length ||
     outboundPost.mediaItems?.length,
   );
-  const initialSharedPost =
-    initial?.publicationPost.publisherPublications?.[0]?.post ??
-    initial?.publicationPost;
-  const sharedPublicationChanged = Boolean(
-    kind === "DIRECT_MUTUAL" &&
-    initial &&
-    ["SCHEDULED", "ACTIVE"].includes(initial.status) &&
-    postFingerprint(initialSharedPost) !== postFingerprint(post),
-  );
   const publishedPosts = initial?.publicationPost.publisherPublications?.map(
     (publication) => publication.post,
   ) ?? [initial?.publicationPost];
@@ -314,15 +308,9 @@ export function CrossPromotionPlanModal({
       postFingerprint(publishedPosts[index]) !== postFingerprint(editedPost),
     ]),
   ) as Record<string, boolean>;
-  const publicationHasTelegramMessage = Object.fromEntries(
-    (initial?.placementPostIds ?? [])
-      .reduce<string[]>((ids, placement) => {
-        if (placement.isPublishedInTelegram && placement.publicationId)
-          ids.push(placement.publicationId);
-        return ids;
-      }, [])
-      .map((publicationId) => [publicationId, true]),
-  ) as Record<string, boolean>;
+  const publicationHasTelegramMessage = Object.fromEntries((initial?.placementPostIds ?? [])
+    .filter(({ isPublishedInTelegram, publicationId }) => isPublishedInTelegram && publicationId)
+    .map(({ publicationId }) => [publicationId, true])) as Record<string, boolean>;
   const requiresRepublish = Boolean(
     initial?.status === "ACTIVE" &&
     editedPublisherPosts.some(
@@ -355,9 +343,9 @@ export function CrossPromotionPlanModal({
     return {
       telegramChannelId: channelId,
       telegramAdProductId: formatId || null,
-      scheduledAt: scheduledAt.toISOString(),
+      scheduledAt: Number.isFinite(scheduledAt.getTime()) ? scheduledAt.toISOString() : "",
       deleteAt:
-        deleteAfterHours && deleteAfterHours > 0
+        deleteAfterHours && deleteAfterHours > 0 && Number.isFinite(scheduledAt.getTime())
           ? new Date(
               scheduledAt.getTime() + deleteAfterHours * 3_600_000,
             ).toISOString()
@@ -379,6 +367,31 @@ export function CrossPromotionPlanModal({
       ? publisherIds.map((id) => ownPromotionPost(outboundMode, post, targets, resolvedTarget, id))
       : [];
     const publicationPost = kind === "OWN_CHANNELS" ? ownPosts[0] : post;
+    const publisherPlacements = publisherIds.map((id) => placement(id, publisherSettings, date));
+    const additionalPlacements = additionalPublisherPosts.map((item) => ({
+      id: item.id, post: item.post, placements: publisherIds.map((id) => placement(id, item.settings, date)),
+    }));
+    const desiredPlacements = [
+      ...(uniqueLinks ? publisherPlacements.map((slot) => ({ id: `publisher-${slot.telegramChannelId}`, placements: [slot] }))
+        : [{ id: initial?.publicationPost.publisherPublications?.[0]?.id ?? "publisher-1", placements: publisherPlacements }]),
+      ...additionalPlacements,
+    ];
+    const unifiedEdit = initial && initial.status !== "DRAFT" && !publicationId && !replaceAndPublishNow;
+    const scheduleChanged = unifiedEdit && promotionScheduleChanged(initial, desiredPlacements);
+    const changedIds = Object.keys(publicationChanges).filter((id) => publicationChanges[id]);
+    const outgoingChanged = kind === "OWN_CHANNELS" && (
+      JSON.stringify(ownPromotionTargets(targets, publisherIds)) !== JSON.stringify(initial?.targets ?? []) ||
+      outboundMode !== (initial?.publicationPost.partnerPostSource ?? "PROMO")
+    );
+    if (unifiedEdit && !scheduleChanged && !changedIds.length && !outgoingChanged) {
+      await updateDetails();
+      return;
+    }
+    if (unifiedEdit && !scheduleChanged && requiresRepublish && initial.status === "ACTIVE") {
+      if (changedIds.length === 1) setConfirmPublishNow(changedIds[0]);
+      else setError("Update posts requiring replacement one at a time.");
+      return;
+    }
     const channelNames = (channelIds: string[]) =>
       channelIds
         .map(
@@ -415,6 +428,7 @@ export function CrossPromotionPlanModal({
       !title.trim() ? "Enter a promotion title." : null,
       !publisherIds.length ? "Choose at least one channel on My side." : null,
       !date ? "Choose a publication date for Partner post 1." : null,
+      desiredPlacements.some(({ placements }) => placements.some(({ scheduledAt }) => !scheduledAt)) ? "Choose a valid date and time for each publication." : null,
       !time ? "Choose a publication time for Partner post 1." : null,
       missingPublisherFormats.length
         ? `Partner post 1: choose a format for ${channelNames(missingPublisherFormats)}.`
@@ -459,8 +473,6 @@ export function CrossPromotionPlanModal({
       setError("Fix the highlighted fields before saving.");
       return;
     }
-    // `publicationPost` is covered by the validation above. Keep this guard
-    // explicit so the persisted payload can never contain a null post.
     if (!publicationPost) return;
     if (submittingScheduleRef.current) return;
     submittingScheduleRef.current = true;
@@ -477,9 +489,6 @@ export function CrossPromotionPlanModal({
             })
           : null;
       if (advertiserId) setPartnerAdvertiserId(advertiserId);
-      const publisherPlacements = publisherIds.map((channelId) =>
-        placement(channelId, publisherSettings, date),
-      );
       const partnerPlacements = partnerIds.map((channelId) =>
         placement(channelId, partnerSettings, partnerDate),
       );
@@ -492,22 +501,16 @@ export function CrossPromotionPlanModal({
             placements: [slot],
           };
         }) : [{
-          id: "publisher-1",
+          id: desiredPlacements[0].id,
           post: {
             ...publicationPost,
             title: publicationPost.title.trim() || title.trim(),
           },
           placements: publisherPlacements,
         }]),
-        ...additionalPublisherPosts.map((publication) => ({
-          id: publication.id,
-          post: {
-            ...publication.post,
-            title: publication.post.title.trim() || title.trim(),
-          },
-          placements: publisherIds.map((channelId) =>
-            placement(channelId, publication.settings, date),
-          ),
+        ...additionalPlacements.map((publication) => ({
+          ...publication,
+          post: { ...publication.post, title: publication.post.title.trim() || title.trim() },
         })),
       ];
       const scheduledAt = new Date(
@@ -593,10 +596,16 @@ export function CrossPromotionPlanModal({
         onReplacePublicationAndPublishNow
       ) {
         await onReplacePublicationAndPublishNow(publicationId, payload);
+        if (confirmPublishNow === publicationId && onUpdateDetails) await onUpdateDetails({
+          title: payload.title, advertiserId: payload.advertiserId, partnerTelegramUsername: payload.partnerTelegramUsername,
+          ...(payload.kind === "DIRECT_MUTUAL" && JSON.stringify(initial?.targets) !== JSON.stringify(payload.targets) ? { targets: payload.targets } : {}),
+        });
       } else if (publicationId && onUpdatePublicationInTelegram) {
         await onUpdatePublicationInTelegram(publicationId, payload);
       } else if (replaceAndPublishNow && onReplaceAndPublishNow) {
         await onReplaceAndPublishNow(payload);
+      } else if (unifiedEdit && !scheduleChanged && !outgoingChanged && initial.status !== "COMPLETED" && onApplyPublicationEdits && initial.publicationPost.publisherPublications?.length) {
+        await onApplyPublicationEdits(changedIds, payload);
       } else {
         await onSubmit(payload);
       }
@@ -612,7 +621,9 @@ export function CrossPromotionPlanModal({
     }
   };
   const updateDetails = async () => {
-    if (!onUpdateDetails) return;
+    if (!onUpdateDetails || submittingScheduleRef.current) return;
+    submittingScheduleRef.current = true;
+    setSubmittingSchedule(true);
     try {
       setError("");
       const trackingChanged = kind === "DIRECT_MUTUAL" &&
@@ -633,6 +644,7 @@ export function CrossPromotionPlanModal({
       await onUpdateDetails({
         title: title.trim(),
         ...(trackingChanged ? { targets } : {}),
+        ...(iconId !== (initial?.publicationPost.iconId ?? null) ? { iconId } : {}),
         advertiserId,
         partnerTelegramUsername:
           kind === "DIRECT_MUTUAL" ? partnerTelegram.trim() || null : null,
@@ -642,6 +654,9 @@ export function CrossPromotionPlanModal({
       setError(
         cause instanceof Error ? cause.message : "Could not update details.",
       );
+    } finally {
+      submittingScheduleRef.current = false;
+      setSubmittingSchedule(false);
     }
   };
   const saveDraft = async () => {
@@ -676,12 +691,6 @@ export function CrossPromotionPlanModal({
         savingDraft={savingDraft}
         onClose={onClose}
         onSubmit={() => void submit()}
-        onReplaceAndPublishNow={
-          (initial?.status === "ACTIVE" || initial?.status === "DRAFT") &&
-          onReplaceAndPublishNow
-            ? () => setConfirmPublishNow("all")
-            : undefined
-        }
         onUpdatePublicationInTelegram={
           initial?.status !== "DRAFT" && onUpdatePublicationInTelegram
             ? (publicationId) => void submit(false, publicationId)
@@ -703,11 +712,6 @@ export function CrossPromotionPlanModal({
             : undefined
         }
         onSaveDraft={() => void saveDraft()}
-        onUpdateDetails={
-          initial && initial.status !== "DRAFT"
-            ? () => void updateDetails()
-            : undefined
-        }
         state={state}
         allChannels={allChannels}
         ownChannels={ownChannels}
@@ -723,8 +727,6 @@ export function CrossPromotionPlanModal({
         resolvedTargets={resolvedTargets}
         promoReady={promoReady}
         showValidationErrors={showValidationErrors}
-        sharedPublicationChanged={sharedPublicationChanged}
-        requiresRepublish={requiresRepublish}
         publicationChanges={publicationChanges}
         publicationHasTelegramMessage={publicationHasTelegramMessage}
         searchAdvertisers={searchAdvertisers}

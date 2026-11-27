@@ -1,5 +1,6 @@
 "use client";
 
+import { PromoPicker, type PromoChoice } from "@/components/features/growth/ad-campaigns/promo-picker";
 import { useCallback, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -14,7 +15,6 @@ import { ModalDraftPicker } from "@/components/ui/modal-draft-picker";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
   Button,
-  CustomSelect,
   DateInput,
   FormError,
   FormField,
@@ -93,7 +93,7 @@ export function BotAdCampaignDialog({
   botScope,
 }: {
   seed: BotAdPlacementSeed;
-  promos: { id: string; title: string }[];
+  promos: PromoChoice[];
   channels: BotAdChannelOption[];
   pending: boolean;
   loading: boolean;
@@ -272,16 +272,13 @@ export function BotAdCampaignDialog({
             </div>
           </div>
           <FormField label="Promo" required>
-            <CustomSelect
+            <PromoPicker
               ariaLabel="Promo"
               value={promoId}
               onChange={(id) => patch({ promoId: id })}
               disabled={pending || loading}
-              placeholder="Select an active promo"
-              options={promos.map(({ id, title }) => ({
-                value: id,
-                label: title,
-              }))}
+              placeholder="Select promo"
+              promos={promos.map((promo) => ({ ...promo, status: promo.archivedAt ? "archived" : "active" }))}
             />
           </FormField>
           <div className="space-y-2">

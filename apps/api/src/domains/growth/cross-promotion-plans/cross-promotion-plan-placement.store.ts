@@ -226,23 +226,28 @@ export class CrossPromotionPlanPlacementStore {
     publicationId: string,
     dto: CreateCrossPromotionPlanDto,
     replacements: ScheduledPlacement[],
-    status: 'SCHEDULED' | 'ACTIVE',
+    status?: 'SCHEDULED' | 'ACTIVE',
   ) {
     const row = await this.prisma.crossPromotionPlan.findFirst({
       where: { id, workspaceId, status: { not: 'CANCELLED' } },
-      select: { placementPostIds: true },
+      select: { placementPostIds: true, publicationPost: true, status: true },
     });
     if (!row) throw new NotFoundException('Cross-promotion plan not found');
     const placements = json<ScheduledPlacement[]>(row.placementPostIds, []);
+    const stored = row.publicationPost as CrossPromotionPlacementPost;
+    const changed = dto.publicationPost.publisherPublications?.find((item) => item.id === publicationId);
     const updated = await this.prisma.crossPromotionPlan.update({
-      where: { id },
+      where: { id, workspaceId },
       data: {
-        publicationPost: dto.publicationPost,
+        publicationPost: !status && stored.publisherPublications?.length && changed ? {
+          ...stored,
+          publisherPublications: stored.publisherPublications.map((item) => item.id === publicationId ? changed : item),
+        } : dto.publicationPost,
         placementPostIds: [
           ...placements.filter((item) => item.publicationId !== publicationId),
           ...replacements,
         ],
-        status,
+        status: status ?? row.status,
         lastError: null,
       },
     });

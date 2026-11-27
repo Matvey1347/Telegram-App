@@ -425,7 +425,6 @@ describe('CrossPromotionPlanSchedulingService', () => {
       'legacy-publisher-publication',
       changedPost,
       expect.any(Array),
-      'ACTIVE',
     );
     expect(progress).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -540,7 +539,6 @@ describe('CrossPromotionPlanSchedulingService', () => {
           managedPostId: 'reimported-live-post',
         }),
       ],
-      'ACTIVE',
     );
   });
 
@@ -771,6 +769,18 @@ describe('CrossPromotionPlanSchedulingService', () => {
       expect.any(Array),
       'ACTIVE',
     );
+  });
+
+  it('keeps the placement when Telegram cannot confirm exact cancellation', async () => {
+    const { service, plans, remoteDeletion } = setup();
+    plans.removalContext.mockResolvedValue({ workspaceId: 'workspace-1', remotePostIds: ['post-1'] });
+    remoteDeletion.deletePublishedManagedPosts.mockResolvedValue({ failed: 1 });
+
+    await expect(service.remove('user-1', 'plan-1')).rejects.toMatchObject({ status: 409 });
+    expect(remoteDeletion.deletePublishedManagedPosts).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1', managedPostIds: ['post-1'], exactNativeSchedules: true,
+    });
+    expect(plans.remove).not.toHaveBeenCalled();
   });
 
   it('does not delete a Telegram post twice after remote deletion succeeds', async () => {

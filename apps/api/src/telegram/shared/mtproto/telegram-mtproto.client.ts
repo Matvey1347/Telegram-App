@@ -729,6 +729,7 @@ export class TelegramMtprotoClient {
     channelRef?: string;
     channel?: StoredTelegramChannelReference;
     messageIds: string[];
+    requireCompleteResponse?: boolean;
   }): Promise<TelegramScheduledMessage[]> {
     return this.publicationTransport.getScheduledMessagesByIds(params);
   }
